@@ -1,0 +1,26 @@
+# config/vep_defaults.yaml
+vep:
+  forks: 4
+  chr_parallel: 4
+  cache_dir: null
+  species: "homo_sapiens"
+  assembly: "GRCh37"
+  plugins:
+    - "dbNSFP,/path/to/dbNSFP.gz"
+    - "CADD,/path/to/whole_genome_SNVs.tsv.gz"
+    - "G2P,/path/to/G2P.csv"
+    - "LoF"
+    - "MaxEntScan,/path/to/fordownload"
+    - "SpliceAI,snv=/path/to/spliceai_snv.hg19.vcf.gz,indel=/path/to/spliceai_indel.hg19.vcf.gz"
+    - "REVEL,/path/to/revel_all_chromosomes.csv.gz"
+    - "gnomAD,/path/to/gnomad.genomes.r2.1.1.sites.vcf.bgz"
+  buffer_size: 5000
+  fields:
+    - "Consequence"
+    - "IMPACT"
+    - "SYMBOL"
+    - "Feature"
+    - "HGVSc"
+    - "HGVSp"
+  filters: []
+  custom: []

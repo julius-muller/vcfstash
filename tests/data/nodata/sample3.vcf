@@ -1,0 +1,6 @@
+##fileformat=VCFv4.2
+##contig=<ID=1,length=248956422>
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+1	40000	.	G	A	100	PASS	DP=35
+1	50000	.	T	G	100	PASS	DP=30

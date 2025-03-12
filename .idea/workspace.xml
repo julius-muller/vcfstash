@@ -5,7 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="47faf918-d42f-4461-a6a9-51a8fefa29b9" name="Changes" comment="Inital commit">
-      <change afterPath="$PROJECT_DIR$/tests/data/create_samples.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/convert.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/annotate.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -96,7 +96,15 @@
       <option name="project" value="LOCAL" />
       <updated>1741773425626</updated>
     </task>
-    <option name="localTasksCounter" value="6" />
+    <task id="LOCAL-00006" summary="Inital commit">
+      <option name="closed" value="true" />
+      <created>1741774444904</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1741774444904</updated>
+    </task>
+    <option name="localTasksCounter" value="7" />
     <servers />
   </component>
   <component name="UnknownFeatures">
