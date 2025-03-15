@@ -5,16 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="47faf918-d42f-4461-a6a9-51a8fefa29b9" name="Changes" comment="Inital commit">
-      <change afterPath="$PROJECT_DIR$/tests/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/data/create_samples.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/data/nodata/reference.fasta" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cache.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/cache.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/data/nodata/dbsnp_test.vcf" beforeDir="false" afterPath="$PROJECT_DIR$/tests/data/nodata/dbsnp_test.vcf" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/data/nodata/gnomad_test.vcf" beforeDir="false" afterPath="$PROJECT_DIR$/tests/data/nodata/gnomad_test.vcf" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_cache.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_cache.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -159,7 +150,15 @@
       <option name="project" value="LOCAL" />
       <updated>1741876124163</updated>
     </task>
-    <option name="localTasksCounter" value="10" />
+    <task id="LOCAL-00010" summary="Inital commit">
+      <option name="closed" value="true" />
+      <created>1742078961410</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1742078961410</updated>
+    </task>
+    <option name="localTasksCounter" value="11" />
     <servers />
   </component>
   <component name="UnknownFeatures">

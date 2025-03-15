@@ -168,6 +168,7 @@ workflows/**/.nextflow/cache/
 workflows/**/.nextflow.log*
 workflows/**/trace-*
 workflows/**/*.png
+work/
 
 # Ignore intermediate files and outputs
 workflows/**/out/
@@ -179,8 +180,7 @@ workflows/**/intermediate/
 # Exclude specific folders like scripts from being ignored
 !workflows/**/scripts/
 
+
 # Ignore all files and directories recursively whitin the project starting with a dot except of .gitignore
 **/.*/
-# Ignore all .bcf and .bcf.csi files
-*.bcf
-*.bcf.csi
+
