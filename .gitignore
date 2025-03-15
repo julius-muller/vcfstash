@@ -170,6 +170,7 @@ workflows/**/trace-*
 workflows/**/*.png
 work/
 
+
 # Ignore intermediate files and outputs
 workflows/**/out/
 workflows/**/results/
@@ -184,3 +185,4 @@ workflows/**/intermediate/
 # Ignore all files and directories recursively whitin the project starting with a dot except of .gitignore
 **/.*/
 
+/tests/data/test_out/

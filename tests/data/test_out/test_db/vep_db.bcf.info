@@ -1,1 +1,0 @@
-[2025-03-15 23:48:35] INFO: Script command: python3 src/cache.py annotate -d /home/j380r/projects/vepstash/tests/data/test_out/test_db -w /home/j380r/projects/vepstash/tests/data/workflow -p /home/j380r/projects/vepstash/tests/data/test_params.yml
