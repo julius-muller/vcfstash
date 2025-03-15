@@ -1,6 +1,19 @@
 ##fileformat=VCFv4.2
-##contig=<ID=1,length=248956422>
+##FILTER=<ID=PASS,Description="All filters passed">
+##fileDate=20240314
+##source=dbSNP_build_156
+##reference=GRCh38
+##contig=<ID=chr1,length=40>
+##contig=<ID=chr2,length=40>
+##INFO=<ID=RS,Number=1,Type=Integer,Description="dbSNP RS number">
+##INFO=<ID=CLNVAR,Number=1,Type=String,Description="Clinical significance">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Global Allele Frequency">
 ##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
+##FILTER=<ID=q10,Description="Quality below 10">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype Quality">
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
-1	10000	.	A	G	100	PASS	X=99
-6	20000	.	T	C	100	PASS	X=99
+chr1	5	rs1234567	C	G	.	PASS	RS=9876543;CLNVAR=benign;AF=0.3;DP=800
+chr1	8	rs8765432	GC	G	.	PASS	RS=8765432;CLNVAR=pathogenic;AF=0.02;DP=600
+chr2	4	rs7654321	G	T,C	.	PASS	RS=7654321;CLNVAR=uncertain;AF=0.15,0.05;DP=750
+chr2	6	.	ACGT	A	.	PASS	AF=0.08;DP=550

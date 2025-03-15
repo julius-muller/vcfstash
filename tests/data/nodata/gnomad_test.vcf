@@ -1,9 +1,16 @@
 ##fileformat=VCFv4.2
-##contig=<ID=1,length=248956422>
+##FILTER=<ID=PASS,Description="All filters passed">
+##fileDate=20240314
+##source=gnomAD_v3.1
+##reference=GRCh38
+##contig=<ID=chr1,length=40>
+##contig=<ID=chr2,length=40>
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele Frequency">
+##INFO=<ID=AC,Number=A,Type=Integer,Description="Allele Count">
+##INFO=<ID=AN,Number=1,Type=Integer,Description="Total number of alleles">
 ##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
-1	10000	.	A	G	100	PASS	X=99
-2	20000	.	T	C	100	PASS	X=99
-3	20000	.	T	C	100	PASS	X=99
-4	20000	.	T	C	100	PASS	X=99
-5	20000	.	T	C	100	PASS	X=99
+chr1	5	rs1234567	C	G	100	PASS	AF=0.1;AC=12;AN=120;DP=500
+chr1	8	rs2345678	CT	C	100	PASS	AF=0.05;AC=6;AN=120;DP=450
+chr2	2	rs3456789	A	G,T	100	PASS	AF=0.2,0.1;AC=24,12;AN=120;DP=600
+chr2	10	.	ACGT	A	100	PASS	AF=0.15;AC=18;AN=120;DP=480

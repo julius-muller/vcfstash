@@ -1,3 +1,28 @@
+
+"""
+VEP Annotation Cache
+
+This script manages a database of genetic variants in BCF/VCF format,
+providing functionality to initialize, add to, and annotate variant databases.
+
+Key features:
+- Supports BCF/VCF format (uncompressed/compressed)
+- Requires pre-indexed input files (CSI/TBI index)
+  -> This ensures input is properly sorted and valid
+- Maintains database integrity through MD5 checksums
+- Provides versioned annotation workflow support
+- Includes detailed logging of all operations
+
+Author: Julius Müller, PhD
+Organization: GHGA - German Human Genome-Phenome Archive
+Date: 16-03-2025
+
+"""
+
+import tarfile
+import tempfile
+from datetime import datetime
+import json
 import os
 import sys
 import subprocess
@@ -5,15 +30,60 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 import shutil
+from pathlib import Path
+from typing import Dict, List, Tuple, Optional
 
-def log_message(log_file, message, level="INFO"):
+
+def create_annotation_archive(run_dir: Path) -> Path:
+    """Create a single archive file from annotation run directory"""
+    archive_name = f"{run_dir.name}.vepstash"
+    archive_path = run_dir.parent / archive_name
+
+    # Create archive with metadata
+    with tarfile.open(archive_path, "w:gz") as tar:
+        # Add all files from run directory
+        tar.add(run_dir, arcname="")
+
+        # Add metadata file
+        metadata = {
+            "created": datetime.now().isoformat(),
+            "format_version": "1.0",
+            "run_id": run_dir.name
+        }
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as tf:
+            json.dump(metadata, tf, indent=2)
+            tf_path = Path(tf.name)
+
+        tar.add(tf_path, arcname="metadata.json")
+        tf_path.unlink()
+
+    # Remove original directory after successful archive creation
+    shutil.rmtree(run_dir)
+    return archive_path
+
+def read_annotation_archive(archive_path: Path, extract_path: Optional[Path] = None) -> Dict:
+    """Read metadata from annotation archive without extracting"""
+    with tarfile.open(archive_path, "r:gz") as tar:
+        try:
+            meta_file = tar.extractfile("metadata.json")
+            if meta_file:
+                metadata = json.loads(meta_file.read().decode())
+                if extract_path:
+                    tar.extractall(path=extract_path)
+                return metadata
+        except KeyError:
+            raise ValueError("Invalid annotation archive: metadata.json not found")
+    return {}
+
+
+def log_message(log_file: Path, message: str, level: str = "INFO") -> None:
     """Log a message with timestamp and level"""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     formatted_message = f"[{timestamp}] {level}: {message}"
     with open(log_file, "a") as log:
         log.write(formatted_message + "\n")
 
-def check_duplicate_md5(info_file, new_md5):
+def check_duplicate_md5(info_file: Path, new_md5: str) -> bool:
     """Check if a file with the same MD5 was already added"""
     try:
         with open(info_file, "r") as f:
@@ -24,7 +94,22 @@ def check_duplicate_md5(info_file, new_md5):
         return False
     return False
 
-def validate_bcf_header(bcf_path, norm:bool = True):
+def ensure_indexed(file_path: Path) -> None:
+    """Ensure input file has an index file (CSI or TBI)"""
+    path = Path(file_path)
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    csi_index = Path(str(file_path) + ".csi")
+    tbi_index = Path(str(file_path) + ".tbi")
+
+    if not (csi_index.exists() or tbi_index.exists()):
+        raise RuntimeError(
+            f"No index found for {file_path}. Use bcftools index for BCF/compressed VCF "
+            "or tabix for compressed VCF files."
+        )
+
+def validate_bcf_header(bcf_path: Path, norm: bool = True) -> Tuple[bool, Optional[str]]:
     """
     Validate BCF header for required normalization command and contig format.
     Returns tuple (is_valid, error_message).
@@ -71,7 +156,7 @@ def validate_bcf_header(bcf_path, norm:bool = True):
     except subprocess.CalledProcessError as e:
         return False, f"Error reading BCF header: {e}"
 
-def get_bcf_stats(bcf_path):
+def get_bcf_stats(bcf_path: Path) -> Dict[str, str]:
     """Get statistics from BCF file using bcftools stats"""
     try:
         result = subprocess.run(
@@ -93,7 +178,7 @@ def get_bcf_stats(bcf_path):
         return {"error": f"Failed to get statistics: {e}"}
 
 
-def compute_md5(file_path):
+def compute_md5(file_path: Path) -> str:
     try:
         result = subprocess.run(
             ["md5sum", file_path],
@@ -106,19 +191,19 @@ def compute_md5(file_path):
         sys.exit(f"Error computing MD5 checksum: {e}")
 
 
-def check_bcftools_installed():
+def check_bcftools_installed() -> None:
     try:
         subprocess.run(["bcftools", "--version"], check=True, capture_output=True)
     except FileNotFoundError:
         sys.exit("Error: bcftools is not installed or not in PATH.")
 
 
-def log_script_command(info_file):
+def log_script_command(info_file: Path) -> None:
     """Log the exact command used to execute the script"""
     command = f"python3 {sys.argv[0]} {' '.join(sys.argv[1:])}"
     log_message(info_file, f"Script command: {command}")
 
-def store_workflow_dag(run_dir:Path, cmd:list):
+def store_workflow_dag(run_dir: Path, cmd: List[str]) -> None:
     """Generate and store workflow DAG visualization"""
 
     try:
@@ -137,17 +222,16 @@ def store_workflow_dag(run_dir:Path, cmd:list):
         log_message(run_dir / "annotation.info", f"Warning: Failed to generate workflow DAG: {e}", level="WARN")
 
 
-def init_mode(args):
-
-    # Add validation at start, will be normalized anyway
+def init_mode(args: argparse.Namespace) -> None:
+    ensure_indexed(args.i)
     is_valid, error = validate_bcf_header(args.i, norm=False)
     if not is_valid:
         sys.exit(f"Invalid input BCF: {error}")
 
-    output_dir = Path(args.name)
+    output_dir = Path(args.output) / args.name
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_bcf = output_dir / "vep_db.bcf"
-    info_file = output_dir / "vep_db.bcf.info"
+    output_bcf = output_dir / "blueprint" / "variants.bcf"
+    info_file = output_dir / "blueprint" / "variants.info"
 
     if not Path(args.i).exists():
         sys.exit("Error: Input BCF file does not exist.")
@@ -158,25 +242,17 @@ def init_mode(args):
     input_md5 = compute_md5(args.i)
 
     try:
-        if args.sort_mem:
-            cmd = [
-                "bcftools", "annotate", "-x", "INFO", "--threads", threads, args.i,
-                "|", "bcftools", "norm", "-m-", "-f", args.fasta, "-c", "x", "--threads", threads, "--rm-dup", "all",
-                "|", "bcftools", "sort", "--threads", threads, "-m", args.sort_mem, "-Ob", "--write-index", "-o",
-                str(output_bcf)
-            ]
-        else:
-            cmd = [
-                "bcftools", "annotate", "-x", "INFO", "--threads", threads, args.i,
-                "|", "bcftools", "norm", "-m-", "-f", args.fasta, "-c", "x", "--threads", threads, "--rm-dup", "all",
-                "-Ob", "--write-index", "-o", str(output_bcf)
-            ]
+        cmd = [
+            "bcftools", "view", "-Ou", "--threads", threads, args.i,
+            "|", "bcftools", "annotate", "-x", "INFO", "--threads", threads,
+            "|", "bcftools", "norm", "-m-", "-f", args.fasta, "-c", "x", "--threads", threads, "--rm-dup", "all",
+            "-Ob", "--write-index", "-o", str(output_bcf)
+        ]
 
         start_time = datetime.now()
         subprocess.run(" ".join(cmd), shell=True, check=True)
         duration = datetime.now() - start_time
 
-        # Only log after successful creation of BCF file
         info_file.write_text("")  # Create empty info file
         log_script_command(info_file)
         log_message(info_file, f"Initialized VEP database: {args.name}")
@@ -187,7 +263,7 @@ def init_mode(args):
     except subprocess.CalledProcessError as e:
         sys.exit(f"Error during bcftools operation: {e}")
 
-def replace_db(db_bcf, temp_output_bcf):
+def replace_db(db_bcf: Path, temp_output_bcf: Path) -> None:
     # Add validation for both files
     is_valid, error = validate_bcf_header(db_bcf)
     if not is_valid:
@@ -218,99 +294,7 @@ def replace_db(db_bcf, temp_output_bcf):
         log_message(info_file, f"Number of samples: {stats['number of samples']}")
 
 
-def add_mode(args):
-
-    db_bcf = Path(args.db) / "vep_db.bcf"
-    info_file = Path(args.db) / "vep_db.bcf.info"
-    input_vcf = Path(args.vcf)
-    threads = str(max(int(args.threads), 1))
-
-    if not db_bcf.exists() or not input_vcf.exists():
-        sys.exit("Error: Database or input VCF file does not exist.")
-
-    input_md5 = compute_md5(input_vcf)
-    if check_duplicate_md5(info_file, input_md5):
-        sys.exit("Error: This file was already added to the database (MD5 match).")
-
-    try:
-        temp_output_bcf = db_bcf.parent / "temp_vep_db.bcf"
-        start_time = datetime.now()
-
-        if args.skip_preprocessing:
-
-            cmd_merge = ["bcftools", "merge", "-m", "none", "-o", str(temp_output_bcf), "-Ob", "--write-index", "--threads", threads,
-                         str(db_bcf), str(input_vcf)]
-            subprocess.run(cmd_merge, check=True)
-            duration = datetime.now() - start_time
-            # we might need this afterwards?
-            # bcftools norm vep_db.bcf -m- -c x --threads 10 -f /mnt/data/resources/reference/ucsc/hg19_canonical.fa.gz |
-            # bcftools sort -Ob -o vep_db_s.bcf --write-index -m 10G -T tmp/
-
-            # Replace the old database with the new one
-            replace_db(db_bcf, temp_output_bcf)
-
-            # Log only after successful operation
-            log_script_command(info_file)
-            log_message(info_file, f"Added new VCF: {input_vcf}")
-            log_message(info_file, f"Input file MD5: {input_md5}")
-            log_message(info_file, f"Merge command: {' '.join(cmd_merge)}")
-            log_message(info_file, f"Merge completed in {duration.total_seconds():.2f} seconds")
-        else:
-            temp_dir = db_bcf.parent / "add_temp"
-            temp_dir.mkdir(parents=True, exist_ok=True)
-            processed_input = temp_dir / "processed_input.bcf"
-
-            try:
-                if args.sort_mem:
-                    preprocess_cmd = [
-                        "bcftools", "annotate", "-x", "INFO", "--threads", threads, str(input_vcf),
-                        "|", "bcftools", "norm", "-m-", "-f", args.fasta, "-c", "x", "--threads", threads, "--rm-dup", "all",
-                        "|", "bcftools", "sort", "-m", args.sort_mem, "-Ob", "--write-index",
-                        "-o", str(processed_input), "-T", str(temp_dir), "--threads", threads
-                    ]
-                else:
-                    preprocess_cmd = [
-                        "bcftools", "annotate", "-x", "INFO", "--threads", threads, str(input_vcf),
-                        "|", "bcftools", "norm", "-m-", "-f", args.fasta, "-c", "x", "--threads", threads,
-                        "-Ob", "--write-index", "-o", str(processed_input), "--rm-dup", "all",
-                    ]
-
-                subprocess.run(" ".join(preprocess_cmd), shell=True, check=True)
-                preprocess_duration = datetime.now() - start_time
-
-                merge_start = datetime.now()
-                # Merge with specified chromosome order
-                cmd_merge = ["bcftools", "merge", "-m", "none",
-                             "-o", str(temp_output_bcf),
-                             "-Ob", "--write-index",
-                             "--threads", threads,
-                             str(db_bcf), str(input_vcf)]
-                subprocess.run(cmd_merge, check=True)
-                merge_duration = datetime.now() - merge_start
-
-                # Replace the old database with the new one
-                replace_db(db_bcf, temp_output_bcf)
-
-                # Log only after successful operation
-                log_script_command(info_file)
-                log_message(info_file, f"Added new VCF: {input_vcf}")
-                log_message(info_file, f"Input file MD5: {input_md5}")
-                log_message(info_file, f"Preprocessing command: {' '.join(preprocess_cmd)}")
-                log_message(info_file, f"Preprocessing completed in {preprocess_duration.total_seconds():.2f} seconds")
-                log_message(info_file, f"Merge command: {' '.join(cmd_merge)}")
-                log_message(info_file, f"Merge completed in {merge_duration.total_seconds():.2f} seconds")
-            finally:
-                import shutil
-                shutil.rmtree(temp_dir)
-
-        log_message(info_file, "Database update completed successfully")
-    except subprocess.CalledProcessError as e:
-        sys.exit(f"Error during bcftools operation: {e}")
-    except Exception as e:
-        raise
-
-
-def create_unique_annotation_dir(db_dir, workflow_hash) -> Path:
+def create_unique_annotation_dir(db_dir: Path, workflow_hash: str) -> Path:
     """Create a unique directory for this annotation run using timestamp and workflow hash"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     annotations_dir = Path(db_dir) / "annotations"
@@ -319,7 +303,7 @@ def create_unique_annotation_dir(db_dir, workflow_hash) -> Path:
     return run_dir
 
 
-def get_workflow_hash(workflow_dir):
+def get_workflow_hash(workflow_dir: Path) -> str:
     """Get combined hash of workflow files"""
     workflow_files = ['main.nf', 'nextflow.config']
     combined_content = b''
@@ -333,8 +317,7 @@ def get_workflow_hash(workflow_dir):
     import hashlib
     return hashlib.md5(combined_content).hexdigest()
 
-
-def store_workflow_files(workflow_dir, target_dir):
+def store_workflow_files(workflow_dir: Path, target_dir: Path) -> Dict[str, str]:
     """Store workflow files with their hash for version control"""
     workflow_files = {
         'main.nf': workflow_dir / 'main.nf',
@@ -356,75 +339,79 @@ def store_workflow_files(workflow_dir, target_dir):
 
     return stored_files
 
+def add_mode(args: argparse.Namespace) -> None:
+    db_bcf = Path(args.db) / "blueprint" / "variants.bcf"
+    info_file = Path(args.db) / "blueprint" / "variants.info"
+    new_vcf = Path(args.vcf)
 
-def find_latest_annotation_run(db_dir):
-    """Find the latest annotation run directory"""
-    annotations_dir = Path(db_dir) / "annotations"
-    if not annotations_dir.exists():
-        return None
+    ensure_indexed(db_bcf)
+    ensure_indexed(new_vcf)
 
-    runs = [d for d in annotations_dir.glob("*_*") if d.is_dir()]
-    if not runs:
-        return None
+    threads = str(max(int(args.t), 1))
 
-    return max(runs, key=lambda x: x.stat().st_mtime)
+    input_md5 = compute_md5(new_vcf)
+    if check_duplicate_md5(info_file, input_md5):
+        sys.exit("Error: This file was already added to the database (MD5 match).")
 
-
-def validate_workflow_version(annotations_dir, workflow_hashes):
-    """Validate that workflow version matches previous runs"""
-    latest_run = find_latest_annotation_run(annotations_dir)
-    if not latest_run:
-        return True, None  # No previous runs, so valid
-
-    latest_info = latest_run / "annotation.info"
+    temp_merged = Path(str(db_bcf) + ".tmp.bcf")
     try:
-        with open(latest_info, 'r') as f:
-            content = f.read()
-            for name, hash_value in workflow_hashes.items():
-                expected_line = f"Workflow {name} MD5: {hash_value}"
-                if expected_line not in content:
-                    return False, f"Workflow file {name} has changed since last annotation run"
-        return True, None
-    except FileNotFoundError:
-        return False, "Previous annotation info file not found"
+        start_time = datetime.now()
 
+        subprocess.run([
+            "bcftools", "concat",
+            "--allow-overlaps",
+            "--rm-dup", "all",
+            "-Ob",
+            "--write-index",
+            "-o", str(temp_merged), "--threads", threads,
+            str(db_bcf), str(new_vcf)
+        ], check=True)
 
-def annotate_mode(args):
-    db_bcf = Path(args.db) / "vep_db.bcf"
-    db_info = Path(args.db) / "vep_db.bcf.info"
+        duration = datetime.now() - start_time
+
+        stats = get_bcf_stats(temp_merged)
+
+        os.replace(temp_merged, db_bcf)
+        os.replace(str(temp_merged) + ".csi", str(db_bcf) + ".csi")
+
+        log_script_command(info_file)
+        log_message(info_file, f"Added new file: {new_vcf}")
+        log_message(info_file, f"Input file MD5: {input_md5}")
+        log_message(info_file, "Database statistics after update:")
+        for key, value in stats.items():
+            log_message(info_file, f"{key}: {value}")
+        log_message(info_file, f"Processing completed in {duration.total_seconds():.2f} seconds")
+
+    except subprocess.CalledProcessError as e:
+        temp_merged.unlink(missing_ok=True)
+        Path(str(temp_merged) + ".csi").unlink(missing_ok=True)
+        raise RuntimeError(f"Failed to add variants: {e}")
+
+def annotate_mode(args: argparse.Namespace) -> None:
+    """Run annotation workflow on database"""
+    db_bcf = Path(args.db) / "blueprint" / "variants.bcf"
+    db_info = Path(args.db) / "blueprint" / "variants.info"
 
     if not db_bcf.exists():
         sys.exit("Error: Database BCF file does not exist.")
 
-    # Get workflow hash and create directory
+    # Create unique run directory
     workflow_hash = get_workflow_hash(args.workflow)
     run_dir = create_unique_annotation_dir(args.db, workflow_hash)
-
-    # Create run-specific info file
     run_info = run_dir / "annotation.info"
 
-    # Copy original info file
-    shutil.copy2(db_info, run_dir / "vep_db.bcf.info.snapshot")
-
-    # Store workflow files and get their hashes
+    # Store blueprint snapshot and workflow files
+    shutil.copy2(db_info, run_dir / "blueprint.snapshot")
     workflow_files = store_workflow_files(Path(args.workflow), run_dir)
 
-    # For subsequent runs, validate workflow version unless force flag is used
-    previous_runs = list(Path(args.db).glob("annotations/*"))
-    if previous_runs and not args.force:
-        is_valid, error = validate_workflow_version(args.db, workflow_files)
-        if not is_valid:
-            sys.exit(f"Workflow validation failed: {error}\nUse --force to override this check.")
-
-
     try:
-        # Run nextflow workflow in database mode first
+        # Run nextflow workflow
         cmd = [
             "nextflow", "run", str(run_dir / "main.nf"),
             "-with-trace",
             "--input", str(db_bcf),
             "--output", str(run_dir),
-            "--db_mode", "true"  # Enable database mode
+            "--db_mode", "true"
         ]
         if args.params:
             cmd.extend(["--params-file", args.params])
@@ -432,9 +419,8 @@ def annotate_mode(args):
         start_time = datetime.now()
         subprocess.run(cmd, check=True)
 
-        # Store workflow DAG
+        # Store workflow DAG and log completion
         store_workflow_dag(run_dir, cmd)
-
         duration = datetime.now() - start_time
 
         # Log annotation details
@@ -446,18 +432,22 @@ def annotate_mode(args):
             log_message(run_info, f"Workflow {name} MD5: {hash_value}")
         log_message(run_info, f"Processing completed in {duration.total_seconds():.2f} seconds")
 
-        # Store tool versions in run directory
+        # Log tool versions if available
         tool_versions = Path(run_dir) / "tool_version.log"
         if tool_versions.exists():
             with open(tool_versions, 'r') as f:
                 for line in f:
                     log_message(run_info, f"Tool version: {line.strip()}")
 
+        # Create archive and clean up
+        archive_path = create_annotation_archive(run_dir)
+        log_message(db_info, f"Created annotation archive: {archive_path.name}")
+
     except subprocess.CalledProcessError as e:
+        shutil.rmtree(run_dir)
         sys.exit(f"Error during workflow execution: {e}")
 
-
-def main():
+def main() -> None:
     check_bcftools_installed()
 
     parser = argparse.ArgumentParser(
@@ -469,20 +459,16 @@ def main():
     init_parser = subparsers.add_parser("init", help="Initialize VEP database")
     init_parser.add_argument("-n", "--name", dest="name", required=True, help="Name of the new database directory")
     init_parser.add_argument("-i", "--vcf", dest="i", help="CSI-indexed BCF file")
-    init_parser.add_argument("-p", "--parent-dir", dest="p", default=".",
-                            help="Parent output directory (default: current directory)")
     init_parser.add_argument("-t", "--threads", dest="t", help="Use multithreading with <int> worker threads [4]", default=4)
-    init_parser.add_argument("-f", "--fasta", required=True, help="Reference FASTA file for variant normalization")
-    init_parser.add_argument("-s", "--sort-mem", help="Sort output with specified memory limit (e.g., '768M'). Skip sorting if not provided")
+    init_parser.add_argument("-f", "--fasta", dest="fasta", required=True, help="Reference FASTA file for variant normalization")
+    init_parser.add_argument("-o", "--output", dest="output", default=".", help="Output directory for the database (default: current directory)")
 
     # add command
     add_parser = subparsers.add_parser("add", help="Add new VCF to the database")
     add_parser.add_argument("-d", "--db", required=True, help="Path to the existing database directory")
     add_parser.add_argument("-i", "--vcf", help="Path to the VCF file to be added")
-    add_parser.add_argument("-t", "--threads", help="Use multithreading with <int> worker threads [4]", default=4)
-    add_parser.add_argument("-f", "--fasta", required=True, help="Reference FASTA file for variant normalization")
-    add_parser.add_argument("-s", "--sort-mem", help="Sort output with specified memory limit (e.g., '768M'). Skip sorting if not provided")
-    add_parser.add_argument("--skip-preprocessing", action="store_true", help="Skip preprocessing steps (annotate, norm, sort) and merge input directly")
+    add_parser.add_argument("-t", "--threads", dest="t", help="Use multithreading with <int> worker threads [4]", default=4)
+    add_parser.add_argument("-f", "--fasta", dest="fasta", required=True, help="Reference FASTA file for variant normalization")
 
     # annotate command
     annotate_parser = subparsers.add_parser("annotate", help="Run annotation workflow on database")
