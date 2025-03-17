@@ -1,1 +1,0 @@
-[2025-03-16 00:02:06] INFO: Script command: python3 src/cache.py init -n test_db -o /home/j380r/projects/vepstash/tests/data/test_out -i /home/j380r/projects/vepstash/tests/data/nodata/gnomad_test.bcf -f /home/j380r/projects/vepstash/tests/data/nodata/reference.fasta -t 2

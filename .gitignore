@@ -1,25 +1,27 @@
 # Python
 __pycache__/
+build/
+dist/
+*.egg-info/
 *.py[cod]
+
+# Environments
 .env*/
 .venv*/
 env/
 venv/
-ENV/
-build/
-dist/
-*.egg-info/
 
 # Testing
 .pytest_cache/
 .coverage
 htmlcov/
 /tests/data/
+/test_db/
 
 # IDE
-.idea/*
-.vscode/
+/.idea/
+/.vscode/
 
 # Nextflow
-.nextflow/
-work/
+/.nextflow/
+/work/
