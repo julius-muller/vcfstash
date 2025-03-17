@@ -94,9 +94,9 @@ process EchtvarAnnotate {
 
     script:
     """
-    /mnt/data/apps/echtvar/echtvar anno -e /mnt/data/resources/gnomad/vep_gnomad_v4_hg19_genomes/echtvar_vep_gnomad4.1_genome_hg19lo.zip \
-                 -e /mnt/data/resources/gnomad/vep_gnomad_v4_hg19_exomes/echtvar_vep_gnomad4.1_exome_hg19lo.zip \
-                 -e /mnt/data/resources/clinvar/vcf_GRCh37/clinvar_20241111_hg19.zip \
+    ${params.echtvar_path} anno -e ${params.echtvar_gnomad_genome} \
+                 -e ${params.echtvar_gnomad_exome} \
+                 -e ${params.echtvar_clinvar} \
                  $subset_bcf ${sample_name}_norm_sub_ev.bcf
     bcftools index ${sample_name}_norm_sub_ev.bcf --threads ${task.cpus}
     """
@@ -295,9 +295,9 @@ process CaptureToolVersions {
     echo "bcftools version:" > ${sample_name}_final.tool_version.log
     bcftools --version >> ${sample_name}_final.tool_version.log
     echo "vep version:" >> ${sample_name}_final.tool_version.log
-    /usr/bin/apptainer exec -B /mnt/data:/mnt/data /mnt/data/apps/ensembl-vep/113/vep.sif vep 2>&1 | grep "ensembl-.*" >> ${sample_name}_final.tool_version.log
+    ${params.apptainer_path} exec -B ${params.bind_path} ${params.vep_container} vep 2>&1 | grep "ensembl-.*" >> ${sample_name}_final.tool_version.log
     echo "echtvar version:" >> ${sample_name}_final.tool_version.log
-    /mnt/data/apps/echtvar/echtvar --version >> ${sample_name}_final.tool_version.log
+    ${params.echtvar_path} --version >> ${sample_name}_final.tool_version.log
     """
 
     stub:

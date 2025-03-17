@@ -416,8 +416,16 @@ def annotate_mode(args: argparse.Namespace) -> None:
         if args.params:
             cmd.extend(["--params-file", args.params])
 
+        # Add any additional Nextflow arguments
+        if args.nextflow_args:
+            # Remove the '--' separator if present
+            if args.nextflow_args[0] == '--':
+                cmd.extend(args.nextflow_args[1:])
+            else:
+                cmd.extend(args.nextflow_args)
+
         start_time = datetime.now()
-        subprocess.run(cmd, check=True)
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
 
         # Store workflow DAG and log completion
         store_workflow_dag(run_dir, cmd)
@@ -471,11 +479,14 @@ def main() -> None:
     add_parser.add_argument("-f", "--fasta", dest="fasta", required=True, help="Reference FASTA file for variant normalization")
 
     # annotate command
+
+    # Annotate command
     annotate_parser = subparsers.add_parser("annotate", help="Run annotation workflow on database")
     annotate_parser.add_argument("-d", "--db", required=True, help="Path to the existing database directory")
     annotate_parser.add_argument("-w", "--workflow", required=True, help="Directory containing workflow files (main.nf, nextflow.config)")
     annotate_parser.add_argument("-p", "--params", help="Optional parameters file for nextflow workflow")
-    annotate_parser.add_argument("-f", "--force", action="store_true", help="Force annotation even if workflow files have changed")
+    # Add support for passing through Nextflow args
+    annotate_parser.add_argument('nextflow_args', nargs=argparse.REMAINDER, help='Additional arguments for Nextflow')
 
     args = parser.parse_args()
 

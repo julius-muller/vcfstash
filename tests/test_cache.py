@@ -177,19 +177,29 @@ def test_annotation(setup_test_env):
     db_path = TEST_OUT / "test_db"
     annotations_dir = db_path / "annotations"
 
-    # Copy the real workflow files
+    # Copy workflow files
     real_workflow = Path(__file__).parent.parent / "workflow"
     shutil.copytree(real_workflow, WORKFLOW_DIR, dirs_exist_ok=True)
 
-    # Run annotation
+    # Run annotation with Nextflow args
     annotate_cmd = [
         "python3", "src/cache.py", "annotate",
         "-d", str(db_path),
         "-w", str(WORKFLOW_DIR),
-        "-p", str(TEST_PARAMS)
+        "-p", str(TEST_PARAMS),
+        "--",  # separator for Nextflow args
+        "-profile", "test",
+        "--max_cpus", "4"
     ]
     result = subprocess.run(annotate_cmd, capture_output=True, text=True)
-    assert result.returncode == 0, f"Annotation failed: {result.stderr}"
+
+    # Print full output for debugging
+    print("\nSTDOUT:")
+    print(result.stdout)
+    print("\nSTDERR:")
+    print(result.stderr)
+
+    assert result.returncode == 0, f"Annotation failed. Exit code: {result.returncode}\nOutput: {result.stdout}\nError: {result.stderr}"
 
     # Get the archive
     archives = sorted(annotations_dir.glob("*.vepstash"))
