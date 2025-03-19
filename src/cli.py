@@ -99,7 +99,7 @@ def main() -> None:
                 db_path=args.db,
                 input_vcf=args.i,
                 output_dir=args.output,
-                threads=args.t
+                threads=args.threads
             )
             annotator.annotate()
 
