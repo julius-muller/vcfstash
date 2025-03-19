@@ -15,7 +15,6 @@ venv/
 .pytest_cache/
 .coverage
 htmlcov/
-/tests/data/
 /test_db/
 
 # IDE

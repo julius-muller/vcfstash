@@ -1,0 +1,6 @@
+[2025-03-17 15:35:56] INFO: Script command: python3 src/cache.py init -n test_db -o /home/j380r/projects/vepstash/tests/data/test_out -i /home/j380r/projects/vepstash/tests/data/nodata/gnomad_test.bcf -f /home/j380r/projects/vepstash/tests/data/nodata/reference.fasta -t 2
+[2025-03-17 15:35:56] INFO: Initialized VEP database: test_db
+[2025-03-17 15:35:56] INFO: Input file: /home/j380r/projects/vepstash/tests/data/nodata/gnomad_test.bcf
+[2025-03-17 15:35:56] INFO: Input file MD5: 870e3ef4504243cdbfb5f3eb4b1a84cd
+[2025-03-17 15:35:56] INFO: Command executed: bcftools view -Ou --threads 2 /home/j380r/projects/vepstash/tests/data/nodata/gnomad_test.bcf | bcftools annotate -x INFO --threads 2 | bcftools norm -m- -f /home/j380r/projects/vepstash/tests/data/nodata/reference.fasta -c x --threads 2 --rm-dup all -Ob --write-index -o /home/j380r/projects/vepstash/tests/data/test_out/test_db/blueprint/variants.bcf
+[2025-03-17 15:35:56] INFO: Processing completed in 0.06 seconds

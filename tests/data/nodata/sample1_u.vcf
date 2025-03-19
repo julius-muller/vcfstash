@@ -1,0 +1,6 @@
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=AD,Number=.,Type=Integer,Description="Allelic depths for the ref and alt alleles">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	SAMPLE1
+1	10000	.	A	G	100	PASS	DP=50	GT:AD	0/1:15,35
+1	20000	.	T	C	100	PASS	DP=45	GT:AD	1/1:5,45

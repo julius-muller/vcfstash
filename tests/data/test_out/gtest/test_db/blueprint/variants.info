@@ -1,0 +1,18 @@
+[2025-03-19 14:51:18] INFO: Initialized VEP database: test_db
+[2025-03-19 14:51:18] INFO: Input file: tests/data/nodata/gnomad_test.bcf
+[2025-03-19 14:51:18] INFO: Input file MD5: 870e3ef4504243cdbfb5f3eb4b1a84cd
+[2025-03-19 14:51:18] INFO: Command executed: bcftools view -Ou --threads 2 tests/data/nodata/gnomad_test.bcf | bcftools annotate -x INFO --threads 2 | bcftools norm -m- -f tests/data/nodata/reference.fasta -c x --threads 2 --rm-dup all -Ob --write-index -o tests/data/test_out/gtest/test_db/blueprint/variants.bcf
+[2025-03-19 14:51:18] INFO: Processing completed in 0.07 seconds
+[2025-03-19 14:54:34] INFO: Added new file: tests/data/nodata/dbsnp_test.bcf
+[2025-03-19 14:54:34] INFO: Input file MD5: afb8591243323559789f8d3c886e9ad2
+[2025-03-19 14:54:34] INFO: Database statistics after update:
+[2025-03-19 14:54:34] INFO: number of samples: 0
+[2025-03-19 14:54:34] INFO: number of records: 7
+[2025-03-19 14:54:34] INFO: number of no-ALTs: 0
+[2025-03-19 14:54:34] INFO: number of SNPs: 4
+[2025-03-19 14:54:34] INFO: number of MNPs: 0
+[2025-03-19 14:54:34] INFO: number of indels: 3
+[2025-03-19 14:54:34] INFO: number of others: 0
+[2025-03-19 14:54:34] INFO: number of multiallelic sites: 0
+[2025-03-19 14:54:34] INFO: number of multiallelic SNP sites: 0
+[2025-03-19 14:54:34] INFO: Processing completed in 0.05 seconds

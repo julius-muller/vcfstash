@@ -1,0 +1,1 @@
+[2025-03-17 15:35:56] INFO: Script command: python3 src/cache.py annotate -d /home/j380r/projects/vepstash/tests/data/test_out/test_db -w /home/j380r/projects/vepstash/tests/data/workflow -p /home/j380r/projects/vepstash/tests/data/test_params.yml -- -profile test --max_cpus 4
