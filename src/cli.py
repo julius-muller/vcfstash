@@ -77,6 +77,7 @@ def main() -> None:
                 threads=args.t
             )
             initializer.initialize()
+
         elif args.command == "stash-add":
                     updater = DatabaseUpdater(
                         db_path=args.db,
@@ -85,6 +86,7 @@ def main() -> None:
                         threads=args.t
                     )
                     updater.add()
+
         elif args.command == "stash-annotate":
             annotator = DatabaseAnnotator(
                 db_path=args.db,
@@ -113,4 +115,4 @@ if __name__ == "__main__":
 # ./vepstash.py stash-init --name test_db --vcf tests/data/nodata/gnomad_test.bcf --fasta tests/data/nodata/reference.fasta --output tests/data/test_out/gtest --threads 2
 # ./vepstash.py stash-add --db tests/data/test_out/gtest/test_db/ --vcf tests/data/nodata/dbsnp_test.bcf --fasta tests/data/nodata/reference.fasta --threads 2
 # ./vepstash.py stash-annotate --db tests/data/test_out/gtest/test_db --workflow workflow --params config/nextflow_test.yml
-# ./vepstash.py annotate --db tests/data/test_out/gtest --vcf tests/data/nodata/gnomad_test.bcf --output tests/data/test_out/gtest/annotated --threads 2
+# ./vepstash.py annotate --db tests/data/test_out/gtest --vcf tests/data/nodata/sample1.vcf --output tests/data/test_out/gtest/annotated --threads 2

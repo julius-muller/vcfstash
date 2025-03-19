@@ -44,6 +44,16 @@ class DatabaseAnnotator(VEPDatabase):
         if not self.variants_bcf.exists():
             raise FileNotFoundError("Database BCF file does not exist.")
 
+        # Create workflow directory in database if it doesn't exist
+        db_workflow_dir = self.db_path / "workflow"
+        db_workflow_dir.mkdir(exist_ok=True)
+
+        # Copy workflow files to database
+        shutil.copy2(self.workflow_path, db_workflow_dir / "main.nf")
+        shutil.copy2(self.workflow_config_path, db_workflow_dir / "nextflow.config")
+        if self.params_file:
+            shutil.copy2(self.params_file, db_workflow_dir / self.params_file.name)
+
         # Store blueprint snapshot and workflow files
         shutil.copy2(self.info_file, self.run_dir / "blueprint.snapshot")
         workflow_files = self._store_workflow_files(self.workflow_dir, self.run_dir)
@@ -81,7 +91,6 @@ class DatabaseAnnotator(VEPDatabase):
             print(f"NextFlow Error:\n{e.stderr}", file=sys.stderr)
             shutil.rmtree(self.run_dir)
             sys.exit(1)
-
 
     def _create_archive(self, run_dir: Path) -> Path:
         """Create a single archive file from annotation run directory"""
