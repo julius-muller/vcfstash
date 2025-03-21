@@ -20,7 +20,8 @@ Date: 16-03-2025
 """
 
 import argparse
-import sys
+from pathlib import Path
+from src.utils.logging import setup_logger, log_command
 
 from src.database.initializer import DatabaseInitializer
 from src.database.updater import DatabaseUpdater
@@ -28,6 +29,12 @@ from src.database.annotator import DatabaseAnnotator, VCFAnnotator
 from src.utils.validation import check_bcftools_installed
 
 def main() -> None:
+
+    # Setup logging
+    log_file = Path("vepstash.log")
+    logger = setup_logger(log_file)
+    log_command(logger)
+
     check_bcftools_installed()
     parser = argparse.ArgumentParser(
         description="Manage VEP database with BCFtools."
@@ -69,6 +76,8 @@ def main() -> None:
 
     try:
         if args.command == "stash-init":
+            logger.info(f"Initializing database: {args.name}")
+
             initializer = DatabaseInitializer(
                 name=args.name,
                 input_file=args.i,
@@ -79,15 +88,18 @@ def main() -> None:
             initializer.initialize()
 
         elif args.command == "stash-add":
-                    updater = DatabaseUpdater(
-                        db_path=args.db,
-                        input_file=args.i,
-                        fasta_ref=args.fasta,
-                        threads=args.t
-                    )
-                    updater.add()
+            logger.info(f"Adding to database: {args.db}")
+            updater = DatabaseUpdater(
+                db_path=args.db,
+                input_file=args.i,
+                fasta_ref=args.fasta,
+                threads=args.t
+            )
+            updater.add()
 
         elif args.command == "stash-annotate":
+            logger.info(f"Running annotation workflow on database: {args.db}")
+
             annotator = DatabaseAnnotator(
                 db_path=args.db,
                 workflow_dir=args.workflow,
@@ -97,6 +109,8 @@ def main() -> None:
             annotator.annotate()
 
         elif args.command == "annotate":
+            logger.info(f"Annotating VCF: {args.i}")
+
             annotator = VCFAnnotator(
                 db_path=args.db,
                 input_vcf=args.i,
@@ -107,6 +121,7 @@ def main() -> None:
             annotator.annotate()
 
     except Exception as e:
+        logger.error(f"Error during execution: {e}", exc_info=True)
         raise  # This will show the full traceback
 
 if __name__ == "__main__":

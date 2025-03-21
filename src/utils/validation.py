@@ -128,18 +128,27 @@ def compute_md5(file_path: Path) -> str:
         sys.exit(f"Error computing MD5 checksum: {e}")
 
 def validate_vcf_format(vcf_path: Path) -> tuple[bool, str | None]:
-    """
-    Validate VCF format fields to ensure required FORMAT fields are present.
+    """Validate VCF format fields.
 
     Args:
-        vcf_path (Path): Path to the VCF file.
+        vcf_path: Path to the VCF file
 
     Returns:
-        tuple: (is_valid, error_message). If valid, error_message is None.
+        Tuple of (is_valid, error_message)
     """
     try:
         vcf = pysam.VariantFile(str(vcf_path))
-        required_formats = {"AD", "DP", "GT"}
+
+        # Ensure the file can be read
+        try:
+            next(vcf.fetch())
+        except StopIteration:
+            return False, "VCF file is empty"
+        except Exception as e:
+            return False, f"Error reading VCF file: {e}"
+
+        # Check for minimal required FORMAT fields
+        required_formats = {'GT', 'AD'}  # Removed DP requirement
         available_formats = set(vcf.header.formats.keys())
 
         missing_formats = required_formats - available_formats
@@ -147,5 +156,6 @@ def validate_vcf_format(vcf_path: Path) -> tuple[bool, str | None]:
             return False, f"Missing required FORMAT fields: {', '.join(missing_formats)}"
 
         return True, None
+
     except Exception as e:
         return False, f"Error reading VCF file: {e}"

@@ -88,18 +88,21 @@ vep_db_name/
 
 ## Workflow Parameters
 
-Custom VEP parameters can be specified in a YAML file:
+All workflow parameters are configured in `config/nextflow.yml`:
+
+### VEP Configuration
 
 ```yaml
-vep:
-  cache_version: 108
-  assembly: GRCh37
-  plugins:
-    - LoFtool
-    - SpliceAI
-```
+# VEP settings
+vep_assembly: 'GRCh37'  # Genome assembly version
+vep_options:            # VEP annotation options
+  - '--transcript_version'
+  - '--total_length'
+  # ... more options
 
-Pass the parameters file using `-p params.yml`.
+# Performance settings
+vep_max_chr_parallel: 2  # Maximum chromosomes to process in parallel
+vep_max_forks: 2         # VEP forks per chromosome
 
 ## Performance
 
