@@ -1,6 +1,15 @@
 ##fileformat=VCFv4.2
 ##contig=<ID=1,length=248956422>
+##contig=<ID=4,length=248956422>
+##contig=<ID=9,length=248956422>
+##contig=<ID=11,length=248956422>
+##contig=<ID=22,length=248956422>
+##contig=<ID=MT,length=248956422>
 ##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
-1	10000	.	A	G	100	PASS	DP=50
-1	20000	.	T	C	100	PASS	DP=45
+1	1	.	G	A	100	PASS	DP=50
+4	2	.	T	C	100	PASS	DP=45
+9	2	.	T	C	100	PASS	DP=45
+11	2	.	T	C	100	PASS	DP=45
+22	2	.	T	C	100	PASS	DP=45
+MT	2	.	T	C	100	PASS	DP=45

@@ -1,12 +1,553 @@
+import json
+import os
+import re
+import shutil
 import subprocess
-import sys
 from pathlib import Path
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Dict, Any
 
-import yaml
-import hashlib
-from src.utils.validation import ensure_indexed, validate_bcf_header
-from src.utils.logging import setup_logger
+from src.utils.validation import validate_bcf_header, get_vep_version_from_cmd, get_echtvar_version_from_cmd
+from src.utils.logging import setup_logging
+
+
+class NextflowWorkflow:
+
+    NXF_VERSION = "24.10.5"
+
+    """ Base class for Nextflow workflow operations for a single input file """
+    def __init__(self, workflow: Path, input_file: Path, output_dir: Path, name: str,
+                 config_file: Path, anno_config_file: Optional[Path] = None,
+                 params_file: Optional[Path] = None, verbosity: int = 0):
+
+        self.workflow_file = Path(workflow).expanduser()
+        self.workflow_dir = self.workflow_file.parent
+        self.input_file = Path(input_file).expanduser()
+        self.output_dir = Path(output_dir).expanduser()
+        self.name = name
+        # Set up logging
+        log_file = Path(self.workflow_dir) / "workflow.log"
+        self.logger = setup_logging(
+            verbosity=verbosity,
+            log_file=log_file if self.workflow_file.exists() else None
+        )
+
+        if not self.workflow_file.exists():
+            self.logger.error(f"Workflow file not found: {self.workflow_file}")
+            raise FileNotFoundError(f"Workflow file not found: {self.workflow_file}")
+
+        self.workflow_dir = self.workflow_file.parent
+        self.workflow_dir_src = Path(__file__).parent.parent.parent / "workflow"
+
+        self.logger.info(f"Initializing Nextflow workflow in: {self.workflow_dir}")
+
+        self.nf_config = Path(config_file).expanduser()
+        if not self.nf_config.exists():
+            self.logger.error(f"Nextflow config file not found: {self.nf_config}")
+            raise FileNotFoundError(f"Nextflow config file not found: {self.nf_config}")
+        self.nf_config_content = self.read_groovy_config(self.nf_config)
+        self.validate_config()
+
+        self.nfa_config = self.nfa_config_content = None
+        if anno_config_file:
+            self.nfa_config = Path(anno_config_file).expanduser()
+            if not self.nfa_config.exists():
+                self.logger.error(f"Nextflow annotation config file not found: {self.nfa_config}")
+                raise FileNotFoundError(f"Nextflow config file not found: {self.nfa_config}")
+            self.nfa_config_content = self.read_groovy_config(self.nfa_config)
+            self.validate_annotation_config()
+
+        # Handle optional params_file
+        self.params_file = Path(params_file).expanduser() if params_file else None
+        if self.params_file and not self.params_file.exists():
+            self.logger.error(f"Parameters file not found: {self.params_file}")
+            raise FileNotFoundError(f"Parameters file not found: {self.params_file}")
+
+        self.work_dir = None
+        self._setup_nextflow_skeleton()
+
+
+
+    def validate_config(self):
+        """
+        Validates the main configuration file (nextflow.config) loaded into self.config_content.
+
+        Checks for required parameters, valid paths, and proper configuration structure.
+
+        Returns:
+            bool: True if configuration is valid
+
+        Raises:
+            ValueError: If critical configuration issues are found
+        """
+        warnings = []
+
+        # Check if config_content exists
+        if not hasattr(self, 'nf_config_content') or not self.nf_config_content:
+            raise ValueError("No configuration content loaded.")
+
+        # Extract params section
+        config_params = self.nf_config_content.get('params', {})
+        if not config_params:
+            err_msg = "No 'params' section found in Nextflow config file."
+            self.logger.error(err_msg)
+            raise ValueError(err_msg)
+
+        # 1. Check required parameters
+        required_params = [
+            'chr_add', 'reference', 'echtvar_cmd','echtvar_cmd_version',
+            'echtvar_gnomad_genome', 'echtvar_gnomad_exome', 'echtvar_clinvar',
+            'vep_cmd','vep_cmd_version', 'vep_cache', 'vep_max_chr_parallel', 'vep_max_forks', 'vep_buffer'
+        ]
+
+        missing_params = [param for param in required_params if param not in config_params]
+        if missing_params:
+            err_msg = f"Missing required parameters in Nextflow config: {', '.join(missing_params)}"
+            self.logger.error(err_msg)
+            raise ValueError(err_msg)
+
+        # Check echtvar and vep Version
+        vep_vers_found = get_vep_version_from_cmd(config_params['vep_cmd'])
+        if config_params['vep_cmd_version'] != vep_vers_found:
+            raise ValueError(f"VEP version mismatch: expected {config_params['vep_cmd_version']}, found {vep_vers_found}")
+
+        ev_vers_found = get_echtvar_version_from_cmd(config_params['echtvar_cmd'])
+        if config_params['echtvar_cmd_version'] != ev_vers_found:
+            raise ValueError(f"echtvar version mismatch: expected {config_params['echtvar_cmd_version']}, found {ev_vers_found}")
+
+        # 2. Check paths for existence
+        file_paths = ['reference', 'chr_add', 'echtvar_gnomad_genome',
+                      'echtvar_gnomad_exome', 'echtvar_clinvar']
+
+        for path_param in file_paths:
+            if path_param in config_params:
+                path_str = config_params[path_param]
+                if path_str and not isinstance(path_str, bool) and not path_str.startswith('${'):
+                    path = Path(path_str)
+                    if not path.exists():
+                        warn_msg = f"Path defined in '{path_param}' does not exist: {path_str}"
+                        self.logger.warning(warn_msg)
+                        warnings.append(warn_msg)
+
+        # 3. Check directory paths
+        dir_paths = ['vep_cache']
+        for path_param in dir_paths:
+            if path_param in config_params:
+                path_str = config_params[path_param]
+                if path_str and not isinstance(path_str, bool) and not path_str.startswith('${'):
+                    path = Path(path_str)
+                    if not path.exists():
+                        warn_msg = f"Directory defined in '{path_param}' does not exist: {path_str}"
+                        self.logger.warning(warn_msg)
+                        warnings.append(warn_msg)
+
+        # 4. Validate VEP command format
+        vep_cmd = config_params['vep_cmd']
+        if not any(x in vep_cmd.lower() for x in ['vep', 'ensembl-vep']):
+            warn_msg = f"VEP command might be misconfigured: '{vep_cmd}'"
+            self.logger.warning(warn_msg)
+            warnings.append(warn_msg)
+
+        # 5. Validate performance settings
+        perf_params = ['vep_max_chr_parallel', 'vep_max_forks', 'vep_buffer']
+        for param in perf_params:
+            if param in config_params:
+                value = config_params[param]
+                if not isinstance(value, (int, float)) or value <= 0:
+                    warn_msg = f"Performance parameter '{param}' should be a positive number: {value}"
+                    self.logger.warning(warn_msg)
+                    warnings.append(warn_msg)
+
+        # Print summary of validation
+        if warnings:
+            self.logger.warning(f"Configuration validation found {len(warnings)} warning(s).")
+
+        self.logger.info("Main configuration validation completed successfully.")
+
+
+    def validate_annotation_config(self):
+        """
+        Validates the annotation configuration (annotation.config) loaded into self.anno_config_content.
+
+        Checks for required parameters, annotation options, and proper configuration structure.
+
+        Returns:
+            bool: True if annotation configuration is valid
+
+        Raises:
+            ValueError: If critical configuration issues are found
+        """
+        warnings = []
+
+        # Check if anno_config_content exists
+        if not hasattr(self, 'nfa_config_content') or not self.nfa_config_content:
+            raise ValueError("No annotation configuration content loaded.")
+
+        # Extract params section
+        anno_params = self.nfa_config_content.get('params', {})
+        if not anno_params:
+            err_msg = "No 'params' section found in annotation config file."
+            self.logger.error(err_msg)
+            raise ValueError(err_msg)
+
+        # 1. Check required MD5 parameters
+        md5_params = [
+            'reference_md5sum', 'echtvar_gnomad_genome_md5sum',
+            'echtvar_gnomad_exome_md5sum', 'echtvar_clinvar_md5sum'
+        ]
+
+        missing_md5_params = [param for param in md5_params if param not in anno_params]
+        if missing_md5_params:
+            err_msg = f"Missing MD5 checksums in annotation config: {', '.join(missing_md5_params)}"
+            self.logger.error(err_msg)
+            raise ValueError(err_msg)
+
+        # 2. Check version parameters
+        version_params = ['echtvar_cmd_version', 'vep_cmd_version']
+        missing_version_params = [param for param in version_params if param not in anno_params]
+        if missing_version_params:
+            err_msg = f"Missing version parameters in annotation config: {', '.join(missing_version_params)}"
+            self.logger.error(err_msg)
+            raise ValueError(err_msg)
+
+        # 3. Check VEP options
+        if 'vep_options' not in anno_params:
+            raise ValueError("VEP options not found in annotation config.")
+
+        # Print summary of validation
+        if warnings:
+            self.logger.warning(f"Annotation config validation found {len(warnings)} warning(s).")
+
+        self.logger.info("Annotation configuration validation completed successfully.")
+
+
+    def read_groovy_config(self, config_path: Path | str) -> dict:
+        """
+        Reads and parses a Groovy configuration file into a Python dictionary.
+
+        Args:
+            config_path (Path | str): Path to the Groovy configuration file.
+
+        Returns:
+            dict: Dictionary representation of the Groovy configuration file if it exists,
+                  else empty dictionary.
+        """
+        try:
+            config_file = Path(config_path)
+            if not config_file.exists():
+                self.logger.warning(f"Groovy config file not found: {config_path}")
+                return {}
+
+            content = config_file.read_text()
+            return self._parse_groovy_content(content)
+        except Exception as e:
+            self.logger.error(f"Error reading Groovy config file {config_path}: {e}")
+            return {}
+
+    @staticmethod
+    def _parse_groovy_content(content: str) -> dict:
+        """
+        Parses Groovy configuration content into a Python dictionary.
+
+        Args:
+            content (str): Content of the Groovy configuration file.
+
+        Returns:
+            dict: Dictionary representation of the Groovy configuration.
+        """
+        result = {}
+        current_section = result
+        section_stack = []
+
+        # Track if we're in a list
+        in_list = False
+        current_key = None
+        list_items = []
+
+        # Split content into lines and process
+        lines = content.split('\n')
+        for i, line in enumerate(lines):
+            original_line = line
+            line = line.strip()
+
+            # Skip comments and empty lines
+            if not line or line.startswith('//'):
+                continue
+
+            # Check if we're in a multi-line list
+            if in_list:
+                if ']' in line:
+                    # End of list
+                    list_part = line.split(']')[0].strip()
+                    if list_part:
+                        # Add the last item if it's not empty
+                        if list_part.endswith(','):
+                            list_part = list_part[:-1].strip()
+                        if list_part:
+                            item = list_part.strip()
+                            if (item.startswith('"') and item.endswith('"')) or (
+                                    item.startswith("'") and item.endswith("'")):
+                                item = item[1:-1]
+                            list_items.append(item)
+
+                    current_section[current_key] = list_items
+                    in_list = False
+                    list_items = []
+                    current_key = None
+                else:
+                    # Continue adding to the list
+                    if line:
+                        item = line.strip()
+                        if item.endswith(','):
+                            item = item[:-1].strip()
+                        if item:
+                            if (item.startswith('"') and item.endswith('"')) or (
+                                    item.startswith("'") and item.endswith("'")):
+                                item = item[1:-1]
+                            list_items.append(item)
+                continue
+
+            # Handle section start
+            section_match = re.match(r'(\w+)\s*\{', line)
+            if section_match:
+                section_name = section_match.group(1)
+                if section_name not in current_section:
+                    current_section[section_name] = {}
+                section_stack.append(current_section)
+                current_section = current_section[section_name]
+                continue
+
+            # Handle section end
+            if line.startswith('}'):
+                if section_stack:
+                    current_section = section_stack.pop()
+                continue
+
+            # Handle key-value pairs
+            kv_match = re.match(r'(\w+)\s*=\s*(.+)', line)
+            if kv_match:
+                key, value = kv_match.group(1), kv_match.group(2).strip()
+
+                # Check for list start
+                if value.startswith('[') and not value.endswith(']'):
+                    # Start of a multi-line list
+                    in_list = True
+                    current_key = key
+                    list_items = []
+
+                    # Process first line of the list
+                    first_item = value[1:].strip()
+                    if first_item and not first_item.startswith('//'):
+                        if first_item.endswith(','):
+                            first_item = first_item[:-1].strip()
+                        if first_item:
+                            if (first_item.startswith('"') and first_item.endswith('"')) or (
+                                    first_item.startswith("'") and first_item.endswith("'")):
+                                first_item = first_item[1:-1]
+                            list_items.append(first_item)
+                    continue
+
+                # Remove trailing commas
+                if value.endswith(','):
+                    value = value[:-1].strip()
+
+                # Handle quoted strings
+                if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+                    value = value[1:-1]
+                # Handle numbers
+                elif value.isdigit():
+                    value = int(value)
+                elif value.lower() == 'true':
+                    value = True
+                elif value.lower() == 'false':
+                    value = False
+                elif value.lower() == 'null':
+                    value = None
+                # Handle single-line lists
+                elif value.startswith('[') and value.endswith(']'):
+                    list_str = value[1:-1].strip()
+                    if list_str:  # Non-empty list
+                        items = []
+                        # Simple split by comma for now
+                        for item in re.split(r',\s*', list_str):
+                            item = item.strip()
+                            # Remove quotes from string items
+                            if (item.startswith('"') and item.endswith('"')) or (
+                                    item.startswith("'") and item.endswith("'")):
+                                item = item[1:-1]
+                            items.append(item)
+                        value = items
+                    else:
+                        value = []
+
+                current_section[key] = value
+
+        return result
+
+    def _setup_nextflow_skeleton(self) -> None:
+        """
+        Sets up a skeleton .nextflow directory structure in workflow_dir and includes the jar file.
+
+        Args:
+            nxf_parent (Path): Path to the Nextflow parent dir
+        """
+
+        self.nxf_home = self.workflow_dir / ".nextflow"
+        jar_dir = self.nxf_home / "framework" / self.NXF_VERSION
+        jar_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create some other common subdirectories, however they should exist already as they are copied from workflow_dir_src at stash-init
+        dirs = ["cache", "plugins", "plr"]
+        for d in dirs:
+            dir_path = Path(self.nxf_home / d)
+            dir_path.mkdir(parents=True, exist_ok=True)
+
+        jar_fl = jar_dir / f"nextflow-{self.NXF_VERSION}-one.jar"
+        if not jar_fl.exists():
+            self.logger.error(f"Nextflow JAR file not found: {jar_fl}")
+            raise FileNotFoundError(f"Nextflow JAR file not found: {jar_fl}")
+
+        # Create an empty history file
+        with open(self.nxf_home / "history", "w") as f:
+            pass
+
+        self.logger.debug(f"Nextflow skeleton setup completed in {self.nxf_home}")
+
+
+    def _get_temp_files(self) -> List[Path]:
+        """Get list of temporary work directories"""
+        if not self.work_dir:
+            return []
+        return [self.work_dir]
+
+    def cleanup_work_dir(self) -> None:
+        """Remove temporary work directory"""
+        if not self.work_dir:
+            return
+
+        self.logger.debug("Cleaning up work directory")
+        try:
+            if self.work_dir.exists():
+                self.logger.debug(f"Removing work directory: {self.work_dir}")
+                shutil.rmtree(self.work_dir)
+        except Exception as e:
+            self.logger.warning(f"Failed to remove work directory {self.work_dir}: {e}")
+        self.work_dir = None
+
+    def warn_temp_files(self) -> None:
+        """Print warning about existing temporary files"""
+        temp_files = self._get_temp_files()
+        if temp_files:
+            self.logger.warning("Temporary files from failed run exist:")
+            for path in temp_files:
+                if path.exists():
+                    self.logger.warning(f"- {path}")
+            self.logger.warning("You may want to remove these files manually")
+
+
+    def store_workflow_dag(self, run_dir: Path, cmd: List[str]) -> None:
+        """Generate and store workflow DAG visualization"""
+        try:
+            self.logger.debug("Generating workflow DAG")
+            try:
+                del cmd[cmd.index("-with-trace")]
+            except ValueError:
+                pass
+
+            dag_cmd = cmd + ["-preview", "-with-dag", str(run_dir / "flowchart.html")]
+            subprocess.run(dag_cmd, check=True, capture_output=True)
+            self.logger.info(f"Workflow DAG saved to: {run_dir}/flowchart.html")
+
+        except subprocess.CalledProcessError as e:
+            self.logger.warning(f"Failed to generate workflow DAG: {e}")
+
+
+    def _create_work_dir(self, parent:Path, dirname:str = 'work') -> None:
+        """Create a temporary work directory for Nextflow"""
+        self.work_dir = parent / dirname
+        if not self.work_dir.exists():
+            self.work_dir.mkdir(parents=True, exist_ok=True)
+            self.logger.debug(f"Created work directory: {self.work_dir}")
+        else:
+            self.logger.warning(f"Work directory already exists: {self.work_dir}")
+
+    def run(self, db_mode: str, nextflow_args: List[str] = None, trace:bool = False, db_bcf: Path = None,
+            dag:bool = False, timeline:bool = False, report:bool = False, temp: Path = '/tmp') -> subprocess.CompletedProcess:
+
+        """Run the Nextflow workflow."""
+
+        # Create temporary work directory
+        self._create_work_dir(self.output_dir)
+        os.environ["NXF_HOME"] = str(self.nxf_home)
+        os.environ['NXF_WORK'] = str(self.work_dir)
+        os.environ['NXF_TEMP'] = str(temp)
+        os.environ['NXF_VER'] = self.NXF_VERSION
+        os.environ['NXF_DISABLE_CHECK_LATEST'] = '1'
+        os.environ['NXF_OFFLINE'] = 'true'
+
+        # export NXF_OFFLINE='true'
+        # Clean Nextflow metadata
+        subprocess.run(['nextflow', 'clean', '-f'], check=False, cwd=self.output_dir)
+
+        # Global options (applied before the command)
+        global_opts = [
+            "-log", str(self.output_dir / ".nextflow.log"),
+            "-c", str(self.nf_config)          # todo: try '-bg' / evaluate '-c' vs '-C'
+        ]
+
+        if self.nfa_config:
+            global_opts.append("-c")
+            global_opts.append(str(self.nfa_config))
+
+
+        # Run-specific options (applied after the "run" command)
+        run_opts = [
+            str(self.workflow_file),  # project name or repo URL
+            "-offline",
+            "--input", str(self.input_file),
+            "--output", str(self.output_dir),
+            "--db_mode", db_mode,
+            "-w", str(self.work_dir),
+            "-name", f"vepstash_{self.name}",
+            "-ansi-log", "true"  # enable colored output
+        ]
+
+        # Add params file if specified
+        if self.params_file:
+            run_opts.extend(["-params-file", str(self.params_file)])
+
+        if db_bcf:
+            run_opts.extend(["--db_bcf", str(db_bcf)])
+
+        if trace:
+            run_opts.extend(["-with-trace", self.output_dir / f'{self.name}_trace.txt'])
+
+        if dag:
+            run_opts.extend(["-with-dag", self.output_dir / f'{self.name}_flowchart.html'])
+
+        if report:
+            run_opts.extend(["-with-report", self.output_dir / f'{self.name}_report.html'])
+
+        if timeline:
+            run_opts.extend(["-with-timeline", self.output_dir / f'{self.name}_timeline.txt'])
+
+        # Add additional arguments
+        if nextflow_args:
+            run_opts.extend(nextflow_args)
+
+        # Assemble the final command list:
+        cmd = ["nextflow"] + global_opts + ["run"] + run_opts
+
+        self.logger.debug(f"Running command: {' '.join(map(str, cmd))}")
+
+        try:
+            # Run without capturing output to show live progress
+            result = subprocess.run(cmd, check=True, cwd=self.output_dir, env = os.environ.copy())
+            return result
+        except subprocess.CalledProcessError as e:
+            self.warn_temp_files()
+            self.logger.error(f"Workflow execution failed with exit code: {e.returncode}")
+            raise RuntimeError(f"Workflow execution failed with exit code: {e.returncode}")
+
 
 class VEPDatabase:
     TRANSCRIPT_KEYS = [
@@ -14,22 +555,75 @@ class VEPDatabase:
         'IMPACT', 'DISTANCE', 'PICK', 'VARIANT_CLASS'
     ]
     """Base class for VEP database operations"""
-    def __init__(self, db_path: Path):
-        self.db_path = Path(db_path)
-        self.blueprint_dir = self.db_path / "blueprint"
-        self.variants_bcf = self.blueprint_dir / "variants.bcf"
-        self.info_file = self.blueprint_dir / "variants.info"
+    def __init__(self, db_path: Path, test_mode: bool, verbosity: int):
+        self.stash_path = Path(db_path).expanduser().resolve()
+        self.stash_name = self.stash_path.name
+        self.test_mode = test_mode
+        self.blueprint_dir = self.stash_path / "blueprint"
+        self.workflow_dir = self.stash_path / "workflow"
+        self.annotations_dir = self.stash_path / "annotations"
+        self.workflow_dir_src = self._locate_src_workflow_dir()
+        self.blueprint_bcf = self.blueprint_dir / "vepstash.bcf"
 
-        # Set up logging
-        log_file = self.db_path / "vepdb.log"
-        self.logger = setup_logger(log_file)
-        self.logger.info(f"Initializing VEP database: {db_path}")
+        self.info_file = self.blueprint_dir / "variants.info"
+        self.verbosity = verbosity
+
+        # Get reference from database info
+        self.db_info = {}
+        if self.info_file.exists():
+            with open(self.info_file) as f:
+                self.db_info = json.load(f)
+
+        # Set up central logging
+        log_file = self.stash_path / "vepdb.log"
+        self.logger = setup_logging(
+            verbosity=self.verbosity,
+            log_file=log_file
+        )
+
+    def setup_config(self, config_file: Path | str | None, config_name: str) -> Path:
+        config_file = Path(config_file).expanduser().resolve() if config_file else None
+        if not self.test_mode:
+            if not config_file:
+                raise ValueError("Config file required for database initialization")
+            self.logger.info("Using provided config file")
+            config_file = Path(config_file).expanduser().resolve()
+        elif self.test_mode:
+            if config_file:
+                self.logger.warning("Config file is not required for database initialization in test mode")
+            config_file = self.workflow_dir_src.parent / 'tests/config/nextflow_test.config'
+
+        shutil.copyfile(config_file, self.workflow_dir / config_name)
+        return self.workflow_dir / config_name
+
+    @staticmethod
+    def validate_labels(label: str) -> None:
+        """
+        Validates that the label is valid in this context.
+        """
+        if len(label) > 20:
+            raise ValueError("Annotation name must be less than 20 characters.")
+        if " " in label:
+            raise ValueError("Annotation name must not contain white spaces.")
+        if not all(c.isalnum() or c in "_-." for c in label):
+            raise ValueError("Annotation name must only contain alphanumeric characters, underscores, dots, or dashes.")
+
 
     def ensure_indexed(self, file_path: Path) -> None:
-        """Validate that BCF/VCF file has an index"""
+        """Ensure input file has an index file (CSI or TBI)"""
         self.logger.debug(f"Checking index for: {file_path}")
-        ensure_indexed(file_path)
-        self.lo
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        csi_index = Path(str(file_path) + ".csi")
+        tbi_index = Path(str(file_path) + ".tbi")
+
+        if not (csi_index.exists() or tbi_index.exists()):
+            raise RuntimeError(
+                f"No index found for {file_path}. Use bcftools index for BCF/compressed VCF "
+                "or tabix for compressed VCF files."
+            )
 
     def validate_bcf_header(self, bcf_path: Path, norm: bool = True) -> Tuple[bool, str]:
         """Validate BCF header format"""
@@ -65,122 +659,94 @@ class VEPDatabase:
 
         return expanded_data
 
-class NextflowWorkflow:
-    """Base class for Nextflow workflow operations"""
-    def __init__(self, workflow_dir: Path, filename: str = "main", params_file: Optional[Path] = None):
-        # Set up logging
-        log_file = Path(workflow_dir) / "workflow.log"
-        self.logger = setup_logger(log_file)
-        self.logger.info(f"Initializing Nextflow workflow in: {workflow_dir}")
+    def _copy_workflow_srcfiles(self, destination: Path, skip_config: bool = False) -> None:
+        """
+        Copy workflow files from source to destination, optionally skipping nextflow.config.
 
-        self.workflow_dir = Path(workflow_dir)
-        self.workflow_path = self.workflow_dir / f"{filename}.nf"
-        if not self.workflow_path.exists():
-            self.logger.error(f"Workflow file not found: {self.workflow_path}")
-            raise FileNotFoundError(f"Workflow file not found: {self.workflow_path}")
-
-        self.workflow_config_path = self.workflow_dir / "nextflow.config"
-        if not self.workflow_config_path.exists():
-            self.logger.error(f"Nextflow config file not found: {self.workflow_config_path}")
-            raise FileNotFoundError(f"Nextflow config file not found: {self.workflow_config_path}")
-
-        # Handle optional params_file
-        self.params_file = Path(params_file) if params_file else None
-        if self.params_file and not self.params_file.exists():
-            self.logger.error(f"Parameters file not found: {self.params_file}")
-            raise FileNotFoundError(f"Parameters file not found: {self.params_file}")
-
-
-        self.workflow_hash = self.get_workflow_hash(self.workflow_dir)
-        self.config = self.load_nextflow_config()
-        self.run_dir = self.workflow_dir / "run"
-        self.run_dir.mkdir(parents=True, exist_ok=True)
-        self.logger.debug(f"Workflow hash: {self.workflow_hash}")
-
-    def load_nextflow_config(self, test_mode=False):
-        """Load Nextflow configuration from YAML files."""
-        if self.params_file:
-            self.logger.debug(f"Loading params from: {self.params_file}")
-            with open(self.params_file) as f:
-                config = yaml.safe_load(f)
-            self.logger.debug("Parameters loaded successfully")
-            return config
-        return {}
-
-    def get_workflow_hash(self, workflow_dir: Path) -> str:
-        """Get combined hash of workflow files"""
-        workflow_files = ['main.nf', 'nextflow.config']
-        combined_content = b''
-
-        self.logger.debug("Computing workflow hash")
-        for file in workflow_files:
-            path = Path(workflow_dir) / file
-            if not path.exists():
-                self.logger.error(f"Required workflow file not found: {path}")
-                raise FileNotFoundError(f"Required workflow file not found: {path}")
-            combined_content += path.read_bytes()
-
-        workflow_hash = hashlib.md5(combined_content).hexdigest()
-        self.logger.debug(f"Workflow hash computed: {workflow_hash}")
-        return workflow_hash
-
-    def store_workflow_dag(self, run_dir: Path, cmd: List[str]) -> None:
-        """Generate and store workflow DAG visualization"""
+        Parameters:
+            destination (Path): Destination directory for copying.
+            skip_config (bool): If True, does not copy nextflow.config. Default is False.
+        """
         try:
-            self.logger.debug("Generating workflow DAG")
-            try:
-                del cmd[cmd.index("-with-trace")]
-            except ValueError:
-                pass
+            # Ensure the source directory exists
+            if not self.workflow_dir_src.exists():
+                raise RuntimeError(f"Source workflow directory does not exist: {self.workflow_dir_src}")
 
-            dag_cmd = cmd + ["-preview", "-with-dag", str(run_dir / "flowchart.html")]
-            subprocess.run(dag_cmd, check=True, capture_output=True)
-            self.logger.info(f"Workflow DAG saved to: {run_dir}/flowchart.html")
+            # Copy entire directory structure like cp -r
+            shutil.copytree(self.workflow_dir_src, destination)
 
-        except subprocess.CalledProcessError as e:
-            self.logger.warning(f"Failed to generate workflow DAG: {e}")
+            # If requested, remove the nextflow.config file from copied destination
+            nextflow_config_path = destination / "nextflow.config"
+            nextflow_aconfig_path = destination / "annotation.config"
+            if skip_config:
+                nextflow_config_path.unlink()
+                nextflow_aconfig_path.unlink()
 
+            # Verify copy worked by ensuring destination isn't empty
+            if not list(destination.glob('*')):
+                raise RuntimeError(f"Failed to copy workflow files to {destination}")
 
-    def run(self, input_file: Path, output_dir: Path, db_mode: bool = False, **kwargs) -> subprocess.CompletedProcess:
-        """Run Nextflow pipeline with the appropriate configuration."""
-        if not self.workflow_path.is_file():
-            self.logger.error(f"Required workflow file not found: {self.workflow_path}")
-            raise FileNotFoundError(f"Required workflow file not found: {self.workflow_path}")
+        except Exception as e:
+            raise RuntimeError(f"Error copying workflow files: {str(e)}")
 
-        cmd = [
-            "nextflow", "run", str(self.workflow_path),
-            "-with-trace",
-            "--input", str(input_file),
-            "--output", str(output_dir)
+    def _locate_src_workflow_dir(self) -> Path:
+        # Look for the workflow directory in different locations
+        possible_workflow_dirs = [
+            Path(__file__).parent.parent.parent / "workflow",  # Relative to module
+            os.path.join(os.environ.get("VEPSTASH_HOME", ""), "workflow")  # Env var
         ]
 
-        if db_mode:
-            cmd.extend(["--db_mode", "true"])
+        workflow_src = None
+        for wd in possible_workflow_dirs:
+            if os.path.exists(wd) and os.path.isdir(wd):
+                workflow_src = wd
+                break
 
-        if self.params_file:
-            cmd.extend(["-params-file", str(self.params_file)])
+        if workflow_src is None:
+            self.logger.error(f"Workflow directory not found. Tried: {', '.join(possible_workflow_dirs)}")
+            raise FileNotFoundError(
+                "Workflow directory not found. Set VEPSTASH_HOME environment variable or use --workflow-dir")
 
-        for key, value in kwargs.items():
-            if key == "nextflow_args" and value:
-                args = [arg for arg in value if arg and arg != '[]']
-                if args:
-                    cmd.extend(args)
-            elif value:
-                cmd.extend([f"--{key}", str(value)])
+        return Path(workflow_src)
 
-        self.logger.info("Starting Nextflow workflow")
-        self.logger.debug(f"Command: {' '.join(str(x) for x in cmd)}")
+    def _setup_cachedir(self, force: bool) -> None:
+        """
+        Set up cache directories and verify they exist after creation.
 
-        try:
-            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            self.logger.info("Workflow completed successfully")
-            self.logger.debug(result.stdout)
-            self.store_workflow_dag(output_dir, cmd)
-            return result
+        Raises:
+            RuntimeError: If any required directory cannot be created or accessed.
+        """
+        # Dictionary of directories to create
+        dirs_to_create = {
+            "blueprint": self.blueprint_dir,
+            "annotations": self.annotations_dir
+        }
 
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"Workflow execution failed (exit code: {e.returncode})")
-            self.logger.error(f"STDOUT: {e.stdout}")
-            self.logger.error(f"STDERR: {e.stderr}")
-            raise
+        # Create directories and verify they exist
+        for name, dir_path in dirs_to_create.items():
+            try:
+
+                # Create directory with parents if it doesn't exist
+                dir_path.mkdir(parents=True, exist_ok=True)
+
+                # Verify the directory exists after creation
+                if not dir_path.exists():
+                    raise RuntimeError(f"Failed to create {name} directory: {dir_path}")
+
+                # Verify it's actually a directory
+                if not dir_path.is_dir():
+                    raise RuntimeError(f"Path exists but is not a directory: {dir_path}")
+
+                # Verify we have write access by creating and removing a test file
+                test_file = dir_path / ".write_test"
+                try:
+                    test_file.touch()
+                    test_file.unlink()
+                except (IOError, PermissionError) as e:
+                    raise RuntimeError(f"No write permission in {name} directory {dir_path}: {e}")
+
+            except Exception as e:
+                # Catch any other exceptions that might occur during directory setup
+                raise RuntimeError(f"Error setting up {name} directory {dir_path}: {e}")
+
 

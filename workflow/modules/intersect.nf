@@ -10,10 +10,11 @@ process PerformIntersection {
 
     output:
     path "out", emit: isec_dir
-
+    //  shared could be: -w 1 -n =2 and then followed by -w 1 -n =1
     script:
     """
     bcftools isec $norm_bcf $db_bcf --threads ${task.cpus} -p out -O b
+
     """
 }
 

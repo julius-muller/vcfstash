@@ -1,38 +1,17 @@
-
-import subprocess
+import re
 import sys
 from typing import Tuple, Optional, Dict
 from pathlib import Path
-
+import subprocess
 import pysam
 
 
-def ensure_indexed(file_path: Path) -> None:
-    """Ensure input file has an index file (CSI or TBI)"""
-    path = Path(file_path)
-    if not path.exists():
-        raise FileNotFoundError(f"File not found: {file_path}")
-
-    csi_index = Path(str(file_path) + ".csi")
-    tbi_index = Path(str(file_path) + ".tbi")
-
-    if not (csi_index.exists() or tbi_index.exists()):
-        raise RuntimeError(
-            f"No index found for {file_path}. Use bcftools index for BCF/compressed VCF "
-            "or tabix for compressed VCF files."
-        )
-
-
-def check_duplicate_md5(info_file: Path, new_md5: str) -> bool:
+def check_duplicate_md5(db_info: dict, new_md5: str) -> bool:
     """Check if a file with the same MD5 was already added"""
     try:
-        with open(info_file, "r") as f:
-            for line in f:
-                if "Input file MD5:" in line and new_md5 in line:
-                    return True
-    except FileNotFoundError:
+        return any(f["md5"] == new_md5 for f in db_info.get("input_files", []))
+    except KeyError:
         return False
-    return False
 
 
 def get_bcf_stats(bcf_path: Path) -> Dict[str, str]:
@@ -116,6 +95,12 @@ def check_bcftools_installed() -> None:
 
 
 def compute_md5(file_path: Path) -> str:
+    """
+
+    :param file_path:
+    :return:
+    file_path = Path('~/projects/vepstash/tests/data/nodata/dbsnp_test.bcf')
+    """
     try:
         result = subprocess.run(
             ["md5sum", file_path],
@@ -159,3 +144,102 @@ def validate_vcf_format(vcf_path: Path) -> tuple[bool, str | None]:
 
     except Exception as e:
         return False, f"Error reading VCF file: {e}"
+
+
+
+def get_vep_version_from_cmd(vep_cmd):
+    """
+    Executes the VEP command and extracts the version number from its output.
+
+    Args:
+        vep_cmd (str): The VEP command to execute.
+
+    Returns:
+        str: The VEP version number (e.g., "113.0").
+
+    Raises:
+        ValueError: If version cannot be extracted from output or command fails.
+
+        vep_cmd ="docker run --user \$(id -u):\$(id -g) -i -v ${vep_cache}:${vep_cache} -v ${refdir}:${refdir} --rm ensemblorg/ensembl-vep:release_113.0 vep"
+    """
+    try:
+        shell_cmd = vep_cmd.replace("\\$(", "$(").replace("\\${", "${")
+
+        # Add --help flag to trigger version display without requiring inputs
+        cmd = f"{shell_cmd} --help"
+        # print(cmd)
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            error_msg = f"VEP command failed with exit code {result.returncode}: {result.stderr.strip()}"
+            raise ValueError(error_msg)
+
+        # Parse the output to find the version
+        output = result.stdout
+
+        # Look for the ensembl-vep version line
+        version_match = re.search(r"ensembl-vep\s*:\s*(\d+\.\d+(?:\.\d+)?)", output)
+        if not version_match:
+            # Alternative pattern for older versions or different formats
+            version_match = re.search(r"VEP version (\d+\.\d+(?:\.\d+)?)", output)
+
+        if version_match:
+            version = version_match.group(1)
+            return version
+        else:
+            error_msg = "Could not determine VEP version from command output."
+            raise ValueError(error_msg)
+
+    except Exception as e:
+        error_msg = f"Error determining VEP version: {str(e)}"
+        raise ValueError(error_msg)
+
+
+def get_echtvar_version_from_cmd(echtvar_cmd):
+    """
+    Executes the echtvar command and extracts the version number from its output.
+
+    Args:
+        echtvar_cmd (str): The echtvar command to execute.
+
+    Returns:
+        str: The echtvar version number (e.g., "0.2.1").
+
+    Raises:
+        ValueError: If version cannot be extracted from output or command fails.
+    """
+    try:
+        # Use -V flag to get version information
+        cmd = f"{echtvar_cmd} -V"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            # Try alternative --version flag if -V fails
+            cmd = f"{echtvar_cmd} --version"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+            if result.returncode != 0:
+                error_msg = f"Echtvar command failed with exit code {result.returncode}: {result.stderr.strip()}"
+                raise ValueError(error_msg)
+
+        # Parse the output to find the version
+        output = result.stdout
+
+        # Try pattern for "echtvar 0.2.1" format
+        version_match = re.search(r"echtvar\s+(\d+\.\d+\.\d+)", output)
+        if not version_match:
+            # Alternative pattern just looking for version number
+            version_match = re.search(r"(\d+\.\d+\.\d+)", output)
+
+        if version_match:
+            version = version_match.group(1)
+            return version
+        else:
+            error_msg = "Could not determine echtvar version from command output."
+            raise ValueError(error_msg)
+
+    except Exception as e:
+        error_msg = f"Error determining echtvar version: {str(e)}"
+        raise ValueError(error_msg)
+
+

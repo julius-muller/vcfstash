@@ -3,64 +3,67 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+def setup_logging(verbosity: int, log_file: Optional[Path] = None) -> logging.Logger:
+    """
+    Setup logging with verbosity levels
 
-def setup_logging(verbosity: int, log_file: Path) -> logging.Logger:
-    """Setup logging with verbosity levels"""
-    log_levels = {
+    Args:
+        verbosity: Verbosity level (0-2)
+        log_file: Optional path to log file. If None, file logging is disabled
+
+    Returns:
+        Configured logger
+    """
+    # Console is one level less verbose than file
+    console_levels = {
         0: logging.WARNING,  # Default
         1: logging.INFO,  # -v
         2: logging.DEBUG  # -vv
     }
-    level = log_levels.get(min(verbosity, 2), logging.DEBUG)
+    file_levels = {
+        0: logging.INFO,  # Default
+        1: logging.DEBUG,  # -v
+        2: logging.DEBUG  # -vv
+    }
 
-    logger = setup_logger(log_file, level)
-    logger.debug(f"Log level set to: {logging.getLevelName(level)}")
-    return logger
+    console_level = console_levels.get(min(verbosity, 2), logging.WARNING)
+    file_level = file_levels.get(min(verbosity, 2), logging.INFO)
 
-def setup_logger(
-    log_file: Path,
-    level: int = logging.INFO,
-    name: str = "vepstash",
-    format_string: Optional[str] = None,
-) -> logging.Logger:
-    """
-    Configure and return a logger with both file and console handlers.
+    logger = logging.getLogger("vepstash")
+    logger.setLevel(logging.DEBUG)  # Allow all levels to handlers
 
-    Args:
-        log_file: Path to the log file
-        level: Logging level (default: INFO)
-        name: Logger name (default: vepstash)
-        format_string: Custom format string for log messages
-
-    Returns:
-        logging.Logger: Configured logger instance
-    """
-    if format_string is None:
-        format_string = "[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s"
-
-    # Create logger
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
+    # Create formatters and handlers
+    formatter = logging.Formatter(
+        "[%(asctime)s] %(levelname)s [%(name)s.%(filename)s.%(funcName)s:%(lineno)d] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
 
     # Prevent adding handlers multiple times
     if logger.hasHandlers():
         logger.handlers.clear()
 
-    # Create formatters and handlers
-    formatter = logging.Formatter(format_string, datefmt="%Y-%m-%d %H:%M:%S")
-
-    # File handler
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-
-    # Console handler
+    # Console handler - less verbose
     console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(console_level)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    return logger
+    # File handler - more verbose (only if log_file is provided)
+    if log_file is not None:
+        # raise ValueError(f"This was passed: {log_file}")
+        # Create parent directory if it doesn't exist
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(log_file, mode='a')
+        file_handler.setLevel(file_level)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        logger.debug(f"File logging enabled at: {log_file}")
+        if not log_file.exists():
+            raise FileNotFoundError(f"File logging enabled but log file does not exist: {log_file}")
 
+    logger.debug(f"Log levels - Console: {logging.getLevelName(console_level)}" +
+                 (f", File: {logging.getLevelName(file_level)}" if log_file else ""))
+    return logger
 
 def log_command(logger: logging.Logger, info:bool = False) -> None:
     """
@@ -79,7 +82,7 @@ def log_command(logger: logging.Logger, info:bool = False) -> None:
 
 # Example usage
 if __name__ == "__main__":
-    logger = setup_logger(
+    logger = setup_logging(
         log_file=Path("vepstash.log"),
         level=logging.DEBUG,
     )

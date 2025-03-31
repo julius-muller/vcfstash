@@ -1,0 +1,23 @@
+##fileformat=VCFv4.2
+##reference=myCrazyReference
+##contig=<ID=chr1,length=40>
+##contig=<ID=chr2,length=40>
+##contig=<ID=chr4,length=40>
+##contig=<ID=chr9,length=40>
+##contig=<ID=chr11,length=40>
+##contig=<ID=chr22,length=40>
+##contig=<ID=chrM,length=40>
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read	Depth">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype	Quality">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sampleA	sampleB
+chr9	20	cs2_5	GTA	T	50	PASS	.	GT:DP:GQ	0/1:12:50	0/0:18:60
+chr1	30	cs2_1	TCA	G	99	PASS	.	GT:DP:GQ	1/1:22:95	0/1:12:45
+chr4	15	cs2_6	CGTA	T,TAC,TACGT	85	PASS	.	GT:DP:GQ	1/2:16:70	0/3:19:65
+chrM	4	cs2_9	G	T	77	PASS	.	GT:DP:GQ	0/1:9:40	1/1:10:60
+chr22	10	cs2_8	ACG	C	91	PASS	.	GT:DP:GQ	0/1:20:99	0/0:16:55
+chr9	35	cs2_10	C	T,TC	66	PASS	.	GT:DP:GQ	2/2:18:70	1/2:25:80
+chr1	2	cs2_3	C	G,A	88	PASS	.	GT:DP:GQ	1/2:10:60	2/2:14:50
+chr2	5	cs2_2	TACGTA	G,GT	79	PASS	.	GT:DP:GQ	2/3:14:65	1/1:12:40
+chr1	39	cs2_7	G	T	93	PASS	.	GT:DP:GQ	0/1:30:88	1/1:21:40
+chr11	35	cs2_4	CG	GTTT	84	PASS	.	GT:DP:GQ	0/1:11:45	1/1:25:75

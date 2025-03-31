@@ -11,12 +11,13 @@ process CaptureToolVersions {
 
     script:
     """
-    echo "bcftools version:" > ${sample_name}_final.tool_version.log
+	echo "bcftools version:" > ${sample_name}_final.tool_version.log
     bcftools --version >> ${sample_name}_final.tool_version.log
     echo "vep version:" >> ${sample_name}_final.tool_version.log
-    ${params.container_engine} exec ${params.container_bind} ${params.vep_container} vep 2>&1 | grep "ensembl-.*" >> ${sample_name}_final.tool_version.log
+    ${params.vep_cmd} --help 2>&1 | grep "ensembl-.*" >> ${sample_name}_final.tool_version.log
     echo "echtvar version:" >> ${sample_name}_final.tool_version.log
-    ${params.echtvar_path} --version >> ${sample_name}_final.tool_version.log
+    ${params.echtvar_cmd} --version >> ${sample_name}_final.tool_version.log
+
     """
 
     stub:
@@ -27,24 +28,26 @@ process CaptureToolVersions {
 
 process ValidateInputs {
     input:
-    path input_file
-    path chr_add
+    path vcf
+    path vcf_index
     path reference
-    path vep_cache
+    path reference_index
+    path chr_add
 
     output:
     val true, emit: validated
 
     script:
     """
-    # Check if all required files exist
-    [ -f "${input_file}" ] || (echo "Input file not found: ${input_file}" && exit 1)
-    [ -f "${chr_add}" ] || (echo "Chr add file not found: ${chr_add}" && exit 1)
-    [ -f "${reference}" ] || (echo "Reference genome not found: ${reference}" && exit 1)
-    [ -d "${vep_cache}" ] || (echo "VEP cache directory not found: ${vep_cache}" && exit 1)
+    # Check if files exist
+    [ -f "${vcf}" ] || { echo "VCF file not found: ${vcf}"; exit 1; }
+    [ -f "${vcf_index}" ] || { echo "VCF index not found: ${vcf_index}"; exit 1; }
+    [ -f "${reference}" ] || { echo "Reference file not found: ${reference}"; exit 1; }
+    [ -f "${reference_index}" ] || { echo "Reference index not found: ${reference_index}"; exit 1; }
+    [ -f "${chr_add}" ] || { echo "Chr add file not found: ${chr_add}"; exit 1; }
 
-    # Check if input file is a valid VCF/BCF
-    bcftools view -h ${input_file} > /dev/null || (echo "Invalid VCF/BCF file: ${input_file}" && exit 1)
+    # Basic file format checks
+    bcftools view -h "${vcf}" >/dev/null || { echo "Invalid VCF/BCF format"; exit 1; }
     """
 }
 
@@ -52,15 +55,22 @@ workflow UTILS {
     take:
     sample_name
     output_dir
-    input_file
+    vcf
     chr_add
     reference
-    vep_cache
 
     main:
-    ValidateInputs(input_file, chr_add, reference, vep_cache)
-    CaptureToolVersions(sample_name, output_dir)
+    // Make sure reference file index exists
+    reference_index = file("${reference}.fai")
+
+    validateInputResult = ValidateInputs(
+        vcf,
+        file("${vcf}.csi"),
+        reference,
+        reference_index,
+        chr_add,
+    )
 
     emit:
-    version_log = CaptureToolVersions.out.version_log
+    validate = validateInputResult.validated
 }

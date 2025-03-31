@@ -1,12 +1,13 @@
 import json
+import re
 import shutil
 import sys
-import tarfile
-import tempfile
 import time
+import uuid
+from src.database.base import VEPDatabase, NextflowWorkflow
+from src.utils.validation import validate_vcf_format, get_bcf_stats, compute_md5
 from src.utils.logging import setup_logging
-from typing import List, Optional, Dict
-from ..utils.validation import compute_md5
+from typing import Optional, Dict
 from pathlib import Path
 import subprocess
 from datetime import datetime
@@ -16,8 +17,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pysam
 
-from .base import VEPDatabase, NextflowWorkflow
-from ..utils.validation import validate_vcf_format, get_bcf_stats
 
 INFO_FIELDS = ['GT', 'DP', 'AF', "gnomadg_af", "gnomade_af", "gnomadg_ac", "gnomade_ac", 'clinvar_clnsig', "deeprvat_score"]
 BASES = {"A", "C", "G", "T"}
@@ -36,227 +35,308 @@ def wavg(f1: float | None, f2: float | None, n1: int, n2: int) -> float | None:
     elif f2 is None:
         return f1
 
+
 class DatabaseAnnotator(VEPDatabase):
     """Handles database annotation workflows"""
-    def __init__(self, db_path: Path, workflow_dir: Path, params_file: Optional[Path],
-                 nextflow_args: List[str], verbosity: int = 0):
-        """Initialize database annotator.
 
+    def __init__(self, annotation_name: str, db_path: Path | str, config_file: Path | str = None,
+                 anno_config_file: Path | str = None, verbosity: int = 0, force: bool = False, test_mode: bool = False):
+        """Initialize database annotator.
+    
         Args:
             db_path: Path to the database
-            workflow_dir: Directory containing workflow files
+            workflow_dir: Optional workflow directory (defaults to <db_path>/workflow)
             params_file: Optional parameters file
-            nextflow_args: Additional Nextflow arguments
             verbosity: Logging verbosity level (0=WARNING, 1=INFO, 2=DEBUG)
         """
-        super().__init__(db_path)
-        self._nf_workflow = NextflowWorkflow(workflow_dir, params_file=params_file)
-        self.workflow_dir = self._nf_workflow.workflow_dir
-        self.workflow_path = self._nf_workflow.workflow_path
-        self.workflow_config_path = self._nf_workflow.workflow_config_path
-        self.params_file = self._nf_workflow.params_file
-        self.nextflow_args = nextflow_args
-        self.run_dir = self._create_run_dir(workflow_hash=self._nf_workflow.workflow_hash)
 
-        # Setup logging with verbosity
-        log_file = self.run_dir / "annotation.log"
-        self.logger = setup_logging(
-            verbosity=verbosity,
-            log_file=log_file
+        super().__init__(db_path, test_mode, verbosity)
+
+        self.validate_labels(annotation_name)
+        self.annotation_name = annotation_name
+        self.output_dir = self._create_run_dir(force=force)
+
+        if config_file:
+            self.config_file = Path(config_file).expanduser()
+        else:
+            self.logger.info("No config file provided, using default config file")
+            self.config_file = self.workflow_dir / 'init_nextflow.config'
+        shutil.copyfile(self.config_file, self.output_dir / f'{self.annotation_name}_nextflow.config')
+        self.config_file = self.output_dir / f'{self.annotation_name}_nextflow.config'
+
+        if anno_config_file:
+            self.anno_config_file = Path(anno_config_file).expanduser()
+        elif test_mode:
+            self.logger.info("No annotation config file provided, using default annotation config file")
+            self.anno_config_file = self.workflow_dir_src.parent / 'tests/config/annotation_test.config'
+        else:
+            raise FileNotFoundError("Annotation config file not found.")
+        shutil.copyfile(self.anno_config_file, self.output_dir / f'{self.annotation_name}_annotation.config')
+        self.anno_config_file = self.output_dir / f'{self.annotation_name}_annotation.config'
+
+        # Initialize NextflowWorkflow
+        self.nx_workflow = NextflowWorkflow(
+            input_file=self.blueprint_bcf,
+            output_dir=self.output_dir,
+            name=self.annotation_name,
+            workflow=self.workflow_dir / "main.nf",
+            config_file=self.config_file,
+            anno_config_file=self.anno_config_file,
+            verbosity=self.verbosity
         )
 
         # Log initialization parameters
         self.logger.info("Initializing database annotation")
-        self.logger.debug(f"Workflow directory: {workflow_dir}")
-        self.logger.debug(f"Parameters file: {params_file}")
-        self.logger.debug(f"Nextflow arguments: {nextflow_args}")
+        self.logger.debug(f"Annotation directory: {self.output_dir}")
+        self.logger.debug(f"Config file: {self.config_file}")
 
-    def annotate(self) -> None:
+    def _validate_annotation_name(self, annotation_name: str) -> str:
+        """
+        Validates that the annotation_name can be a valid path, is less than 20 characters,
+        only contains alphanumeric characters or underscores, and doesn't contain any white spaces.
+    
+        Args:
+            annotation_name (str): The name to validate.
+    
+        Returns:
+            str: The validated annotation name.
+    
+        Raises:
+            ValueError: If validation fails.
+        """
+        if len(annotation_name) > 20:
+            raise ValueError("Annotation name must be less than 20 characters.")
+        if " " in annotation_name:
+            raise ValueError("Annotation name must not contain white spaces.")
+        if not re.match(r'^[\w]+$', annotation_name):
+            raise ValueError("Annotation name must only contain alphanumeric characters or underscores.")
+        return annotation_name
+
+    def annotate(self, extra_files:bool = True) -> None:
         """Run annotation workflow on database"""
-        if not self.variants_bcf.exists():
-            self.logger.error("Database BCF file does not exist")
-            raise FileNotFoundError("Database BCF file does not exist.")
-
-        # Copy workflow files to database
-        workflow_dir = Path(self.workflow_dir)
-        db_workflow_dir = Path(self.db_path).parent / "workflow"
-        db_workflow_dir.mkdir(exist_ok=True)
-
-        # Copy main files
-        shutil.copy2(workflow_dir / "main.nf", db_workflow_dir / "main.nf")
-        shutil.copy2(workflow_dir / "nextflow.config", db_workflow_dir / "nextflow.config")
-
-        # Copy module files
-        modules_dir = workflow_dir / "modules"
-        if modules_dir.exists():
-            db_modules_dir = db_workflow_dir / "modules"
-            db_modules_dir.mkdir(exist_ok=True)
-            for module_file in modules_dir.glob("*.nf"):
-                rel_path = module_file.relative_to(workflow_dir)
-                target_path = db_workflow_dir / rel_path
-                target_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(module_file, target_path)
-                self.logger.debug(f"Copied module file: {rel_path}")
-
-        if self.params_file:
-            shutil.copy2(self.params_file, db_workflow_dir / self.params_file.name)
 
         # Store blueprint snapshot and workflow files
-        shutil.copy2(self.info_file, self.run_dir / "blueprint.snapshot")
-        workflow_files = self._store_workflow_files(self.workflow_dir, self.run_dir)
+        shutil.copy2(self.info_file, self.output_dir / "blueprint.snapshot")
 
         try:
             self.logger.info("Starting annotation workflow")
 
             start_time = datetime.now()
-            result = self._nf_workflow.run(
-                input_file=self.variants_bcf,
-                output_dir=self.run_dir,
-                db_mode=True,
-                nextflow_args=self.nextflow_args
+            self.nx_workflow.run(
+                db_mode='stash-annotate',
+                db_bcf= self.blueprint_bcf,
+                trace=extra_files,
+                dag=extra_files,
+                report=extra_files
             )
+            self.nx_workflow.cleanup_work_dir()
+
             duration = datetime.now() - start_time
-            self.logger.info(f"Annotation completed in {duration.total_seconds():.2f} seconds")
+            self.logger.info(f"Annotation to {self.output_dir} completed in {duration.total_seconds():.2f} seconds")
 
-            # Log workflow files
-            for name, hash_value in workflow_files.items():
-                self.logger.debug(f"Workflow {name} MD5: {hash_value}")
-
-            # Create archive
-            archive_path = self._create_archive(self.run_dir)
-            self.logger.info(f"Created annotation archive: {archive_path}")
 
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Workflow execution failed: {e.stderr}")
-            shutil.rmtree(self.run_dir)
+            self.logger.warning(f"Removing output directory: {self.output_dir}")
+            shutil.rmtree(self.output_dir)
             sys.exit(1)
 
-    def _create_archive(self, run_dir: Path) -> Path:
-        """Create a single archive file from annotation run directory"""
-        archive_name = f"{run_dir.name}.vepstash"
-        archive_path = run_dir.parent / archive_name
 
-        # Create archive with metadata
-        with tarfile.open(archive_path, "w:gz") as tar:
-            # Add all files from run directory
-            tar.add(run_dir, arcname="")
 
-            # Add metadata file
-            metadata = {
-                "created": datetime.now().isoformat(),
-                "format_version": "1.0",
-                "run_id": run_dir.name
-            }
-            with tempfile.NamedTemporaryFile(mode='w', delete=False) as tf:
-                json.dump(metadata, tf, indent=2)
-                tf_path = Path(tf.name)
-
-            tar.add(tf_path, arcname="metadata.json")
-            tf_path.unlink()
-
-        # Remove original directory after successful archive creation
-        shutil.rmtree(run_dir)
-        return archive_path
-
-    def _read_archive(self, archive_path: Path, extract_path: Optional[Path] = None) -> Dict:
-        """Read metadata from annotation archive without extracting"""
-        with tarfile.open(archive_path, "r:gz") as tar:
-            try:
-                meta_file = tar.extractfile("metadata.json")
-                if meta_file:
-                    metadata = json.loads(meta_file.read().decode())
-                    if extract_path:
-                        tar.extractall(path=extract_path)
-                    return metadata
-            except KeyError:
-                raise ValueError("Invalid annotation archive: metadata.json not found")
-        return {}
-
-    def _create_run_dir(self, db_dir: Path, workflow_hash: str) -> Path:
+    def _create_run_dir(self, force: bool) -> Path:
         """Create a unique directory for this annotation run using timestamp and workflow hash"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        annotations_dir = Path(db_dir) / "annotations"
-        run_dir = annotations_dir / f"{timestamp}_{workflow_hash[:8]}"  # Use first 8 chars of hash
+        run_dir = self.annotations_dir / self.annotation_name
+        # Remove destination directory if it exists to ensure clean copy
+        if force and run_dir.exists():
+            self.logger.debug(f"Removing workdir: {run_dir}")
+            shutil.rmtree(run_dir)
         run_dir.mkdir(parents=True, exist_ok=True)
+
+        # some minimal consistency checks
+        if not self.blueprint_bcf.exists():
+            self.logger.error("Database BCF file does not exist")
+            raise FileNotFoundError("Database BCF file does not exist.")
+
         return run_dir
 
-    def _store_workflow_files(self, workflow_dir: Path, target_dir: Path) -> Dict[str, str]:
-        """Store workflow files with their hash for version control"""
-        # Get main workflow files
-        stored_files = {}
-
-        # Copy main workflow files
-        main_files = ['main.nf', 'nextflow.config']
-        for name in main_files:
-            path = workflow_dir / name
-            if not path.exists():
-                self.logger.error(f"Required workflow file not found: {path}")
-                raise FileNotFoundError(f"Required workflow file not found: {path}")
-
-            # Copy file
-            target_path = target_dir / name
-            with open(path, 'rb') as src, open(target_path, 'wb') as dst:
-                dst.write(src.read())
-            stored_files[name] = compute_md5(target_path)
-
-        # Copy module files
-        modules_dir = workflow_dir / "modules"
-        if modules_dir.exists():
-            target_modules_dir = target_dir / "modules"
-            target_modules_dir.mkdir(exist_ok=True)
-
-            for module_file in modules_dir.glob("*.nf"):
-                rel_path = module_file.relative_to(workflow_dir)
-                target_path = target_dir / rel_path
-                target_path.parent.mkdir(parents=True, exist_ok=True)
-
-                with open(module_file, 'rb') as src, open(target_path, 'wb') as dst:
-                    dst.write(src.read())
-                stored_files[str(rel_path)] = compute_md5(target_path)
-                self.logger.debug(f"Stored module file: {rel_path}")
-
-        return stored_files
 
 
 class VCFAnnotator(VEPDatabase):
     """Handles annotation of user VCF files using the database"""
 
-    def __init__(self, db_path: Path, input_vcf: Path, output_dir: Path, workflow_dir: Optional[Path] = None,
-                 params_file: Optional[Path] = None, threads: int = 4, verbosity: int = 0):
-        """Initialize VCF annotator.
+    def __init__(self, input_vcf: Path | str, annotation_db: Path | str, config_file: Path | str = None,
+                 output_dir: Path | str = None, verbosity: int = 0, force: bool = False, uncached: bool = False,
+                 test_mode: bool = False):
+        """Initialize database annotator.
 
         Args:
             db_path: Path to the database
-            input_vcf: Path to input VCF file
-            output_dir: Output directory
-            workflow_dir: Optional workflow directory (default: db_path/workflow)
+            workflow_dir: Optional workflow directory (defaults to <db_path>/workflow)
             params_file: Optional parameters file
-            threads: Number of threads to use (default: 4)
             verbosity: Logging verbosity level (0=WARNING, 1=INFO, 2=DEBUG)
         """
-        super().__init__(db_path)
-        self.input_vcf = Path(input_vcf)
-        self.output_dir = Path(output_dir)
-        self.workflow_dir = workflow_dir or self.db_path / "workflow"
-        self.params_file = params_file
-        self.threads = max(int(threads), 1)
-        self._nf_workflow = NextflowWorkflow(self.workflow_dir, params_file=self.params_file)
-        self.run_dir = self._create_run_dir(workflow_hash=self._nf_workflow.workflow_hash)
+        self.annotation_db_path = Path(annotation_db).expanduser().resolve()
+        self.annotation_name = self.annotation_db_path.stem
+        if not self.annotation_db_path.exists():
+            raise FileNotFoundError(f"Annotation database not found: {self.annotation_db_path}")
+        stash_db = self.annotation_db_path.parent.parent
+        super().__init__(stash_db, test_mode, verbosity)
+        self._check_annotation_db_path()
+        self.input_vcf = Path(input_vcf).expanduser().resolve()
+        self.vcf_name, fext = self._validate_and_extract_sample_name()
 
-        # Setup logging with verbosity
-        log_file = self.run_dir / "annotation.log"
-        self.logger = setup_logging(
-            verbosity=verbosity,
-            log_file=log_file
+        if not self.input_vcf.exists():
+            raise FileNotFoundError(f"Input VCF file not found: {self.input_vcf}")
+        if output_dir:
+            self.output_dir = Path(output_dir).expanduser().resolve()
+        else:
+            self.output_dir = Path(self.input_vcf.parent / f'vst_{self.vcf_name}')
+            self.logger.info(f"No oputput directory provided, using input VCF directory as output directory: {self.output_dir}")
+
+        if self.output_dir.exists():
+            if force:
+                self.logger.warning(f"Output directory already exists, removing: {self.output_dir}")
+                shutil.rmtree(self.output_dir)
+            else:
+                raise FileExistsError(f"Output directory already exists: {self.output_dir}")
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.annotation_wfl_path = self.output_dir / "workflow"
+        self._copy_workflow_srcfiles(destination=self.annotation_wfl_path, skip_config=True)
+        self.output_vcf = Path(self.output_dir / (self.vcf_name + f'_{self.annotation_name}_vst' + fext))
+        self.uncached = uncached
+
+        # now also import the mandatory annotation file, that cannot be provided by the user at this stage
+        self.anno_config_file = self.annotation_db_path / f'{self.annotation_name}_annotation.config'
+        if not self.anno_config_file.exists():
+            raise FileNotFoundError(f"Annotation config file not found: {self.anno_config_file}")
+
+        self.config_file = Path(config_file).expanduser() if config_file else self.annotation_db_path / f'{self.annotation_name}_nextflow.config'
+        if not self.config_file.exists():
+            raise FileNotFoundError(f"Config file not found: {self.config_file}")
+        shutil.copyfile(self.config_file, self.annotation_wfl_path / f'{self.annotation_name}_nextflow.config')
+        self.config_file = self.annotation_wfl_path / f'{self.annotation_name}_nextflow.config'
+
+
+        self.stash_file = self.annotation_db_path / "vepstash_annotated.bcf"
+
+        # Initialize NextflowWorkflow
+        self.nx_workflow = NextflowWorkflow(
+            input_file=self.input_vcf,
+            output_dir=self.output_dir,
+            name=self.annotation_name,
+            workflow=self.workflow_dir / "main.nf",
+            config_file=self.config_file,
+            anno_config_file=self.anno_config_file,
+            verbosity=self.verbosity
         )
 
+        # Extract vep_options from annotation config
+        self.nx_workflow.nf_config_content['params']['vep_options'] = self.nx_workflow.nfa_config_content['params']['vep_options']
+
+        self._validate_db_vs_input()
+        
         # Log initialization parameters
-        self.logger.info("Initializing VCF annotation")
-        self.logger.debug(f"Input VCF: {input_vcf}")
-        self.logger.debug(f"Output directory: {output_dir}")
-        self.logger.debug(f"Workflow directory: {workflow_dir}")
-        self.logger.debug(f"Parameters file: {params_file}")
-        self.logger.debug(f"Threads: {threads}")
+        self.logger.info(f"Initializing {'un' if self.uncached else ''}cached annotation of {self.input_vcf.name}")
+        self.logger.debug(f"Cache file: {self.stash_file}")
+        self.logger.debug(f"Config file: {self.config_file}")
+
+
+    def _validate_db_vs_input(self) -> None:
+        """
+        Validates that the database BCF file is compatible with the input VCF file.
+        Raises an error if the database BCF file is not indexed or does not match the input VCF file.
+
+                    self = VCFAnnotator(input_vcf="~/projects/vepstash/tests/data/nodata/sample1.vcf",
+             annotation_db = "~/tmp/test/test_out/nftest/annotations/testor",
+                 output_dir = "~/tmp/test/aout",force=True, uncached= False, verbosity=10,
+                 config_file="/home/j380r/projects/vepstash/tests/config/nextflow_test.config"
+                 )
+
+
+
+        """
+        self.nx_workflow.validate_annotation_config()
+
+        # Check if the database BCF file is indexed
+        if not self.stash_file.exists():
+            raise FileNotFoundError(f"Database BCF file not found: {self.stash_file}")
+
+        params_config = self.nx_workflow.nf_config_content['params']
+        params_aconf = self.nx_workflow.nfa_config_content['params']
+        for key in params_aconf:
+            if key == 'vep_options':
+                continue
+            if key not in params_config:
+                self.logger.warning(f"Key '{key}' not found in annotation config file.")
+                raise ValueError(f"Key '{key}' not found in annotation config file.")
+            if params_aconf[key] != params_config[key]:
+                self.logger.warning(f"Key '{key}' does not match between config files.")
+                raise ValueError(f"Key '{key}' does not match between config files.")
+
+        self.logger.info(f"Database BCF file is valid: {self.stash_file}")
+
+
+    
+    def _validate_and_extract_sample_name(self) -> tuple[str, str]:
+        """
+        Validates the input VCF file has an acceptable extension
+        ('.bcf', '.vcf.gz', '.vcf') and extracts the sample name
+        (filename without directory path and extension).
+
+        Returns:
+            str: the extracted sample name
+
+        Raises:
+            ValueError: if the input file has an invalid extension
+        """
+        input_vcf_path = self.input_vcf
+
+        # Validate file extension
+        if not input_vcf_path.suffixes:
+            raise ValueError(f"Input VCF file '{input_vcf_path}' lacks a file extension.")
+
+        # Check for valid extensions, considering multi-part extensions
+        if input_vcf_path.name.endswith('.vcf.gz'):
+            extension = '.vcf.gz'
+            sample_name = input_vcf_path.name[:-7]  # Removes '.vcf.gz'
+        elif input_vcf_path.name.endswith('.bcf'):
+            extension = '.bcf'
+            sample_name = input_vcf_path.name[:-4]  # Removes '.bcf'
+        elif input_vcf_path.name.endswith('.vcf'):
+            extension = '.vcf'
+            sample_name = input_vcf_path.name[:-4]  # Removes '.vcf'
+        else:
+            raise ValueError(
+                f"Input VCF file '{input_vcf_path}' must end with one of {self.VALID_VCF_EXTENSIONS}"
+            )
+
+        return sample_name, extension
+
+    
+    def _check_annotation_db_path(self) -> None:
+        """
+        Checks whether the provided annotation_db path is within a valid annotation database structure.
+
+        """
+
+        # List of expected files within a valid annotation_db directory
+        expected_files = [
+            self.annotation_db_path / "vepstash_annotated.bcf",
+            self.annotation_db_path / "vepstash_annotated.bcf.csi",
+            self.stash_path / "workflow" / "init_nextflow.config",
+            self.stash_path / "workflow" / "main.nf",
+            self.stash_path / "workflow" / "modules" / "annotate.nf"
+        ]
+
+        # Check each expected file exists
+        for file in expected_files:
+            if not file.is_file():
+                raise FileNotFoundError(f"Missing expected file: {file}\nIs this a valid vepstash directory?")
+
+        if not Path(self.stash_path / "blueprint" / "vepstash.bcf"):
+            self.logger.debug("Missing blueprint BCF file in the stash path! No new database annotations can be created.")
+
+
 
     def _process_region(self, args: tuple) -> pd.DataFrame:
         """Process a single genomic region from BCF file."""
@@ -315,7 +395,7 @@ class VCFAnnotator(VEPDatabase):
                     # Process VEP annotations
                     vep_csqs = [dict(zip(vcf.header.info['CSQ'].description.split(' ')[-1].split('|'),
                                        x.split("|"))) for x in record.info["CSQ"]]
-                    expanded_transcripts = parse_vep_info(vep_csqs)
+                    expanded_transcripts = self.parse_vep_info(vep_csqs)
 
                     for transcript in expanded_transcripts:
                         row = {
@@ -371,7 +451,7 @@ class VCFAnnotator(VEPDatabase):
 
 
 
-    def annotate(self, convert_parquet: bool = True) -> Path:
+    def annotate(self, convert_parquet: bool = True) -> None:
         """Run annotation workflow on input VCF file.
 
         Args:
@@ -379,103 +459,45 @@ class VCFAnnotator(VEPDatabase):
 
         Returns:
             Path to output file (BCF or Parquet)
+            self = VCFAnnotator(input_vcf="/home/j380r/projects/vepstash/tests/data/nodata/sample1.bcf",
+             annotation_db = "~/tmp/test/test_out/nftest/annotations/testor",
+                 output_dir = "~/tmp/test/",force=True, uncached= False)
         """
         start_time = time.time()
         self.logger.info("Starting VCF annotation")
 
         try:
-            self._validate_inputs()
-            annotated_bcf = self._run_workflow()
-            vep_time = time.time()
-            self.logger.info(f"VEP workflow completed in {vep_time - start_time:.1f}s")
-
-            if not convert_parquet:
-                return annotated_bcf
-
-            self.logger.info("Converting to Parquet format")
-
-            output_file = self._convert_to_parquet(annotated_bcf)
-            end_time = time.time()
-
-            self.logger.info(f"Parquet conversion completed in {end_time - vep_time:.1f}s")
-            self.logger.info(f"Total execution time: {end_time - start_time:.1f}s")
 
 
-            return output_file
+            # Run the workflow in database mode
+            self.nx_workflow.run(
+                db_mode='annotate',
+                db_bcf=self.stash_file,
+                trace=True,
+                dag=True,
+                report=True
+            )
+            duration = time.time() - start_time
+            self.logger.info(f"VEP workflow completed in {duration:.1f}s")
+
 
         except Exception as e:
             self.logger.error("Annotation failed", exc_info=True)
-            if self.run_dir.exists():
-                shutil.rmtree(self.run_dir)
             raise
+# todo: unquote!
+        self.nx_workflow.cleanup_work_dir()
 
 
-    def _validate_inputs(self) -> None:
-        """Validate input VCF format and requirements"""
-        if not self.input_vcf.exists():
-            self.logger.error(f"Input VCF file not found: {self.input_vcf}")
-
-            raise FileNotFoundError(f"Input VCF file not found: {self.input_vcf}")
-
-        is_valid, error = validate_vcf_format(self.input_vcf)
-        if not is_valid:
-            self.logger.error(f"Invalid VCF file: {error}")
-
-            raise ValueError(f"Invalid VCF file: {error}")
-
-        self.ensure_indexed(self.input_vcf)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.logger.info("Input validation completed")
-
-    def _run_workflow(self) -> Path:
-        """Run the Nextflow annotation workflow"""
-        sample_name = self.input_vcf.stem.split('.')[0]
-        final_bcf = self.run_dir / f"{sample_name}_norm_final.bcf"
-
-        cmd = [
-            "nextflow", "run", str(self.workflow_dir / "main.nf"),
-            "--input", str(self.input_vcf),
-            "--output", str(self.run_dir),
-            "--db_bcf", str(self.variants_bcf),
-            "--db_mode", "false",
-            "--vep_max_forks", str(min(self.threads, 4)),
-            "--vep_max_chr_parallel", str(min(self.threads, 4)),
-            "-with-trace"
-        ]
-
-        try:
-            start_time = datetime.now()
-            self.logger.info("Starting Nextflow workflow")
-            self.logger.debug(f"Command: {' '.join(cmd)}")
-            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            duration = datetime.now() - start_time
-
-            self._nf_workflow.store_workflow_dag(self.run_dir, cmd)
-            stats = get_bcf_stats(final_bcf)
-
-            # Log annotation details
-            self.logger.info(f"Workflow completed in {duration.total_seconds():.2f} seconds")
-            self.logger.info(f"Output BCF: {final_bcf}")
-            self.logger.debug("Output statistics:")
-            for key, value in stats.items():
-                self.logger.debug(f"{key}: {value}")
-
-            return final_bcf
-
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"Workflow execution failed: {e.stderr}")
-            raise RuntimeError(f"Annotation workflow failed: {e}")
-
-    def _convert_to_parquet(self, bcf_path: Path) -> Path:
+    def _convert_to_parquet(self, bcf_path: Path, threads:int) -> Path:
         """Convert annotated BCF to optimized Parquet format"""
         vcf = pysam.VariantFile(str(bcf_path))
         regions = list(vcf.header.contigs.keys())
         args_list = [(str(bcf_path), region) for region in regions]
 
         self.logger.info(f"Converting BCF to Parquet: {bcf_path}")
-        self.logger.debug(f"Processing {len(regions)} regions using {self.threads} threads")
+        self.logger.debug(f"Processing {len(regions)} regions using {threads} threads")
 
-        with Pool(self.threads) as pool:
+        with Pool(threads) as pool:
             dataframes = pool.map(self._process_region, args_list)
 
         # Filter and combine dataframes
@@ -503,20 +525,4 @@ class VCFAnnotator(VEPDatabase):
         self.logger.info("Parquet conversion completed")
         return output_file
 
-    def _create_run_dir(self, workflow_hash: str) -> Path:
-        """Create a unique directory for this annotation run.
 
-        Args:
-            workflow_hash: Hash of the workflow files
-
-        Returns:
-            Path to the created run directory
-        """
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        annotations_dir = self.output_dir / "annotations"
-        run_dir = annotations_dir / f"{timestamp}_{workflow_hash[:8]}"  # Use first 8 chars of hash
-        self.logger.debug(f"Creating run directory: {run_dir}")
-        run_dir.mkdir(parents=True, exist_ok=True)
-        self.logger.debug("Run directory created successfully")
-
-        return run_dir

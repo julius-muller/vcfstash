@@ -1,107 +1,137 @@
+import json
+import shutil
 from pathlib import Path
 import subprocess
-import os
 from datetime import datetime
-from .base import VEPDatabase
-from ..utils.logging import setup_logging
-from ..utils.validation import compute_md5, get_bcf_stats, check_duplicate_md5
+from src.database.base import VEPDatabase, NextflowWorkflow
+from src.utils.validation import compute_md5, get_bcf_stats, check_duplicate_md5
 
 class DatabaseUpdater(VEPDatabase):
     """Handles adding new variants to database"""
-    def __init__(self, db_path: Path, input_file: Path, fasta_ref: Path, threads: int, verbosity: int = 0):
-        super().__init__(db_path)
-        self.input_file = Path(input_file)
-        self.fasta_ref = Path(fasta_ref)
-        self.threads = max(int(threads), 1)
+    def __init__(self, db_path: Path | str, input_file: Path | str, config_file: Path | str = None,
+                 verbosity: int = 0, test_mode: bool = False):
+        super().__init__(db_path, test_mode, verbosity)
+        self.input_file = Path(input_file).expanduser().resolve()
+        self.input_md5 = compute_md5(self.input_file) # might take too long to do here
 
-        # Setup logging with verbosity
-        log_file = self.db_path / "update.log"
-        self.logger = setup_logging(
-            verbosity=verbosity,
-            log_file=log_file
+        self.config_file = self.setup_config(config_file=config_file, config_name=f'add_{self.input_md5}_nextflow.config')
+
+        # Initialize NextflowWorkflow
+        self.nx_workflow = NextflowWorkflow(
+            input_file=self.input_file,
+            output_dir=self.blueprint_dir,
+            name=f'add_{self.input_md5}',
+            workflow=self.workflow_dir / "main.nf",
+            config_file=self.config_file,
+            verbosity=self.verbosity
         )
 
         # Log initialization parameters
         self.logger.info("Initializing database update")
         self.logger.debug(f"Input file: {input_file}")
-        self.logger.debug(f"Reference: {fasta_ref}")
-        self.logger.debug(f"Threads: {threads}")
 
     def add(self) -> None:
-        """Add new variants to existing database"""
+        """
+        Add new variants to existing database
+
+        self = DatabaseUpdater(db_path=Path('~/projects/vepstash/tests/data/test_out/nftest'),
+        input_file=Path('~/projects/vepstash/tests/data/nodata/dbsnp_test.bcf'),
+        verbosity=2)
+        profile='test'
+        """
         self.logger.info("Starting database update")
-        self._validate_inputs()
-        self._merge_variants()
-        self.logger.info("Database update completed successfully")
+
+        try:
+            # Check for duplicate before validation
+            if check_duplicate_md5(db_info=self.db_info, new_md5=self.input_md5):
+                self.logger.warning(f"Skipping duplicate file (MD5 match): {self.input_file}")
+                return
+
+            self._validate_inputs()
+            self._merge_variants()
+            self.logger.info("Database update completed successfully")
+
+        except FileNotFoundError as e:
+            self.logger.error(str(e))
+            raise
+        except ValueError as e:
+            self.logger.error(str(e))
+            raise
 
     def _validate_inputs(self) -> None:
         """Validate input files and check for duplicates"""
         self.logger.debug("Validating inputs")
 
-        if not self.variants_bcf.exists():
+        # First check database BCF
+        if not self.blueprint_bcf.exists():
             self.logger.error("Database BCF file does not exist")
             raise FileNotFoundError("Database BCF file does not exist")
 
+        # Check input VCF/BCF
         if not self.input_file.exists():
             self.logger.error("Input VCF/BCF file does not exist")
             raise FileNotFoundError("Input VCF/BCF file does not exist")
 
-        self.ensure_indexed(self.variants_bcf)
+        # Validate remaining inputs
+        self.ensure_indexed(self.blueprint_bcf)
         self.ensure_indexed(self.input_file)
-
-        input_md5 = compute_md5(self.input_file)
-        self.logger.debug(f"Input file MD5: {input_md5}")
-
-        if check_duplicate_md5(self.info_file, input_md5):
-            self.logger.error("Duplicate file detected (MD5 match)")
-            raise ValueError("This file was already added to the database (MD5 match)")
-
         self.logger.debug("Input validation successful")
 
     def _merge_variants(self) -> None:
         """Merge new variants into the database"""
-        temp_merged = Path(str(self.variants_bcf) + ".tmp.bcf")
+
         self.logger.info("Starting variant merge")
-        self.logger.debug(f"Using temporary file: {temp_merged}")
 
         try:
-            start_time = datetime.now()
-            cmd = [
-                "bcftools", "concat",
-                "--allow-overlaps",
-                "--rm-dup", "all",
-                "-Ob",
-                "--write-index",
-                "-o", str(temp_merged),
-                "--threads", str(self.threads),
-                str(self.variants_bcf),
-                str(self.input_file)
-            ]
-            self.logger.debug(f"Executing command: {' '.join(str(x) for x in cmd)}")
+            # Get statistics before merge
+            pre_stats = get_bcf_stats(self.blueprint_bcf)
 
-            subprocess.run(cmd, check=True)
+            # Run the workflow in database mode
+            start_time = datetime.now()
+            self.nx_workflow.run(
+                db_mode="stash-add",
+                trace=True,
+                dag=True,
+                report=True,
+                db_bcf=self.blueprint_bcf
+            )
             duration = datetime.now() - start_time
 
-            stats = get_bcf_stats(temp_merged)
+            # Get statistics after merge
+            post_stats = get_bcf_stats(self.blueprint_bcf)
+
+            # Calculate differences
+            diff_stats = {}
+            for key in set(pre_stats.keys()) | set(post_stats.keys()):
+                try:
+                    pre_val = int(pre_stats.get(key, 0))
+                    post_val = int(post_stats.get(key, 0))
+                    diff_stats[key] = post_val - pre_val
+                except ValueError:
+                    continue
+
             self.logger.debug("Merge completed, updating database files")
 
-            # Replace old database with merged file
-            os.replace(temp_merged, self.variants_bcf)
-            os.replace(str(temp_merged) + ".csi", str(self.variants_bcf) + ".csi")
+            self.db_info["input_files"].append({
+                "path": str(self.input_file),
+                "md5": self.input_md5,
+                "added": datetime.now().isoformat()
+            })
+
+            with open(self.info_file, "w") as f:
+                json.dump(self.db_info, f, indent=2)
 
             # Log update details
-            input_md5 = compute_md5(self.input_file)
             self.logger.info("Database update summary:")
             self.logger.info(f"- Added file: {self.input_file}")
-            self.logger.info(f"- Input MD5: {input_md5}")
-            self.logger.info("- Database statistics after update:")
-            for key, value in stats.items():
-                self.logger.info(f"  {key}: {value}")
+            self.logger.info(f"- Input MD5: {self.input_md5}")
+            self.logger.info("- Database statistics changes:")
+            for key, diff in diff_stats.items():
+                prefix = "+" if diff > 0 else ""
+                self.logger.info(f"  {key}: {prefix}{diff:d} ({pre_stats[key]} -> {post_stats[key]})")
             self.logger.info(f"- Processing time: {duration.total_seconds():.2f}s")
+            self.nx_workflow.cleanup_work_dir()
 
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Failed to merge variants: {e}")
-            self.logger.debug("Cleaning up temporary files")
-            temp_merged.unlink(missing_ok=True)
-            Path(str(temp_merged) + ".csi").unlink(missing_ok=True)
             raise RuntimeError(f"Failed to add variants: {e}")
