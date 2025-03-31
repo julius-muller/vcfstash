@@ -471,7 +471,7 @@ class VCFAnnotator(VEPDatabase):
 
             # Run the workflow in database mode
             self.nx_workflow.run(
-                db_mode='annotate',
+                db_mode='annotate' if not self.uncached else 'annotate-nocache',
                 db_bcf=self.stash_file,
                 trace=True,
                 dag=True,
