@@ -484,7 +484,7 @@ class VCFAnnotator(VEPDatabase):
         except Exception as e:
             self.logger.error("Annotation failed", exc_info=True)
             raise
-# todo: unquote!
+
         self.nx_workflow.cleanup_work_dir()
 
 
