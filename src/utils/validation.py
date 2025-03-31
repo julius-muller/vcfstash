@@ -160,7 +160,7 @@ def get_vep_version_from_cmd(vep_cmd):
     Raises:
         ValueError: If version cannot be extracted from output or command fails.
 
-        vep_cmd ="docker run --user \$(id -u):\$(id -g) -i -v ${vep_cache}:${vep_cache} -v ${refdir}:${refdir} --rm ensemblorg/ensembl-vep:release_113.0 vep"
+        vep_cmd ="docker run --user \\$(id -u):\\$(id -g) -i -v ${vep_cache}:${vep_cache} -v ${refdir}:${refdir} --rm ensemblorg/ensembl-vep:release_113.0 vep"
     """
     try:
         shell_cmd = vep_cmd.replace("\\$(", "$(").replace("\\${", "${")
