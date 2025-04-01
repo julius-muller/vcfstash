@@ -9,12 +9,17 @@ from src.utils.validation import compute_md5, get_bcf_stats, check_duplicate_md5
 class DatabaseUpdater(VEPDatabase):
     """Handles adding new variants to database"""
     def __init__(self, db_path: Path | str, input_file: Path | str, config_file: Path | str = None,
-                 verbosity: int = 0, test_mode: bool = False):
-        super().__init__(db_path, test_mode, verbosity)
+                 verbosity: int = 0):
+        super().__init__(Path(db_path), verbosity)
+        self.stashed_output.validate_structure()
+        self.logger = self.connect_loggers()
         self.input_file = Path(input_file).expanduser().resolve()
         self.input_md5 = compute_md5(self.input_file) # might take too long to do here
-
-        self.config_file = self.setup_config(config_file=config_file, config_name=f'add_{self.input_md5}_nextflow.config')
+        if config_file:
+            self.config_file = self.blueprint_dir / f'add_{self.input_md5}_nextflow.config'
+            shutil.copyfile(config_file.expanduser().resolve(), self.config_file)
+        else:
+            self.config_file = self.workflow_dir / "init_nextflow.config"
 
         # Initialize NextflowWorkflow
         self.nx_workflow = NextflowWorkflow(

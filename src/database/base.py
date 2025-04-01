@@ -3,9 +3,11 @@ import os
 import re
 import shutil
 import subprocess
+from logging import Logger
 from pathlib import Path
 from typing import Tuple, List, Optional, Dict, Any
 
+from src.database.outputs import StashOutput
 from src.utils.validation import validate_bcf_header, get_vep_version_from_cmd, get_echtvar_version_from_cmd
 from src.utils.logging import setup_logging
 
@@ -40,7 +42,7 @@ class NextflowWorkflow:
 
         self.logger.info(f"Initializing Nextflow workflow in: {self.workflow_dir}")
 
-        self.nf_config = Path(config_file).expanduser()
+        self.nf_config = Path(config_file).expanduser().resolve()
         if not self.nf_config.exists():
             self.logger.error(f"Nextflow config file not found: {self.nf_config}")
             raise FileNotFoundError(f"Nextflow config file not found: {self.nf_config}")
@@ -49,7 +51,7 @@ class NextflowWorkflow:
 
         self.nfa_config = self.nfa_config_content = None
         if anno_config_file:
-            self.nfa_config = Path(anno_config_file).expanduser()
+            self.nfa_config = Path(anno_config_file).expanduser().resolve()
             if not self.nfa_config.exists():
                 self.logger.error(f"Nextflow annotation config file not found: {self.nfa_config}")
                 raise FileNotFoundError(f"Nextflow config file not found: {self.nfa_config}")
@@ -122,9 +124,9 @@ class NextflowWorkflow:
             if path_param in config_params:
                 path_str = config_params[path_param]
                 if path_str and not isinstance(path_str, bool) and not path_str.startswith('${'):
-                    path = Path(path_str)
+                    path = Path(path_str).expanduser().resolve()
                     if not path.exists():
-                        warn_msg = f"Path defined in '{path_param}' does not exist: {path_str}"
+                        warn_msg = f"Path defined in '{path_param}' does not exist: {str(path)}"
                         self.logger.warning(warn_msg)
                         warnings.append(warn_msg)
 
@@ -555,58 +557,39 @@ class VEPDatabase:
         'IMPACT', 'DISTANCE', 'PICK', 'VARIANT_CLASS'
     ]
     """Base class for VEP database operations"""
-    def __init__(self, db_path: Path, test_mode: bool, verbosity: int):
-        self.stash_path = Path(db_path).expanduser().resolve()
+    def __init__(self, db_path: Path, verbosity: int):
+
+        self.stashed_output = StashOutput(str(db_path))
+        self.stash_path = self.stashed_output.root_dir
         self.stash_name = self.stash_path.name
-        self.test_mode = test_mode
         self.blueprint_dir = self.stash_path / "blueprint"
         self.workflow_dir = self.stash_path / "workflow"
         self.annotations_dir = self.stash_path / "annotations"
-        self.workflow_dir_src = self._locate_src_workflow_dir()
+        self.workflow_dir_src =  self.stashed_output.workflow_src_dir
         self.blueprint_bcf = self.blueprint_dir / "vepstash.bcf"
 
-        self.info_file = self.blueprint_dir / "variants.info"
+        self.info_file = self.blueprint_dir / "sources.info"
         self.verbosity = verbosity
 
-        # Get reference from database info
-        self.db_info = {}
         if self.info_file.exists():
             with open(self.info_file) as f:
                 self.db_info = json.load(f)
+        else:
+            self.db_info = {'input_files':[]}
+        self.logger = None
 
+    def connect_loggers(self, logger_name: str = "vepdb") -> Logger:
         # Set up central logging
-        log_file = self.stash_path / "vepdb.log"
-        self.logger = setup_logging(
+        log_file = self.stash_path / f"{logger_name}.log"
+        return setup_logging(
             verbosity=self.verbosity,
             log_file=log_file
         )
 
-    def setup_config(self, config_file: Path | str | None, config_name: str) -> Path:
-        config_file = Path(config_file).expanduser().resolve() if config_file else None
-        if not self.test_mode:
-            if not config_file:
-                raise ValueError("Config file required for database initialization")
-            self.logger.info("Using provided config file")
-            config_file = Path(config_file).expanduser().resolve()
-        elif self.test_mode:
-            if config_file:
-                self.logger.warning("Config file is not required for database initialization in test mode")
-            config_file = self.workflow_dir_src.parent / 'tests/config/nextflow_test.config'
-
+    def setup_config(self, config_file: Path | str , config_name: str) -> Path:
+        config_file = config_file.expanduser().resolve()
         shutil.copyfile(config_file, self.workflow_dir / config_name)
         return self.workflow_dir / config_name
-
-    @staticmethod
-    def validate_labels(label: str) -> None:
-        """
-        Validates that the label is valid in this context.
-        """
-        if len(label) > 20:
-            raise ValueError("Annotation name must be less than 20 characters.")
-        if " " in label:
-            raise ValueError("Annotation name must not contain white spaces.")
-        if not all(c.isalnum() or c in "_-." for c in label):
-            raise ValueError("Annotation name must only contain alphanumeric characters, underscores, dots, or dashes.")
 
 
     def ensure_indexed(self, file_path: Path) -> None:
@@ -659,7 +642,8 @@ class VEPDatabase:
 
         return expanded_data
 
-    def _copy_workflow_srcfiles(self, destination: Path, skip_config: bool = False) -> None:
+    @staticmethod
+    def _copy_workflow_srcfiles(source: Path, destination: Path, skip_config: bool = False) -> None:
         """
         Copy workflow files from source to destination, optionally skipping nextflow.config.
 
@@ -669,18 +653,18 @@ class VEPDatabase:
         """
         try:
             # Ensure the source directory exists
-            if not self.workflow_dir_src.exists():
-                raise RuntimeError(f"Source workflow directory does not exist: {self.workflow_dir_src}")
+            if not source.exists():
+                raise RuntimeError(f"Source workflow directory does not exist: {source}")
 
-            # Copy entire directory structure like cp -r
-            shutil.copytree(self.workflow_dir_src, destination)
+            # Ensure the destination directory exists
+            if not destination.exists():
+                raise RuntimeError(f"Destination directory does not exist: {destination}")
 
-            # If requested, remove the nextflow.config file from copied destination
-            nextflow_config_path = destination / "nextflow.config"
-            nextflow_aconfig_path = destination / "annotation.config"
+            # Copy entire directory structure except *.config files
             if skip_config:
-                nextflow_config_path.unlink()
-                nextflow_aconfig_path.unlink()
+                shutil.copytree(source, destination, ignore= shutil.ignore_patterns('*.config'), dirs_exist_ok=True)
+            else:
+                shutil.copytree(source, destination, dirs_exist_ok=True)
 
             # Verify copy worked by ensuring destination isn't empty
             if not list(destination.glob('*')):
@@ -689,64 +673,6 @@ class VEPDatabase:
         except Exception as e:
             raise RuntimeError(f"Error copying workflow files: {str(e)}")
 
-    def _locate_src_workflow_dir(self) -> Path:
-        # Look for the workflow directory in different locations
-        possible_workflow_dirs = [
-            Path(__file__).parent.parent.parent / "workflow",  # Relative to module
-            os.path.join(os.environ.get("VEPSTASH_HOME", ""), "workflow")  # Env var
-        ]
 
-        workflow_src = None
-        for wd in possible_workflow_dirs:
-            if os.path.exists(wd) and os.path.isdir(wd):
-                workflow_src = wd
-                break
-
-        if workflow_src is None:
-            self.logger.error(f"Workflow directory not found. Tried: {', '.join(possible_workflow_dirs)}")
-            raise FileNotFoundError(
-                "Workflow directory not found. Set VEPSTASH_HOME environment variable or use --workflow-dir")
-
-        return Path(workflow_src)
-
-    def _setup_cachedir(self, force: bool) -> None:
-        """
-        Set up cache directories and verify they exist after creation.
-
-        Raises:
-            RuntimeError: If any required directory cannot be created or accessed.
-        """
-        # Dictionary of directories to create
-        dirs_to_create = {
-            "blueprint": self.blueprint_dir,
-            "annotations": self.annotations_dir
-        }
-
-        # Create directories and verify they exist
-        for name, dir_path in dirs_to_create.items():
-            try:
-
-                # Create directory with parents if it doesn't exist
-                dir_path.mkdir(parents=True, exist_ok=True)
-
-                # Verify the directory exists after creation
-                if not dir_path.exists():
-                    raise RuntimeError(f"Failed to create {name} directory: {dir_path}")
-
-                # Verify it's actually a directory
-                if not dir_path.is_dir():
-                    raise RuntimeError(f"Path exists but is not a directory: {dir_path}")
-
-                # Verify we have write access by creating and removing a test file
-                test_file = dir_path / ".write_test"
-                try:
-                    test_file.touch()
-                    test_file.unlink()
-                except (IOError, PermissionError) as e:
-                    raise RuntimeError(f"No write permission in {name} directory {dir_path}: {e}")
-
-            except Exception as e:
-                # Catch any other exceptions that might occur during directory setup
-                raise RuntimeError(f"Error setting up {name} directory {dir_path}: {e}")
 
 

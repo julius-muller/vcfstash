@@ -3,41 +3,37 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 from src.database.base import VEPDatabase, NextflowWorkflow
+from src.database.outputs import StashOutput
 from src.utils.validation import compute_md5
 
 
 class DatabaseInitializer(VEPDatabase):
     """Handles database initialization"""
-    def __init__(self, name: str, input_file: Path | str, config_file: Path | str = None, output_dir: Path | str = Path("."),
-                 verbosity: int = 0, force: bool = False, test_mode: bool = False) -> None:
+    def __init__(self, input_file: Path | str, config_file: Path | str, output_dir: Path | str = Path("."),
+                 verbosity: int = 0, force: bool = False) -> None:
         """Initialize the database creator.
 
         Args:
-            name: Name of the new database
             input_file: Path to input BCF/VCF file (required)
+            config_file: Path to Nextflow config file (required)
             output_dir: Output directory (default: current directory)
-            verbosity: Logging verbosity level (0=WARNING, 1=INFO, 2=DEBUG)        """
-        # Create the database directory first
+            verbosity: Logging verbosity level (0=WARNING, 1=INFO, 2=DEBUG)
+            force: Force overwrite of existing database (default: False)
+
+        """
+
+        # Initialize the parent class
+        super().__init__(output_dir,  verbosity)
+        self._setup_stash(force=force)
+        self.logger = self.connect_loggers()
+
+        # self.validate_label(name)
         self.input_file = Path(input_file).expanduser().resolve()
-        self.output_dir = Path(output_dir).expanduser().resolve()
-        self.stash_path = self.output_dir / name
-        self.test_mode = test_mode
 
-        # Remove destination directory if it exists to ensure clean copy
-        if force and self.stash_path.exists():
-            print(f"Stash directory already exists, removing: {self.stash_path}")
-            shutil.rmtree(self.stash_path)
+        self._copy_workflow_srcfiles(source=self.workflow_dir_src, destination=self.workflow_dir, skip_config=True)
 
-        # Now initialize the parent class
-        super().__init__(self.stash_path, test_mode, verbosity)
-        self.validate_labels(name)
-
-        # Create the database directory
-        self._setup_cachedir(force = force)
-
-        self._copy_workflow_srcfiles(destination=self.workflow_dir, skip_config=True)
-
-        self.config_file = self.setup_config(config_file=config_file, config_name='init_nextflow.config')
+        self.config_file = self.workflow_dir / 'init_nextflow.config'
+        shutil.copyfile(config_file.expanduser().resolve(), self.config_file)
 
         # Initialize NextflowWorkflow
         self.logger.info("Initializing Nextflow workflow...")
@@ -53,9 +49,26 @@ class DatabaseInitializer(VEPDatabase):
         # Log initialization parameters
         self.logger.info(f"Initializing database: {self.stash_name}")
         self.logger.debug(f"Input file: {self.input_file}")
-        self.logger.debug(f"Output directory: {self.output_dir}")
+        self.logger.debug(f"Output directory: {self.blueprint_dir}")
         self.logger.debug(f"Config file: {self.config_file}")
 
+
+    def _setup_stash(self, force:bool) -> None:
+        # Remove destination directory if it exists to ensure clean copy
+        if self.stashed_output.root_dir.exists():
+            if self.stashed_output.validate_structure():  # we dont want to remove a random dir....
+                if force:
+                    print(f"Stash directory already exists, removing: {self.stashed_output.root_dir}")
+                    shutil.rmtree(self.stashed_output.root_dir)
+                else:
+                    raise FileExistsError(
+                        f"Output directory already exists: {self.stashed_output.root_dir}\nIf intended, use --force to overwrite.")
+            else:
+                raise FileNotFoundError(
+                    f"Output directory must not exist if --force is not set and a valid stash directory: {self.stashed_output.root_dir}")
+
+        print(f"Creating stash structure: {self.stashed_output.root_dir}")
+        self.stashed_output.create_structure()
 
     def initialize(self) -> None:
         """Initialize new VEP database
@@ -99,22 +112,12 @@ class DatabaseInitializer(VEPDatabase):
                 raise FileNotFoundError(msg)
             self.ensure_indexed(self.input_file)
 
-        # Check output directory permissions
-        if not self.output_dir.exists():
-            try:
-                self.output_dir.mkdir(parents=True)
-            except PermissionError:
-                msg = f"Cannot create output directory: {self.output_dir}"
-                self.logger.error(msg)
-                raise PermissionError(msg)
-
         self.logger.debug("Input validation successful")
 
     def _create_database(self) -> None:
         """Create and initialize the database"""
         self.logger.info("Creating database from normalized and annotated variants...")
 
-        self.blueprint_dir.mkdir(parents=True, exist_ok=True)
 
         self.logger.info(f"Workflow files copied to: {self.workflow_dir}")
 
@@ -164,7 +167,7 @@ class DatabaseInitializer(VEPDatabase):
                 raise FileNotFoundError(msg)
             self.logger.info(f"- Created at: {db_info['created']}")
             self.logger.info(f"- Input file: {self.input_file}")
-            self.logger.info(f"- Output file: {self.output_dir / self.blueprint_bcf}")
+            self.logger.info(f"- Output file: {self.blueprint_bcf}")
             self.logger.info(f"- Input MD5: {input_md5}")
             self.logger.info(f"- Processing time: {duration.total_seconds():.2f}s")
 

@@ -102,6 +102,7 @@ def compute_md5(file_path: Path) -> str:
     file_path = Path('~/projects/vepstash/tests/data/nodata/dbsnp_test.bcf')
     """
     try:
+        print(f'Computing MD5 for {file_path} ...')
         result = subprocess.run(
             ["md5sum", file_path],
             check=True,
@@ -241,5 +242,87 @@ def get_echtvar_version_from_cmd(echtvar_cmd):
     except Exception as e:
         error_msg = f"Error determining echtvar version: {str(e)}"
         raise ValueError(error_msg)
+
+
+
+
+def generate_test_command(
+        vepstash_path="~/projects/vepstash/vepstash.py",
+        vcf_path="~/projects/vepstash/tests/data/nodata/crayz_db.bcf",
+        output_dir="/home/j380r/tmp/test/test_out",
+        config_path="/home/j380r/projects/vepstash/tests/config/nextflow_test.config",
+        annotation_config = "/home/j380r/projects/vepstash/tests/config/annotation_test.config",
+        add_vcf_path="~/projects/vepstash/tests/data/nodata/crayz_db2.bcf",
+        annotate_name="testor",
+        force=True
+):
+    """
+    Generate a nicely formatted test command string for vepstash operations.
+
+    Returns:
+        str: A copy-pastable command string with proper formatting
+    """
+    #
+    cmd_init = (
+        f"{vepstash_path} stash-init "
+        f"--vcf {vcf_path} "
+        f"--output {output_dir} "
+        f"-c {config_path} "
+        f"{'-f' if force else ''} "
+    ).strip()
+
+    cmd_add = (
+        f"{vepstash_path} stash-add "
+        f"--db {output_dir} "
+        f"-i {add_vcf_path} "
+    ).strip()
+
+    cmd_annotate = (
+        f"{vepstash_path} stash-annotate "
+        f"--name {annotate_name} "
+        f"-a {annotation_config}"
+        f"--db {output_dir} "
+        f"{'-f' if force else ''} "
+    ).strip()
+
+    # Combine commands
+    full_cmd = f"{cmd_init} ; {cmd_add} ; {cmd_annotate}"
+
+    # Also create a nicely formatted display version for easier reading
+    formatted_cmds = f"""
+# INITIALIZE
+{cmd_init}
+
+# ADD
+{cmd_add}
+
+# ANNOTATE
+{cmd_annotate}
+
+# COMBINED COMMAND (for copy-paste)
+alias stx="{full_cmd}"
+"""
+
+    print(formatted_cmds)
+    return full_cmd
+
+# generate_test_command()
+
+
+# Example usage into test dir in repo:
+# ~/projects/vepstash/vepstash.py stash-init --name nftest --vcf ~/projects/vepstash/tests/data/nodata/crayz_db.bcf --output /home/j380r/tmp/test/test_out -f --test -vv
+# ~/projects/vepstash/vepstash.py stash-add --db ~/projects/vepstash/tests/data/test_out/nftest -i ~/projects/vepstash/tests/data/nodata/crayz_db2.bcf --test -vv
+# ~/projects/vepstash/vepstash.py stash-annotate --name testor --db ~/projects/vepstash/tests/data/test_out/nftest --test -vv -f
+# ... or locally
+# ~/projects/vepstash/vepstash.py stash-init --name nftest --vcf ~/projects/vepstash/tests/data/nodata/crayz_db.bcf --output test_out --test -f -vv
+# ~/projects/vepstash/vepstash.py stash-add --db test_out/nftest -i ~/projects/vepstash/tests/data/nodata/crayz_db2.bcf --test -vv
+# ~/projects/vepstash/vepstash.py stash-annotate --name testor --db test_out/nftest --test -vv -f
+# ~/projects/vepstash/vepstash.py annotate --a ~/tmp/test/test_out/nftest/annotations/testor --vcf ~/projects/vepstash/tests/data/nodata/sample4.bcf --output ~/tmp/test/aout --test -f
+
+# as one:
+# alias stx="~/projects/vepstash/vepstash.py stash-init --name nftest --vcf ~/projects/vepstash/tests/data/nodata/crayz_db.bcf --output test_out -f ; ~/projects/vepstash/vepstash.py stash-add --db test_out/nftest -i ~/projects/vepstash/tests/data/nodata/crayz_db2.bcf --test ; ~/projects/vepstash/vepstash.py stash-annotate --name testor --db test_out/nftest --test "
+
+# ~/projects/vepstash/vepstash.py annotate --a ~/tmp/test/test_out/annotations/testor --vcf ~/projects/vepstash/tests/data/nodata/sample1.vcf --output ~/tmp/test/aout -f
+
 
 

@@ -3,11 +3,10 @@ import re
 import shutil
 import sys
 import time
-import uuid
+
 from src.database.base import VEPDatabase, NextflowWorkflow
-from src.utils.validation import validate_vcf_format, get_bcf_stats, compute_md5
-from src.utils.logging import setup_logging
-from typing import Optional, Dict
+from src.database.outputs import AnnotatedStashOutput, AnnotatedUserOutput
+
 from pathlib import Path
 import subprocess
 from datetime import datetime
@@ -17,6 +16,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pysam
 
+from src.utils.logging import setup_logging
 
 INFO_FIELDS = ['GT', 'DP', 'AF', "gnomadg_af", "gnomade_af", "gnomadg_ac", "gnomade_ac", 'clinvar_clnsig', "deeprvat_score"]
 BASES = {"A", "C", "G", "T"}
@@ -39,8 +39,8 @@ def wavg(f1: float | None, f2: float | None, n1: int, n2: int) -> float | None:
 class DatabaseAnnotator(VEPDatabase):
     """Handles database annotation workflows"""
 
-    def __init__(self, annotation_name: str, db_path: Path | str, config_file: Path | str = None,
-                 anno_config_file: Path | str = None, verbosity: int = 0, force: bool = False, test_mode: bool = False):
+    def __init__(self, annotation_name: str, db_path: Path | str, anno_config_file: Path | str,
+                 config_file: Path | str = None, verbosity: int = 0, force: bool = False):
         """Initialize database annotator.
     
         Args:
@@ -50,29 +50,28 @@ class DatabaseAnnotator(VEPDatabase):
             verbosity: Logging verbosity level (0=WARNING, 1=INFO, 2=DEBUG)
         """
 
-        super().__init__(db_path, test_mode, verbosity)
+        super().__init__(db_path, verbosity)
 
-        self.validate_labels(annotation_name)
+        self.stashed_annotations = AnnotatedStashOutput(str(self.annotations_dir / annotation_name))
+        self.stashed_annotations.validate_label(annotation_name)
         self.annotation_name = annotation_name
-        self.output_dir = self._create_run_dir(force=force)
+        self.logger = self.connect_loggers()
+        self._setup_annotation_stash(force)
+        self.output_dir = self.stashed_annotations.annotation_dir
 
+        self.config_file = self.output_dir / 'annotation_nextflow.config'
         if config_file:
-            self.config_file = Path(config_file).expanduser()
+            shutil.copyfile(config_file.expanduser().resolve(), self.config_file)
         else:
-            self.logger.info("No config file provided, using default config file")
-            self.config_file = self.workflow_dir / 'init_nextflow.config'
-        shutil.copyfile(self.config_file, self.output_dir / f'{self.annotation_name}_nextflow.config')
-        self.config_file = self.output_dir / f'{self.annotation_name}_nextflow.config'
+            self.logger.debug("No config file provided, using default config file")
+            shutil.copyfile(self.workflow_dir / "init_nextflow.config", self.config_file)
 
-        if anno_config_file:
-            self.anno_config_file = Path(anno_config_file).expanduser()
-        elif test_mode:
-            self.logger.info("No annotation config file provided, using default annotation config file")
-            self.anno_config_file = self.workflow_dir_src.parent / 'tests/config/annotation_test.config'
-        else:
-            raise FileNotFoundError("Annotation config file not found.")
-        shutil.copyfile(self.anno_config_file, self.output_dir / f'{self.annotation_name}_annotation.config')
-        self.anno_config_file = self.output_dir / f'{self.annotation_name}_annotation.config'
+        self.info_snapshot_file = self.output_dir / "blueprint_snapshot.info"
+
+        anno_config_file = Path(anno_config_file).expanduser().resolve()
+        self.anno_config_file = self.output_dir / 'annotation.config'
+        if anno_config_file != self.anno_config_file:
+            shutil.copyfile(anno_config_file.expanduser().resolve() , self.anno_config_file)
 
         # Initialize NextflowWorkflow
         self.nx_workflow = NextflowWorkflow(
@@ -90,33 +89,28 @@ class DatabaseAnnotator(VEPDatabase):
         self.logger.debug(f"Annotation directory: {self.output_dir}")
         self.logger.debug(f"Config file: {self.config_file}")
 
-    def _validate_annotation_name(self, annotation_name: str) -> str:
-        """
-        Validates that the annotation_name can be a valid path, is less than 20 characters,
-        only contains alphanumeric characters or underscores, and doesn't contain any white spaces.
-    
-        Args:
-            annotation_name (str): The name to validate.
-    
-        Returns:
-            str: The validated annotation name.
-    
-        Raises:
-            ValueError: If validation fails.
-        """
-        if len(annotation_name) > 20:
-            raise ValueError("Annotation name must be less than 20 characters.")
-        if " " in annotation_name:
-            raise ValueError("Annotation name must not contain white spaces.")
-        if not re.match(r'^[\w]+$', annotation_name):
-            raise ValueError("Annotation name must only contain alphanumeric characters or underscores.")
-        return annotation_name
+    def _setup_annotation_stash(self, force:bool) -> None:
+        # Remove destination directory if it exists to ensure clean copy
+        if self.stashed_annotations.annotation_dir.exists():
+            if self.stashed_output.validate_structure():  # we dont want to remove a random dir....
+                if force:
+                    print(f"Stash directory already exists, removing: {self.stashed_output.root_dir}")
+                    shutil.rmtree(self.stashed_annotations.annotation_dir)
+                else:
+                    raise FileExistsError(
+                        f"Output directory already exists: {self.stashed_annotations.annotation_dir}\nIf intended, use --force to overwrite.")
+            else:
+                raise FileNotFoundError(
+                    f"Output directory must not exist if --force is not set and a valid stash directory: {self.stashed_annotations.annotation_dir}")
+
+        print(f"Creating stash structure: {self.stashed_annotations.annotation_dir}")
+        self.stashed_annotations.create_structure()
 
     def annotate(self, extra_files:bool = True) -> None:
         """Run annotation workflow on database"""
 
         # Store blueprint snapshot and workflow files
-        shutil.copy2(self.info_file, self.output_dir / "blueprint.snapshot")
+        shutil.copy2(self.info_file, self.info_snapshot_file)
 
         try:
             self.logger.info("Starting annotation workflow")
@@ -143,30 +137,11 @@ class DatabaseAnnotator(VEPDatabase):
 
 
 
-    def _create_run_dir(self, force: bool) -> Path:
-        """Create a unique directory for this annotation run using timestamp and workflow hash"""
-        run_dir = self.annotations_dir / self.annotation_name
-        # Remove destination directory if it exists to ensure clean copy
-        if force and run_dir.exists():
-            self.logger.debug(f"Removing workdir: {run_dir}")
-            shutil.rmtree(run_dir)
-        run_dir.mkdir(parents=True, exist_ok=True)
-
-        # some minimal consistency checks
-        if not self.blueprint_bcf.exists():
-            self.logger.error("Database BCF file does not exist")
-            raise FileNotFoundError("Database BCF file does not exist.")
-
-        return run_dir
-
-
-
 class VCFAnnotator(VEPDatabase):
     """Handles annotation of user VCF files using the database"""
 
-    def __init__(self, input_vcf: Path | str, annotation_db: Path | str, config_file: Path | str = None,
-                 output_dir: Path | str = None, verbosity: int = 0, force: bool = False, uncached: bool = False,
-                 test_mode: bool = False):
+    def __init__(self, input_vcf: Path | str, annotation_db: Path | str, output_dir: Path | str,
+                 config_file: Path | str = None, verbosity: int = 0, force: bool = False):
         """Initialize database annotator.
 
         Args:
@@ -175,49 +150,50 @@ class VCFAnnotator(VEPDatabase):
             params_file: Optional parameters file
             verbosity: Logging verbosity level (0=WARNING, 1=INFO, 2=DEBUG)
         """
-        self.annotation_db_path = Path(annotation_db).expanduser().resolve()
-        self.annotation_name = self.annotation_db_path.stem
-        if not self.annotation_db_path.exists():
-            raise FileNotFoundError(f"Annotation database not found: {self.annotation_db_path}")
-        stash_db = self.annotation_db_path.parent.parent
-        super().__init__(stash_db, test_mode, verbosity)
-        self._check_annotation_db_path()
+
         self.input_vcf = Path(input_vcf).expanduser().resolve()
         self.vcf_name, fext = self._validate_and_extract_sample_name()
 
         if not self.input_vcf.exists():
             raise FileNotFoundError(f"Input VCF file not found: {self.input_vcf}")
-        if output_dir:
-            self.output_dir = Path(output_dir).expanduser().resolve()
-        else:
-            self.output_dir = Path(self.input_vcf.parent / f'vst_{self.vcf_name}')
-            self.logger.info(f"No oputput directory provided, using input VCF directory as output directory: {self.output_dir}")
 
-        if self.output_dir.exists():
-            if force:
-                self.logger.warning(f"Output directory already exists, removing: {self.output_dir}")
-                shutil.rmtree(self.output_dir)
-            else:
-                raise FileExistsError(f"Output directory already exists: {self.output_dir}")
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.annotation_wfl_path = self.output_dir / "workflow"
-        self._copy_workflow_srcfiles(destination=self.annotation_wfl_path, skip_config=True)
+        self.stashed_annotations = AnnotatedStashOutput(str(annotation_db))
+        if not self.stashed_annotations.validate_structure():
+            raise FileNotFoundError(f"Annotation database annotation_db not valid: {self.stashed_annotations.annotation_dir}")
+        self.annotation_db_path = self.stashed_annotations.annotation_dir
+        self.annotation_name = self.stashed_annotations.name
+        super().__init__(self.stashed_annotations.stash_output.root_dir, verbosity)
+
+
+        self.output_annotations = AnnotatedUserOutput(str(output_dir))
+        self.output_annotations.validate_label(self.output_annotations.name)
+
+        self._setup_output(force=force)
+        self.output_dir = self.output_annotations.root_dir
+        self.logger = setup_logging(
+            verbosity=self.verbosity,
+            log_file=self.output_dir / "annotation.log",
+        )
+
+        self.annotation_wfl_path = self.output_annotations.workflow_dir
+        self._copy_workflow_srcfiles(source=self.workflow_dir, destination=self.annotation_wfl_path, skip_config=True)
         self.output_vcf = Path(self.output_dir / (self.vcf_name + f'_{self.annotation_name}_vst' + fext))
-        self.uncached = uncached
 
         # now also import the mandatory annotation file, that cannot be provided by the user at this stage
-        self.anno_config_file = self.annotation_db_path / f'{self.annotation_name}_annotation.config'
+        self.anno_config_file = self.annotation_db_path / 'annotation.config'
         if not self.anno_config_file.exists():
             raise FileNotFoundError(f"Annotation config file not found: {self.anno_config_file}")
 
-        self.config_file = Path(config_file).expanduser() if config_file else self.annotation_db_path / f'{self.annotation_name}_nextflow.config'
+        self.config_file = Path(config_file).expanduser().resolve() if config_file else self.annotation_db_path / 'annotation_nextflow.config'
         if not self.config_file.exists():
             raise FileNotFoundError(f"Config file not found: {self.config_file}")
-        shutil.copyfile(self.config_file, self.annotation_wfl_path / f'{self.annotation_name}_nextflow.config')
-        self.config_file = self.annotation_wfl_path / f'{self.annotation_name}_nextflow.config'
 
+        shutil.copyfile(self.config_file, self.annotation_wfl_path / self.config_file.name)
+        self.config_file = self.annotation_wfl_path / self.config_file
 
         self.stash_file = self.annotation_db_path / "vepstash_annotated.bcf"
+        if not self.stash_file.exists():
+            raise FileNotFoundError(f"Stash file not found: {self.stash_file}")
 
         # Initialize NextflowWorkflow
         self.nx_workflow = NextflowWorkflow(
@@ -236,9 +212,27 @@ class VCFAnnotator(VEPDatabase):
         self._validate_db_vs_input()
         
         # Log initialization parameters
-        self.logger.info(f"Initializing {'un' if self.uncached else ''}cached annotation of {self.input_vcf.name}")
+        self.logger.info(f"Initializing annotation of {self.input_vcf.name}")
         self.logger.debug(f"Cache file: {self.stash_file}")
         self.logger.debug(f"Config file: {self.config_file}")
+
+
+    def _setup_output(self, force:bool) -> None:
+        # Remove destination directory if it exists to ensure clean copy
+        if self.output_annotations.root_dir.exists():
+            if self.output_annotations.validate_structure():  # we dont want to remove a random dir....
+                if force:
+                    print(f"Output directory already exists, removing: {self.output_annotations.root_dir}")
+                    shutil.rmtree(self.output_annotations.root_dir)
+                else:
+                    raise FileExistsError(
+                        f"Output directory already exists: {self.output_annotations.root_dir}\nIf intended, use --force to overwrite.")
+            else:
+                raise FileNotFoundError(
+                    f"Output directory must not exist if --force is not set and a valid output directory: {self.output_annotations.root_dir}")
+
+        print(f"Creating output structure: {self.output_annotations.root_dir}")
+        self.output_annotations.create_structure()
 
 
     def _validate_db_vs_input(self) -> None:
@@ -311,31 +305,6 @@ class VCFAnnotator(VEPDatabase):
             )
 
         return sample_name, extension
-
-    
-    def _check_annotation_db_path(self) -> None:
-        """
-        Checks whether the provided annotation_db path is within a valid annotation database structure.
-
-        """
-
-        # List of expected files within a valid annotation_db directory
-        expected_files = [
-            self.annotation_db_path / "vepstash_annotated.bcf",
-            self.annotation_db_path / "vepstash_annotated.bcf.csi",
-            self.stash_path / "workflow" / "init_nextflow.config",
-            self.stash_path / "workflow" / "main.nf",
-            self.stash_path / "workflow" / "modules" / "annotate.nf"
-        ]
-
-        # Check each expected file exists
-        for file in expected_files:
-            if not file.is_file():
-                raise FileNotFoundError(f"Missing expected file: {file}\nIs this a valid vepstash directory?")
-
-        if not Path(self.stash_path / "blueprint" / "vepstash.bcf"):
-            self.logger.debug("Missing blueprint BCF file in the stash path! No new database annotations can be created.")
-
 
 
     def _process_region(self, args: tuple) -> pd.DataFrame:
@@ -451,7 +420,7 @@ class VCFAnnotator(VEPDatabase):
 
 
 
-    def annotate(self, convert_parquet: bool = True) -> None:
+    def annotate(self, uncached: bool = False, convert_parquet: bool = True) -> None:
         """Run annotation workflow on input VCF file.
 
         Args:
@@ -471,7 +440,7 @@ class VCFAnnotator(VEPDatabase):
 
             # Run the workflow in database mode
             self.nx_workflow.run(
-                db_mode='annotate' if not self.uncached else 'annotate-nocache',
+                db_mode='annotate' if not uncached else 'annotate-nocache',
                 db_bcf=self.stash_file,
                 trace=True,
                 dag=True,
@@ -485,7 +454,7 @@ class VCFAnnotator(VEPDatabase):
             self.logger.error("Annotation failed", exc_info=True)
             raise
 
-        #self.nx_workflow.cleanup_work_dir()
+        self.nx_workflow.cleanup_work_dir()
 
 
     def _convert_to_parquet(self, bcf_path: Path, threads:int) -> Path:
