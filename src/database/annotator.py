@@ -249,8 +249,6 @@ class VCFAnnotator(VEPDatabase):
 
 
         """
-        self.nx_workflow.validate_annotation_config()
-
         # Check if the database BCF file is indexed
         if not self.stash_file.exists():
             raise FileNotFoundError(f"Database BCF file not found: {self.stash_file}")
