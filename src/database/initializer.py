@@ -64,8 +64,8 @@ class DatabaseInitializer(VEPDatabase):
                     raise FileExistsError(
                         f"Output directory already exists: {self.stashed_output.root_dir}\nIf intended, use --force to overwrite.")
             else:
-                raise FileNotFoundError(
-                    f"Output directory must not exist if --force is not set and a valid stash directory: {self.stashed_output.root_dir}")
+                raise FileExistsError(
+                    f"Output directory with an invalid structure detected: {self.stashed_output.root_dir}")
 
         print(f"Creating stash structure: {self.stashed_output.root_dir}")
         self.stashed_output.create_structure()

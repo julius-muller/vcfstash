@@ -320,7 +320,20 @@ alias stx="{full_cmd}"
 # ~/projects/vepstash/vepstash.py annotate --a ~/tmp/test/test_out/nftest/annotations/testor --vcf ~/projects/vepstash/tests/data/nodata/sample4.bcf --output ~/tmp/test/aout --test -f
 
 # as one:
-# alias stx="~/projects/vepstash/vepstash.py stash-init --vcf ~/projects/vepstash/tests/data/nodata/crayz_db.bcf --output /home/j380r/tmp/test/test_out -c /home/j380r/projects/vepstash/tests/config/nextflow_test.config -f ; ~/projects/vepstash/vepstash.py stash-add --db /home/j380r/tmp/test/test_out -i ~/projects/vepstash/tests/data/nodata/crayz_db2.bcf ; ~/projects/vepstash/vepstash.py stash-annotate --name testor -a ~/tmp/test/test_out/annotations/testor --db /home/j380r/tmp/test/test_out -f"
-# ~/projects/vepstash/vepstash.py annotate -a ~/tmp/test/test_out/annotations/testor --vcf ~/projects/vepstash/tests/data/nodata/sample4.bcf --output ~/tmp/test/aout -f -p -vv
+cmd = """alias stx="~/projects/vepstash/vepstash.py stash-init --vcf ~/projects/vepstash/tests/data/nodata/crayz_db.bcf --output /home/j380r/tmp/test/test_out -c /home/j380r/projects/vepstash/tests/config/nextflow_test.config -f ; 
+~/projects/vepstash/vepstash.py stash-add --db /home/j380r/tmp/test/test_out -i ~/projects/vepstash/tests/data/nodata/crayz_db2.bcf ; 
+~/projects/vepstash/vepstash.py stash-annotate --name testor -a /home/j380r/projects/vepstash/tests/config/annotation.config --db /home/j380r/tmp/test/test_out -f;
+~/projects/vepstash/vepstash.py annotate -a ~/tmp/test/test_out/annotations/testor --vcf ~/projects/vepstash/tests/data/nodata/sample4.bcf
+--output ~/tmp/test/aout -f -p -vv"
+"""
+
+
+# on gvpre
+cmd2 = """
+~/projects/vepstash/vepstash.py stash-init --vcf /mnt/data/resources/gnomad/vep_gnomad_v4_hg19_exomes/gnomad.exomes.v4.1.sites.grch37.trimmed_liftover_norm_1e-1.bcf --output gnomad_1e-1  -c ~/projects/vepstash/tests/config/nextflow_gnomadhg19.config;
+~/projects/vepstash/vepstash.py stash-add --db gnomad_1e-1 -i /mnt/data/resources/gnomad/vep_gnomad_v4_hg19_genomes/gnomad.genomes.v4.1.sites.grch37.trimmed_liftover_norm_1e-1.bcf;
+~/projects/vepstash/vepstash.py stash-annotate --name gen_ex -a ~/projects/vepstash/tests/config/annotation.config --db gnomad_1e-1;
+~/projects/vepstash/vepstash.py annotate -a gnomad_1e-1/annotations/gen_ex --vcf /mnt/data/samples/test_mgm/mgm_WGS_32.gatkWGS_norm.bcf --output mgm_WGS_32 -p;
+"""
 
 

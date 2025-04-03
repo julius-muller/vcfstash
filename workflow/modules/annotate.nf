@@ -62,6 +62,7 @@ process VEPAnnotate {
 
 process EchtvarAnnotate {
 	scratch true
+    debug true
 
 	input:
 	path subset_bcf
@@ -83,7 +84,6 @@ process EchtvarAnnotate {
 
 process EchtvarAnnotateChr {
 	scratch true
-	memory '10 GB'
 
 	input:
 	path subset_bcf
