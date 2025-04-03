@@ -42,12 +42,12 @@ class BaseOutput(ABC):
         """
         Validates that the label is valid in this context.
         """
-        if len(label) > 20:
-            raise ValueError("Annotation name must be less than 20 characters.")
+        if len(label) > 30:
+            raise ValueError(f"Annotation name must be less than 30 characters, but has {len(label)}: {label}")
         if " " in label:
-            raise ValueError("Annotation name must not contain white spaces.")
+            raise ValueError(f"Annotation name must not contain white spaces: {label}")
         if not all(c.isalnum() or c in "_-." for c in label):
-            raise ValueError("Annotation name must only contain alphanumeric characters, underscores, dots, or dashes.")
+            raise ValueError(f"Annotation name must only contain alphanumeric characters, underscores, dots, or dashes: {label}")
 
 
     @staticmethod
