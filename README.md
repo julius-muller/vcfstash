@@ -11,31 +11,42 @@ VEPstash manages a variant cache database and runs VEP annotations only on novel
 
 ## Features
 
-- Initialize variant cache databases from VCF/BCF files
-- Add new variants to existing cache databases
-- Run VEP annotations on cache databases or individual samples
+- Initialize bare bone 'blueprint' variant cache databases from user provided VCF/BCF files. Typically from large human genome allele frequency databases like gnomAD
+- Extend exisiting blueprint caches by adding new variants e.g. add variants based on WES to WGS
+- Instanciate a cache by annotation of a blueprint cache.
+- Run VEP annotations on arbitrary user provided vcf files, leveraging overlap of cached variants resulting in a large performance boost
 - Automatic variant normalization and deduplication
-- Multi-threaded processing
+- Resource management through nextflow config files
+- Multi-processing enabled workflows
 - Detailed logging and workflow tracking
 - Support for workflow parameter customization
 
 ## Requirements
 
-- bcftools (latest version)
-- Nextflow
-- Ensembl VEP
-- Python 3.8+
-- Docker (recommended)
+- bcftools (latest version in path, also located at tools/ )
+- Ensembl VEP (configured via user provided nextflow config)
+- Python 3.11+
+
+Docker is not not yet implemented.
+Nextflow installation is optional, as the jar is shipped in:
+workflow/.nextflow/framework/24.10.5/nextflow-24.10.5-one.jar and could be invoked with:
+java -jar framework/24.10.5/nextflow-24.10.5-one.jar run
 
 ## Installation
 
 ```bash
 git clone https://github.com/user/vepstash
 cd vepstash
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
+
+pytest tests/test_cache_init.py 
 ```
 
-## Usage
+# *** *THE BELOW IS OUTDATED* ***
+
+## Usage 
 
 ### Initialize Cache Database
 
