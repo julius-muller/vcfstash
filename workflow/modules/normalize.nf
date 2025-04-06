@@ -18,7 +18,7 @@ process RenameAndNormalizeVCF {
     script:
     def sort_command = do_sort ? "${params.bcftools_cmd} sort -m ${params.bcftools_sort_memory} -T ${task.scratch} |" : ""
     def gt_option = remove_gt ? "-G" : ""
-    def info_option = remove_info ? "-x INFO" : ""  // Create annotation option based on parameter
+    def info_option = remove_info ? "-x INFO" : "-x INFO/CSQ"
 
     """
     # First, convert to BCF and index to ensure proper format

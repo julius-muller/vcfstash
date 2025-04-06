@@ -1,6 +1,5 @@
 Here's a README that explains the project's purpose and usage:
 
-```markdown
 # VEPstash
 
 A tool to accelerate VEP annotations of large VCF files by maintaining a cache of frequently shared variants across human WGS samples.
@@ -27,7 +26,7 @@ VEPstash manages a variant cache database and runs VEP annotations only on novel
 - Ensembl VEP (configured via user provided nextflow config)
 - Python 3.11+
 
-Docker is not not yet implemented.
+Docker is not yet implemented.
 Nextflow installation is optional, as the jar is shipped in:
 workflow/.nextflow/framework/24.10.5/nextflow-24.10.5-one.jar and could be invoked with:
 java -jar framework/24.10.5/nextflow-24.10.5-one.jar run
@@ -35,10 +34,10 @@ java -jar framework/24.10.5/nextflow-24.10.5-one.jar run
 ## Installation
 
 ```bash
-git clone https://github.com/user/vepstash
+git clone https://github.com/julius-muller/vepstash.git
 cd vepstash
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 
 pytest tests/test_cache_init.py 
@@ -114,6 +113,7 @@ vep_options:            # VEP annotation options
 # Performance settings
 vep_max_chr_parallel: 2  # Maximum chromosomes to process in parallel
 vep_max_forks: 2         # VEP forks per chromosome
+```
 
 ## Performance
 
