@@ -543,7 +543,7 @@ class NextflowWorkflow:
             run_opts.extend(nextflow_args)
 
         # Assemble the final command list:
-        cmd = nfx_exe + global_opts + ["run"] + run_opts
+        cmd = nxf_exe + global_opts + ["run"] + run_opts
 
         self.logger.debug(f"Running command: {' '.join(map(str, cmd))}")
 
