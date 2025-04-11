@@ -29,7 +29,7 @@ def setup_logging(verbosity: int, log_file: Optional[Path] = None) -> logging.Lo
     console_level = console_levels.get(min(verbosity, 2), logging.WARNING)
     file_level = file_levels.get(min(verbosity, 2), logging.INFO)
 
-    logger = logging.getLogger("vepstash")
+    logger = logging.getLogger("vcfstash")
     logger.setLevel(logging.DEBUG)  # Allow all levels to handlers
 
     # Create formatters and handlers
@@ -83,7 +83,7 @@ def log_command(logger: logging.Logger, info:bool = False) -> None:
 # Example usage
 if __name__ == "__main__":
     logger = setup_logging(
-        log_file=Path("vepstash.log"),
+        log_file=Path("vcfstash.log"),
         level=logging.DEBUG,
     )
     logger.debug("Debug message")

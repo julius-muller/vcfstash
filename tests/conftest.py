@@ -5,10 +5,10 @@ from pathlib import Path
 
 
 @pytest.fixture(scope="session", autouse=True)
-def set_vepstash_root():
-    """Set the VEPSTASH_ROOT environment variable for all tests."""
-    if 'VEPSTASH_ROOT' not in os.environ:
+def set_vcfstash_root():
+    """Set the VCFSTASH_ROOT environment variable for all tests."""
+    if 'VCFSTASH_ROOT' not in os.environ:
         package_root = Path(__file__).parent.parent.absolute()
-        os.environ['VEPSTASH_ROOT'] = str(package_root)
-        print(f"Set VEPSTASH_ROOT to {package_root}")
-    return os.environ['VEPSTASH_ROOT']
+        os.environ['VCFSTASH_ROOT'] = str(package_root)
+        print(f"Set VCFSTASH_ROOT to {package_root}")
+    return os.environ['VCFSTASH_ROOT']

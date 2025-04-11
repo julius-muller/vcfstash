@@ -13,11 +13,6 @@ process CaptureToolVersions {
     """
 	echo "${params.bcftools_cmd} version:" > ${sample_name}_final.tool_version.log
     ${params.bcftools_cmd} --version >> ${sample_name}_final.tool_version.log
-    echo "vep version:" >> ${sample_name}_final.tool_version.log
-    ${params.vep_cmd} --help 2>&1 | grep "ensembl-.*" >> ${sample_name}_final.tool_version.log
-    echo "echtvar version:" >> ${sample_name}_final.tool_version.log
-    ${params.echtvar_cmd} --version >> ${sample_name}_final.tool_version.log
-
     """
 
     stub:

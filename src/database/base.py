@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Tuple, List, Optional, Dict, Any
 
 from src.database.outputs import StashOutput
-from src.utils.validation import validate_bcf_header, get_vep_version_from_cmd, get_echtvar_version_from_cmd
+from src.utils.validation import validate_bcf_header, get_vep_version_from_cmd
 from src.utils.logging import setup_logging
 
 
@@ -47,7 +47,7 @@ class NextflowWorkflow:
             self.logger.error(f"Nextflow config file not found: {self.nf_config}")
             raise FileNotFoundError(f"Nextflow config file not found: {self.nf_config}")
         self.nf_config_content = self.read_groovy_config(self.nf_config)
-        self.validate_config()
+        self.validate_env_config()
 
         self.nfa_config = self.nfa_config_content = None
         if anno_config_file:
@@ -69,9 +69,9 @@ class NextflowWorkflow:
 
 
 
-    def validate_config(self):
+    def validate_env_config(self):
         """
-        Validates the main configuration file (nextflow.config) loaded into self.config_content.
+        Validates the main environment configuration file (typically env_xxx.config) loaded into self.config_content.
 
         Checks for required parameters, valid paths, and proper configuration structure.
 
@@ -96,29 +96,18 @@ class NextflowWorkflow:
 
         # 1. Check required parameters
         required_params = [
-            'chr_add', 'reference', 'echtvar_cmd','echtvar_cmd_version', 'bcftools_cmd',
-            'echtvar_gnomad_genome', 'echtvar_gnomad_exome', 'echtvar_clinvar',
-            'vep_cmd','vep_cmd_version', 'vep_cache', 'vep_max_chr_parallel', 'vep_max_forks', 'vep_buffer'
+            'bcftools_cmd', 'bcftools_cmd_version', 'chr_add',
+            'annotation_tool_cmd','tool_version_command','tool_version_regex'
         ]
 
         missing_params = [param for param in required_params if param not in config_params]
         if missing_params:
-            err_msg = f"Missing required parameters in Nextflow config: {', '.join(missing_params)}"
+            err_msg = f"Missing required parameters in environment nextflow config: {', '.join(missing_params)}"
             self.logger.error(err_msg)
             raise ValueError(err_msg)
 
-        # Check echtvar and vep Version
-        vep_vers_found = get_vep_version_from_cmd(config_params['vep_cmd'])
-        if config_params['vep_cmd_version'] != vep_vers_found:
-            raise ValueError(f"VEP version mismatch: expected {config_params['vep_cmd_version']}, found {vep_vers_found}")
-
-        ev_vers_found = get_echtvar_version_from_cmd(config_params['echtvar_cmd'])
-        if config_params['echtvar_cmd_version'] != ev_vers_found:
-            raise ValueError(f"echtvar version mismatch: expected {config_params['echtvar_cmd_version']}, found {ev_vers_found}")
-
         # 2. Check paths for existence
-        file_paths = ['reference', 'chr_add', 'echtvar_gnomad_genome',
-                      'echtvar_gnomad_exome', 'echtvar_clinvar']
+        file_paths = ['reference', 'chr_add']
 
         for path_param in file_paths:
             if path_param in config_params:
@@ -130,34 +119,6 @@ class NextflowWorkflow:
                         self.logger.warning(warn_msg)
                         warnings.append(warn_msg)
 
-        # 3. Check directory paths
-        dir_paths = ['vep_cache']
-        for path_param in dir_paths:
-            if path_param in config_params:
-                path_str = config_params[path_param]
-                if path_str and not isinstance(path_str, bool) and not path_str.startswith('${'):
-                    path = Path(path_str)
-                    if not path.exists():
-                        warn_msg = f"Directory defined in '{path_param}' does not exist: {path_str}"
-                        self.logger.warning(warn_msg)
-                        warnings.append(warn_msg)
-
-        # 4. Validate VEP command format
-        vep_cmd = config_params['vep_cmd']
-        if not any(x in vep_cmd.lower() for x in ['vep', 'ensembl-vep']):
-            warn_msg = f"VEP command might be misconfigured: '{vep_cmd}'"
-            self.logger.warning(warn_msg)
-            warnings.append(warn_msg)
-
-        # 5. Validate performance settings
-        perf_params = ['vep_max_chr_parallel', 'vep_max_forks', 'vep_buffer']
-        for param in perf_params:
-            if param in config_params:
-                value = config_params[param]
-                if not isinstance(value, (int, float)) or value <= 0:
-                    warn_msg = f"Performance parameter '{param}' should be a positive number: {value}"
-                    self.logger.warning(warn_msg)
-                    warnings.append(warn_msg)
 
         # Print summary of validation
         if warnings:
@@ -193,8 +154,7 @@ class NextflowWorkflow:
 
         # 1. Check required MD5 parameters
         md5_params = [
-            'reference_md5sum', 'echtvar_gnomad_genome_md5sum',
-            'echtvar_gnomad_exome_md5sum', 'echtvar_clinvar_md5sum'
+            'reference_md5sum'
         ]
 
         missing_md5_params = [param for param in md5_params if param not in anno_params]
@@ -204,16 +164,16 @@ class NextflowWorkflow:
             raise ValueError(err_msg)
 
         # 2. Check version parameters
-        version_params = ['echtvar_cmd_version', 'vep_cmd_version']
+        version_params = ['vep_cmd_version']
         missing_version_params = [param for param in version_params if param not in anno_params]
         if missing_version_params:
             err_msg = f"Missing version parameters in annotation config: {', '.join(missing_version_params)}"
             self.logger.error(err_msg)
             raise ValueError(err_msg)
 
-        # 3. Check VEP options
+        # 3. Check VCF options
         if 'vep_options' not in anno_params:
-            raise ValueError("VEP options not found in annotation config.")
+            raise ValueError("VCF options not found in annotation config.")
 
         # Print summary of validation
         if warnings:
@@ -486,11 +446,11 @@ class NextflowWorkflow:
         env['NXF_VER'] = self.NXF_VERSION
         env['NXF_DISABLE_CHECK_LATEST'] = '1'
         env['NXF_OFFLINE'] = 'true'
-        if 'VEPSTASH_ROOT' not in env:
-            raise RuntimeError("VEPSTASH_ROOT environment variable is not set")
+        if 'VCFSTASH_ROOT' not in env:
+            raise RuntimeError("VCFSTASH_ROOT environment variable is not set")
         # Set up the Nextflow executable
         nxf_exe = ['java', '-jar', str(Path(env[
-               'VEPSTASH_ROOT']) / f'workflow/.nextflow/framework/{self.NXF_VERSION}/nextflow-{self.NXF_VERSION}-one.jar')]
+               'VCFSTASH_ROOT']) / f'workflow/.nextflow/framework/{self.NXF_VERSION}/nextflow-{self.NXF_VERSION}-one.jar')]
         # this could also use the executable in PATH with nxf_exe = ['nextflow']
 
         # Clean Nextflow metadata
@@ -515,7 +475,7 @@ class NextflowWorkflow:
             "--output", str(self.output_dir),
             "--db_mode", db_mode,
             "-w", str(self.work_dir),
-            "-name", f"vepstash_{self.name}",
+            "-name", f"vcfstash_{self.name}",
             "-ansi-log", "true"  # enable colored output
         ]
 
@@ -557,12 +517,12 @@ class NextflowWorkflow:
             raise RuntimeError(f"Workflow execution failed with exit code: {e.returncode}")
 
 
-class VEPDatabase:
+class VCFDatabase:
     TRANSCRIPT_KEYS = [
         'SYMBOL', 'Feature', 'Consequence', 'HGVS_OFFSET', 'HGVSc', 'HGVSp',
         'IMPACT', 'DISTANCE', 'PICK', 'VARIANT_CLASS'
     ]
-    """Base class for VEP database operations"""
+    """Base class for VCF database operations"""
     def __init__(self, db_path: Path, verbosity: int):
 
         self.stashed_output = StashOutput(str(db_path))
@@ -570,9 +530,9 @@ class VEPDatabase:
         self.stash_name = self.stash_path.name
         self.blueprint_dir = self.stash_path / "blueprint"
         self.workflow_dir = self.stash_path / "workflow"
-        self.annotations_dir = self.stash_path / "annotations"
+        self.stash_dir = self.stash_path / "stash"
         self.workflow_dir_src =  self.stashed_output.workflow_src_dir
-        self.blueprint_bcf = self.blueprint_dir / "vepstash.bcf"
+        self.blueprint_bcf = self.blueprint_dir / "vcfstash.bcf"
 
         self.info_file = self.blueprint_dir / "sources.info"
         self.verbosity = verbosity
@@ -584,7 +544,7 @@ class VEPDatabase:
             self.db_info = {'input_files':[]}
         self.logger = None
 
-    def connect_loggers(self, logger_name: str = "vepdb") -> Logger:
+    def connect_loggers(self, logger_name: str = "vcfdb") -> Logger:
         # Set up central logging
         log_file = self.stash_path / f"{logger_name}.log"
         return setup_logging(
@@ -622,10 +582,10 @@ class VEPDatabase:
             self.logger.error(f"BCF header validation failed: {result[1]}")
         return result
 
-    def parse_vep_info(self, vep_data: list) -> list:
-        """Parses VEP INFO field and expands transcript consequences."""
+    def parse_vcf_info(self, vcf_data: list) -> list:
+        """Parses VCF INFO field and expands transcript consequences."""
 
-        def convert_vepstr(value):
+        def convert_vcfstr(value):
             if value is None or value == "":
                 return None
             try:
@@ -636,15 +596,15 @@ class VEPDatabase:
                 return value
 
         expanded_data = []
-        for tn, transcript in enumerate(vep_data):
+        for tn, transcript in enumerate(vcf_data):
             expanded_data.append({})
             for entry in self.TRANSCRIPT_KEYS:
-                if entry not in vep_data[tn]:
+                if entry not in vcf_data[tn]:
                     raise ValueError(f"Did not find key={entry} in CSQ INFO tag")
                 if entry == "PICK":
-                    expanded_data[tn][entry] = vep_data[tn][entry] == "1"
+                    expanded_data[tn][entry] = vcf_data[tn][entry] == "1"
                 else:
-                    expanded_data[tn][entry] = convert_vepstr(vep_data[tn][entry])
+                    expanded_data[tn][entry] = convert_vcfstr(vcf_data[tn][entry])
 
         return expanded_data
 

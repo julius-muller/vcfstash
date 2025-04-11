@@ -1,5 +1,5 @@
 # docker/Dockerfile
-FROM ensemblorg/ensembl-vep:latest
+FROM ensemblorg/ensembl-vcf:latest
 
 RUN apt-get update && apt-get install -y \
     python3.11 \
@@ -10,4 +10,4 @@ COPY . /app
 WORKDIR /app
 RUN uv venv && uv pip install .
 
-ENTRYPOINT ["vepstash"]
+ENTRYPOINT ["vcfstash"]

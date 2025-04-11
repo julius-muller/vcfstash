@@ -99,7 +99,7 @@ def compute_md5(file_path: Path) -> str:
 
     :param file_path:
     :return:
-    file_path = Path('~/projects/vepstash/tests/data/nodata/dbsnp_test.bcf')
+    file_path = Path('~/projects/vcfstash/tests/data/nodata/dbsnp_test.bcf')
     """
     try:
         print(f'Computing MD5 for {file_path} ...')
@@ -150,18 +150,18 @@ def validate_vcf_format(vcf_path: Path) -> tuple[bool, str | None]:
 
 def get_vep_version_from_cmd(vep_cmd):
     """
-    Executes the VEP command and extracts the version number from its output.
+    Executes the VCF command and extracts the version number from its output.
 
     Args:
-        vep_cmd (str): The VEP command to execute.
+        vep_cmd (str): The VCF command to execute.
 
     Returns:
-        str: The VEP version number (e.g., "113.0").
+        str: The VCF version number (e.g., "113.0").
 
     Raises:
         ValueError: If version cannot be extracted from output or command fails.
 
-        vep_cmd ="docker run --user \\$(id -u):\\$(id -g) -i -v ${vep_cache}:${vep_cache} -v ${refdir}:${refdir} --rm ensemblorg/ensembl-vep:release_113.0 vep"
+        vep_cmd ="docker run --user \\$(id -u):\\$(id -g) -i -v ${vep_cache}:${vep_cache} -v ${refdir}:${refdir} --rm ensemblorg/ensembl-vcf:release_113.0 vep"
     """
     try:
         shell_cmd = vep_cmd.replace("\\$(", "$(").replace("\\${", "${")
@@ -172,99 +172,49 @@ def get_vep_version_from_cmd(vep_cmd):
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
         if result.returncode != 0:
-            error_msg = f"VEP command failed with exit code {result.returncode}: {result.stderr.strip()}"
+            error_msg = f"VCF command failed with exit code {result.returncode}: {result.stderr.strip()}"
             raise ValueError(error_msg)
 
         # Parse the output to find the version
         output = result.stdout
 
-        # Look for the ensembl-vep version line
-        version_match = re.search(r"ensembl-vep\s*:\s*(\d+\.\d+(?:\.\d+)?)", output)
+        # Look for the ensembl-vcf version line
+        version_match = re.search(r"ensembl-vcf\s*:\s*(\d+\.\d+(?:\.\d+)?)", output)
         if not version_match:
             # Alternative pattern for older versions or different formats
-            version_match = re.search(r"VEP version (\d+\.\d+(?:\.\d+)?)", output)
+            version_match = re.search(r"VCF version (\d+\.\d+(?:\.\d+)?)", output)
 
         if version_match:
             version = version_match.group(1)
             return version
         else:
-            error_msg = "Could not determine VEP version from command output."
+            error_msg = "Could not determine VCF version from command output."
             raise ValueError(error_msg)
 
     except Exception as e:
-        error_msg = f"Error determining VEP version: {str(e)}"
+        error_msg = f"Error determining VCF version: {str(e)}"
         raise ValueError(error_msg)
-
-
-def get_echtvar_version_from_cmd(echtvar_cmd):
-    """
-    Executes the echtvar command and extracts the version number from its output.
-
-    Args:
-        echtvar_cmd (str): The echtvar command to execute.
-
-    Returns:
-        str: The echtvar version number (e.g., "0.2.1").
-
-    Raises:
-        ValueError: If version cannot be extracted from output or command fails.
-    """
-    try:
-        # Use -V flag to get version information
-        cmd = f"{echtvar_cmd} -V"
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-
-        if result.returncode != 0:
-            # Try alternative --version flag if -V fails
-            cmd = f"{echtvar_cmd} --version"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-
-            if result.returncode != 0:
-                error_msg = f"Echtvar command failed with exit code {result.returncode}: {result.stderr.strip()}"
-                raise ValueError(error_msg)
-
-        # Parse the output to find the version
-        output = result.stdout
-
-        # Try pattern for "echtvar 0.2.1" format
-        version_match = re.search(r"echtvar\s+(\d+\.\d+\.\d+)", output)
-        if not version_match:
-            # Alternative pattern just looking for version number
-            version_match = re.search(r"(\d+\.\d+\.\d+)", output)
-
-        if version_match:
-            version = version_match.group(1)
-            return version
-        else:
-            error_msg = "Could not determine echtvar version from command output."
-            raise ValueError(error_msg)
-
-    except Exception as e:
-        error_msg = f"Error determining echtvar version: {str(e)}"
-        raise ValueError(error_msg)
-
-
 
 
 def generate_test_command(
-        vepstash_path="~/projects/vepstash/vepstash.py",
-        vcf_path="~/projects/vepstash/tests/data/nodata/crayz_db.bcf",
+        vcfstash_path="~/projects/vcfstash/vcfstash.py",
+        vcf_path="~/projects/vcfstash/tests/data/nodata/crayz_db.bcf",
         output_dir="~/tmp/test/test_out",
-        config_path="~/projects/vepstash/tests/config/nextflow_test.config",
-        annotation_config = "~/projects/vepstash/tests/config/annotation_test.config",
-        add_vcf_path="~/projects/vepstash/tests/data/nodata/crayz_db2.bcf",
+        config_path="~/projects/vcfstash/tests/config/nextflow_test.config",
+        annotation_config = "~/projects/vcfstash/tests/config/annotation_test.config",
+        add_vcf_path="~/projects/vcfstash/tests/data/nodata/crayz_db2.bcf",
         annotate_name="testor",
         force=True
 ):
     """
-    Generate a nicely formatted test command string for vepstash operations.
+    Generate a nicely formatted test command string for vcfstash operations.
 
     Returns:
         str: A copy-pastable command string with proper formatting
     """
     #
     cmd_init = (
-        f"{vepstash_path} stash-init "
+        f"{vcfstash_path} stash-init "
         f"--vcf {vcf_path} "
         f"--output {output_dir} "
         f"-c {config_path} "
@@ -272,13 +222,13 @@ def generate_test_command(
     ).strip()
 
     cmd_add = (
-        f"{vepstash_path} stash-add "
+        f"{vcfstash_path} stash-add "
         f"--db {output_dir} "
         f"-i {add_vcf_path} "
     ).strip()
 
     cmd_annotate = (
-        f"{vepstash_path} stash-annotate "
+        f"{vcfstash_path} stash-annotate "
         f"--name {annotate_name} "
         f"-a {annotation_config}"
         f"--db {output_dir} "
@@ -310,30 +260,30 @@ alias stx="{full_cmd}"
 
 
 # Example usage into test dir in repo:
-# ~/projects/vepstash/vepstash.py stash-init --name nftest --vcf ~/projects/vepstash/tests/data/nodata/crayz_db.bcf --output /home/j380r/tmp/test/test_out -f --test -vv
-# ~/projects/vepstash/vepstash.py stash-add --db ~/projects/vepstash/tests/data/test_out/nftest -i ~/projects/vepstash/tests/data/nodata/crayz_db2.bcf --test -vv
-# ~/projects/vepstash/vepstash.py stash-annotate --name testor --db ~/projects/vepstash/tests/data/test_out/nftest --test -vv -f
+# ~/projects/vcfstash/vcfstash.py stash-init --name nftest --vcf ~/projects/vcfstash/tests/data/nodata/crayz_db.bcf --output /home/j380r/tmp/test/test_out -f --test -vv
+# ~/projects/vcfstash/vcfstash.py stash-add --db ~/projects/vcfstash/tests/data/test_out/nftest -i ~/projects/vcfstash/tests/data/nodata/crayz_db2.bcf --test -vv
+# ~/projects/vcfstash/vcfstash.py stash-annotate --name testor --db ~/projects/vcfstash/tests/data/test_out/nftest --test -vv -f
 # ... or locally
-# ~/projects/vepstash/vepstash.py stash-init --name nftest --vcf ~/projects/vepstash/tests/data/nodata/crayz_db.bcf --output test_out --test -f -vv
-# ~/projects/vepstash/vepstash.py stash-add --db test_out/nftest -i ~/projects/vepstash/tests/data/nodata/crayz_db2.bcf --test -vv
-# ~/projects/vepstash/vepstash.py stash-annotate --name testor --db test_out/nftest --test -vv -f
-# ~/projects/vepstash/vepstash.py annotate --a ~/tmp/test/test_out/nftest/annotations/testor --vcf ~/projects/vepstash/tests/data/nodata/sample4.bcf --output ~/tmp/test/aout --test -f
+# ~/projects/vcfstash/vcfstash.py stash-init --name nftest --vcf ~/projects/vcfstash/tests/data/nodata/crayz_db.bcf --output test_out --test -f -vv
+# ~/projects/vcfstash/vcfstash.py stash-add --db test_out/nftest -i ~/projects/vcfstash/tests/data/nodata/crayz_db2.bcf --test -vv
+# ~/projects/vcfstash/vcfstash.py stash-annotate --name testor --db test_out/nftest --test -vv -f
+# ~/projects/vcfstash/vcfstash.py annotate --a ~/tmp/test/test_out/nftest/stash/testor --vcf ~/projects/vcfstash/tests/data/nodata/sample4.bcf --output ~/tmp/test/aout --test -f
 
 # as one:
-cmd = """alias stx="~/projects/vepstash/vepstash.py stash-init --vcf ~/projects/vepstash/tests/data/nodata/crayz_db.bcf --output /home/j380r/tmp/test/test_out -c /home/j380r/projects/vepstash/tests/config/nextflow_test.config -f ; 
-~/projects/vepstash/vepstash.py stash-add --db /home/j380r/tmp/test/test_out -i ~/projects/vepstash/tests/data/nodata/crayz_db2.bcf ; 
-~/projects/vepstash/vepstash.py stash-annotate --name testor -a /home/j380r/projects/vepstash/tests/config/annotation.config --db /home/j380r/tmp/test/test_out -f;
-~/projects/vepstash/vepstash.py annotate -a ~/tmp/test/test_out/annotations/testor --vcf ~/projects/vepstash/tests/data/nodata/sample4.bcf
+cmd = """alias stx="~/projects/vcfstash/vcfstash.py stash-init --vcf ~/projects/vcfstash/tests/data/nodata/crayz_db.bcf --output /home/j380r/tmp/test/test_out -c /home/j380r/projects/vcfstash/tests/config/nextflow_test.config -f ; 
+~/projects/vcfstash/vcfstash.py stash-add --db /home/j380r/tmp/test/test_out -i ~/projects/vcfstash/tests/data/nodata/crayz_db2.bcf ; 
+~/projects/vcfstash/vcfstash.py stash-annotate --name testor -a /home/j380r/projects/vcfstash/tests/config/annotation.config --db /home/j380r/tmp/test/test_out -f;
+~/projects/vcfstash/vcfstash.py annotate -a ~/tmp/test/test_out/stash/testor --vcf ~/projects/vcfstash/tests/data/nodata/sample4.bcf
 --output ~/tmp/test/aout -f -p -vv"
 """
 
 
 # on gvpre
 cmd2 = """
-~/projects/vepstash/vepstash.py stash-init --vcf /mnt/data/resources/gnomad/vep_gnomad_v4_hg19_exomes/gnomad.exomes.v4.1.sites.grch37.trimmed_liftover_norm_1e-1.bcf --output gnomad_1e-1  -c ~/projects/vepstash/tests/config/nextflow_gnomadhg19.config;
-~/projects/vepstash/vepstash.py stash-add --db gnomad_1e-1 -i /mnt/data/resources/gnomad/vep_gnomad_v4_hg19_genomes/gnomad.genomes.v4.1.sites.grch37.trimmed_liftover_norm_1e-1.bcf;
-~/projects/vepstash/vepstash.py stash-annotate --name gen_ex -a ~/projects/vepstash/tests/config/annotation.config --db gnomad_1e-1;
-~/projects/vepstash/vepstash.py annotate -a gnomad_1e-1/annotations/gen_ex --vcf /mnt/data/samples/test_mgm/mgm_WGS_32.gatkWGS_norm.bcf --output mgm_WGS_32 -p;
+~/projects/vcfstash/vcfstash.py stash-init --vcf /mnt/data/resources/gnomad/vcf_gnomad_v4_hg19_exomes/gnomad.exomes.v4.1.sites.grch37.trimmed_liftover_norm_1e-1.bcf --output gnomad_1e-1  -c ~/projects/vcfstash/tests/config/nextflow_gnomadhg19.config;
+~/projects/vcfstash/vcfstash.py stash-add --db gnomad_1e-1 -i /mnt/data/resources/gnomad/vcf_gnomad_v4_hg19_genomes/gnomad.genomes.v4.1.sites.grch37.trimmed_liftover_norm_1e-1.bcf;
+~/projects/vcfstash/vcfstash.py stash-annotate --name gen_ex -a ~/projects/vcfstash/tests/config/annotation.config --db gnomad_1e-1;
+~/projects/vcfstash/vcfstash.py annotate -a gnomad_1e-1/stash/gen_ex --vcf /mnt/data/samples/test_mgm/mgm_WGS_32.gatkWGS_norm.bcf --output mgm_WGS_32 -p;
 """
 
 

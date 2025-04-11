@@ -15,14 +15,14 @@ TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 TEST_VCF = os.path.join(TEST_DATA_DIR, "nodata", "crayz_db.bcf")
 TEST_CONFIG = os.path.join(os.path.dirname(__file__), "config", "nextflow_test.config")
 TEST_ANNO_CONFIG = os.path.join(os.path.dirname(__file__), "config", "annotation.config")
-VEPSTASH_CMD = os.path.join(os.path.dirname(os.path.dirname(__file__)), "vepstash.py")
+VCFSTASH_CMD = os.path.join(os.path.dirname(os.path.dirname(__file__)), "vcfstash.py")
 
 
 @pytest.fixture
 def fresh_output_dir():
     """Create a non-existent path for the test output."""
     # Create a parent directory
-    parent_dir = tempfile.mkdtemp(prefix="vepstash_parent_")
+    parent_dir = tempfile.mkdtemp(prefix="vcfstash_parent_")
 
     # Create a unique path within that directory (but don't create the directory)
     output_dir = os.path.join(parent_dir, f"output_{uuid.uuid4().hex}")
@@ -42,7 +42,7 @@ def test_stash_annotate(fresh_output_dir):
 
     # First, initialize the stash with stash-init
     init_cmd = [
-        VEPSTASH_CMD,
+        VCFSTASH_CMD,
         "stash-init",
         "-i", TEST_VCF,
         "-o", fresh_output_dir,
@@ -69,7 +69,7 @@ def test_stash_annotate(fresh_output_dir):
     # Now run stash-annotate with a test name
     annotation_name = "test_annotation"
     annotate_cmd = [
-        VEPSTASH_CMD,
+        VCFSTASH_CMD,
         "stash-annotate",
         "--name", annotation_name,
         "-a", TEST_ANNO_CONFIG,
@@ -92,7 +92,7 @@ def test_stash_annotate(fresh_output_dir):
     print(f"Annotate stderr: {annotate_result.stderr}")
 
     # Use the proper variable name from your test for the output directory
-    annotation_dir = os.path.join(fresh_output_dir, "annotations", annotation_name)
+    annotation_dir = os.path.join(fresh_output_dir, "stash", annotation_name)
 
     # Print contents of directory
     print(f"Contents of annotation directory {annotation_dir}:")
@@ -112,7 +112,7 @@ def test_stash_annotate(fresh_output_dir):
         blueprint_data["timestamp"] = datetime.datetime.now().isoformat()
 
         # Add the blueprint_bcf field - point to the BCF file in the annotation directory
-        bcf_file = "vepstash_annotated.bcf"
+        bcf_file = "vcfstash_annotated.bcf"
         bcf_path = os.path.join(annotation_dir, bcf_file)
         if os.path.exists(bcf_path):
             blueprint_data["blueprint_bcf"] = bcf_path
@@ -148,7 +148,7 @@ def test_stash_annotate(fresh_output_dir):
 
     # Make sure blueprint_bcf is set
     if "blueprint_bcf" not in snapshot_data:
-        bcf_file = "vepstash_annotated.bcf"
+        bcf_file = "vcfstash_annotated.bcf"
         bcf_path = os.path.join(annotation_dir, bcf_file)
         snapshot_data["blueprint_bcf"] = bcf_path
 
@@ -187,7 +187,7 @@ def test_stash_annotate(fresh_output_dir):
     assert annotate_result.returncode == 0, f"stash-annotate failed: {annotate_result.stderr}"
 
     # Verify annotation directory structure
-    annotation_dir = os.path.join(fresh_output_dir, "annotations", annotation_name)
+    annotation_dir = os.path.join(fresh_output_dir, "stash", annotation_name)
     assert os.path.exists(annotation_dir), f"Annotation directory not created at {annotation_dir}"
 
     # Verify expected annotation files exist
@@ -198,8 +198,8 @@ def test_stash_annotate(fresh_output_dir):
         f"{annotation_name}_flowchart.html",  # Nextflow flowchart
         f"{annotation_name}_report.html",  # Nextflow report
         f"{annotation_name}_trace.txt",  # Nextflow trace
-        "vepstash_annotated.bcf",  # Output BCF file
-        "vepstash_annotated.bcf.csi"  # Index file
+        "vcfstash_annotated.bcf",  # Output BCF file
+        "vcfstash_annotated.bcf.csi"  # Index file
     ]
 
     missing_files = []
@@ -211,7 +211,7 @@ def test_stash_annotate(fresh_output_dir):
     assert not missing_files, f"Missing expected files in annotation directory: {missing_files}"
 
     # Check the BCF file content (basic existence check)
-    bcf_file = os.path.join(annotation_dir, "vepstash_annotated.bcf")
+    bcf_file = os.path.join(annotation_dir, "vcfstash_annotated.bcf")
     assert os.path.getsize(bcf_file) > 0, "BCF file is empty"
 
     # Check the blueprint snapshot
@@ -236,8 +236,8 @@ def test_stash_annotate(fresh_output_dir):
     main_nf = os.path.join(workflow_dir, "main.nf")
     assert os.path.exists(main_nf), "main.nf not found in workflow directory"
 
-    # List all directories under annotations for debugging
-    print(f"Annotations directory content: {os.listdir(os.path.join(fresh_output_dir, 'annotations'))}")
+    # List all directories under stash for debugging
+    print(f"Annotations directory content: {os.listdir(os.path.join(fresh_output_dir, 'stash'))}")
     print(f"Specific annotation directory content: {os.listdir(annotation_dir)}")
 
     # If available, check for Nextflow work directory to verify execution

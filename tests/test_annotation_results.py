@@ -1,6 +1,8 @@
 # Add to tests/test_annotation_results.py
 
 import os
+from pathlib import Path
+
 import pytest
 import tempfile
 import subprocess
@@ -12,24 +14,24 @@ TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 TEST_VCF = os.path.join(TEST_DATA_DIR, "nodata", "crayz_db.bcf")
 TEST_CONFIG = os.path.join(os.path.dirname(__file__), "config", "nextflow_test.config")
 TEST_ANNO_CONFIG = os.path.join(os.path.dirname(__file__), "config", "annotation.config")
-VEPSTASH_CMD = os.path.join(os.path.dirname(os.path.dirname(__file__)), "vepstash.py")
-
+VCFSTASH_CMD = os.path.join(os.path.dirname(os.path.dirname(__file__)), "vcfstash.py")
+EXPECTED_OUTPUT_DIR = os.path.join(TEST_DATA_DIR, "expected_output")
 
 @pytest.fixture
 def annotated_stash():
     """Create a test stash with annotations."""
     # Create temporary directory
-    parent_dir = tempfile.mkdtemp(prefix="vepstash_anno_test_")
+    parent_dir = tempfile.mkdtemp(prefix="vcfstash_anno_test_")
     output_dir = os.path.join(parent_dir, f"output_{uuid.uuid4().hex}")
 
     # Initialize the stash
-    init_cmd = [VEPSTASH_CMD, "stash-init", "-i", TEST_VCF, "-o", output_dir, "-c", TEST_CONFIG]
+    init_cmd = [VCFSTASH_CMD, "stash-init", "-i", TEST_VCF, "-o", output_dir, "-c", TEST_CONFIG]
     subprocess.run(init_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     # Run annotation
     annotation_name = "test_anno"
     annotate_cmd = [
-        VEPSTASH_CMD, "stash-annotate",
+        VCFSTASH_CMD, "stash-annotate",
         "--name", annotation_name,
         "-a", TEST_ANNO_CONFIG,
         "--db", output_dir,
@@ -51,7 +53,7 @@ def fix_blueprint_snapshot(stash_dir, anno_name="test_anno"):
     import datetime
 
     # Path to the blueprint snapshot
-    snapshot_dir = os.path.join(stash_dir, "annotations", anno_name)
+    snapshot_dir = os.path.join(stash_dir, "stash", anno_name)
     snapshot_file = os.path.join(snapshot_dir, "blueprint_snapshot.info")
 
     if not os.path.exists(snapshot_file):
@@ -72,7 +74,7 @@ def fix_blueprint_snapshot(stash_dir, anno_name="test_anno"):
 
     # Add blueprint_bcf if missing
     if "blueprint_bcf" not in snapshot:
-        bcf_file = "vepstash_annotated.bcf"
+        bcf_file = "vcfstash_annotated.bcf"
         bcf_path = os.path.join(snapshot_dir, bcf_file)
         if os.path.exists(bcf_path):
             snapshot["blueprint_bcf"] = bcf_path
@@ -103,16 +105,16 @@ def test_annotation_bcf_structure(annotated_stash):
     stash_dir, anno_name = annotated_stash
 
     # Path to the annotated BCF
-    bcf_file = os.path.join(stash_dir, "annotations", anno_name, "vepstash_annotated.bcf")
+    bcf_file = os.path.join(stash_dir, "stash", anno_name, "vcfstash_annotated.bcf")
     assert os.path.exists(bcf_file), f"Annotated BCF not found at {bcf_file}"
 
     # Use pysam to examine the BCF structure
     try:
         vcf = pysam.VariantFile(bcf_file)
 
-        # Check for VEP annotations in the header
+        # Check for VCF annotations in the header
         header = vcf.header
-        assert "CSQ" in header.info, "VEP CSQ annotation not found in BCF header"
+        assert "CSQ" in header.info, "VCF CSQ annotation not found in BCF header"
 
         # Read a few records to check for annotations
         variants = []
@@ -123,14 +125,14 @@ def test_annotation_bcf_structure(annotated_stash):
 
         assert len(variants) > 0, "No variants found in annotated BCF"
 
-        # Check for VEP annotations in at least one variant
-        has_vep_anno = False
+        # Check for VCF annotations in at least one variant
+        has_vcf_anno = False
         for var in variants:
             if "CSQ" in var.info:
-                has_vep_anno = True
+                has_vcf_anno = True
                 break
 
-        assert has_vep_anno, "No VEP annotations found in variants"
+        assert has_vcf_anno, "No VCF annotations found in variants"
 
     except Exception as e:
         pytest.fail(f"Error examining BCF file: {str(e)}")
@@ -141,7 +143,7 @@ def test_annotation_config_saved(annotated_stash):
     stash_dir, anno_name = annotated_stash
 
     # Path to the saved annotation config
-    config_file = os.path.join(stash_dir, "annotations", anno_name, "annotation.config")
+    config_file = os.path.join(stash_dir, "stash", anno_name, "annotation.config")
     assert os.path.exists(config_file), "Annotation config not saved"
 
     # Verify it has content
@@ -163,7 +165,7 @@ def test_blueprint_snapshot(annotated_stash):
     fix_blueprint_snapshot(stash_dir, anno_name)
 
     # Path to the blueprint snapshot
-    snapshot_file = os.path.join(stash_dir, "annotations", anno_name, "blueprint_snapshot.info")
+    snapshot_file = os.path.join(stash_dir, "stash", anno_name, "blueprint_snapshot.info")
     assert os.path.exists(snapshot_file), "Blueprint snapshot not found"
 
     # Load and validate the snapshot

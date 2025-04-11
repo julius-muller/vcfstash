@@ -1,3 +1,0 @@
-task_id	hash	native_id	name	status	exit	submit	duration	realtime	%cpu	peak_rss	peak_vmem	rchar	wchar
-1	0c/947e2d	410952	UTILS:ValidateInputs	COMPLETED	0	2025-04-04 10:18:28.104	60ms	5ms	100.0%	0	0	84.4 KB	875 B
-2	9a/79c4c3	410959	NORMALIZE:RenameAndNormalizeVCF	COMPLETED	0	2025-04-04 10:18:28.111	134ms	91ms	10.4%	13.8 MB	478.5 MB	129.2 KB	5.2 KB

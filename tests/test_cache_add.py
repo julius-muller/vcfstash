@@ -9,14 +9,14 @@ import uuid
 TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 TEST_VCF = os.path.join(TEST_DATA_DIR, "nodata", "crayz_db.bcf")
 TEST_CONFIG = os.path.join(os.path.dirname(__file__), "config", "nextflow_test.config")
-VEPSTASH_CMD = os.path.join(os.path.dirname(os.path.dirname(__file__)), "vepstash.py")
+VCFSTASH_CMD = os.path.join(os.path.dirname(os.path.dirname(__file__)), "vcfstash.py")
 
 
 @pytest.fixture
 def fresh_output_dir():
     """Create a non-existent path for the test output."""
     # Create a parent directory
-    parent_dir = tempfile.mkdtemp(prefix="vepstash_parent_")
+    parent_dir = tempfile.mkdtemp(prefix="vcfstash_parent_")
 
     # Create a unique path within that directory (but don't create the directory)
     output_dir = os.path.join(parent_dir, f"output_{uuid.uuid4().hex}")
@@ -38,7 +38,7 @@ def test_stash_init_and_add(fresh_output_dir):
 
     # Run stash-init with a fresh directory
     init_cmd = [
-        VEPSTASH_CMD,
+        VCFSTASH_CMD,
         "stash-init",
         "-i", TEST_VCF,
         "-o", fresh_output_dir,
@@ -82,7 +82,7 @@ def test_stash_init_and_add(fresh_output_dir):
 
     # Test stash-add by adding the same file again (reusing the same test file for simplicity)
     add_cmd = [
-        VEPSTASH_CMD,
+        VCFSTASH_CMD,
         "stash-add",
         "--db", fresh_output_dir,
         "-i", TEST_VCF,
@@ -110,11 +110,11 @@ def test_stash_init_and_add(fresh_output_dir):
     assert len(updated_sources_data["input_files"]) >= 1, "No input files in sources.info after stash-add"
 
     # Check for BCF file
-    bcf_file = os.path.join(blueprint_dir, "vepstash.bcf")
+    bcf_file = os.path.join(blueprint_dir, "vcfstash.bcf")
     assert os.path.exists(bcf_file), "BCF file not created"
 
     # Check for other expected files (adjust these based on your application's expected output)
-    expected_files = ["vepstash.bcf", "vepstash.bcf.csi", "sources.info"]
+    expected_files = ["vcfstash.bcf", "vcfstash.bcf.csi", "sources.info"]
     for file in expected_files:
         assert os.path.exists(os.path.join(blueprint_dir, file)), f"Expected file {file} not found"
 

@@ -1,7 +1,7 @@
 ##########################################################################
 #                                                                        #
 # This file contains abstract base classes and implementations           #
-# for managing output file structures in VEP-based workflows.
+# for managing output file structures in VCF-based workflows.
 # NOT CURRENTLY USED.                                            #
 #                                                                        #
 ##########################################################################
@@ -20,7 +20,7 @@ class BaseOutput(ABC):
     def __init__(self, root_dir: str):
         self.root_dir = Path(root_dir).expanduser().resolve()
         # define the base directory of the module
-        self.module_src_dir = Path(os.getenv('VEPSTASH_ROOT', Path('.').resolve())) if '__file__' not in globals() else Path(__file__).parent.parent.parent
+        self.module_src_dir = Path(os.getenv('VCFSTASH_ROOT', Path('.').resolve())) if '__file__' not in globals() else Path(__file__).parent.parent.parent
 
     @abstractmethod
     def required_paths(self) -> dir:
@@ -86,7 +86,7 @@ class StashOutput(BaseOutput):
 
       <stash_root_dir>/
       ├── blueprint/
-      ├── annotations/
+      ├── stash/
       └── workflow/
           ├── ... parse from src
           ├── modules/
@@ -109,7 +109,7 @@ class StashOutput(BaseOutput):
 
         return  {
             "blueprint": self.stash_root_dir / "blueprint",
-            "annotations": self.stash_root_dir / "annotations",
+            "stash": self.stash_root_dir / "stash",
             "workflow": self.workflow_dir,
             "workflow_src": self.module_src_dir / "workflow",
             "modules": self.workflow_dir / "modules",
@@ -139,7 +139,7 @@ class AnnotatedStashOutput(BaseOutput):
     Encapsulates the structure for annotation stash from stash-annotate. Example:
 
       <stash_root_dir>/
-      ├── annotations/
+      ├── stash/
       │   └── <any subfolders, e.g. 'test'>  <- annotation_dir
 
     """
@@ -147,7 +147,7 @@ class AnnotatedStashOutput(BaseOutput):
     def __init__(self, annotation_dir: str):
         super().__init__(annotation_dir)
         self.annotation_dir = self.root_dir
-        self.annotations_dir = self.root_dir.parent
+        self.stash_dir = self.root_dir.parent
         self.stash_root_dir = self.root_dir.parent.parent
         self.stash_output = StashOutput(str(self.stash_root_dir))
         self.name = self.annotation_dir.name
@@ -167,7 +167,7 @@ class AnnotatedStashOutput(BaseOutput):
         self.create_directories({'annotation': self.annotation_dir})
     
     def validate_structure(self) -> bool:
-        # this is valid if it sits inside annotations of a valid stash output
+        # this is valid if it sits inside stash of a valid stash output
         valid_structure = self.stash_output.validate_structure()
         required_paths = self.required_paths()
         for pname, path in required_paths.items():
@@ -189,7 +189,7 @@ class AnnotatedUserOutput(BaseOutput):
     Encapsulates the structure for annotation workflows. Example:
 
       <stash_root_dir>/
-      ├── annotations/
+      ├── stash/
       │   └── <any subfolders, e.g. 'testor'>
 
     """
@@ -215,7 +215,7 @@ class AnnotatedUserOutput(BaseOutput):
 
     def create_structure(self) -> None:
         dirs_to_create = {
-            "workflow": self.workflow_dir # remaining sub dirs are created by the copytree in VEPDatabase._copy_workflow_srcfiles()
+            "workflow": self.workflow_dir # remaining sub dirs are created by the copytree in VCFDatabase._copy_workflow_srcfiles()
         }
         self.create_directories(dirs_to_create)
 

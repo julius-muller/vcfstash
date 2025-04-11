@@ -3,7 +3,7 @@ nextflow.enable.dsl = 2
 include { NORMALIZE } from './modules/normalize'
 include { INTERSECT } from './modules/intersect'
 include { ANNOTATE } from './modules/annotate'
-include { ANNOTATE_INFO } from './modules/annotate_info'
+include { AnnotateFromDB; FilterMissingAnnotations; MergeAnnotations } from './modules/annotate_cache'
 include { MERGE } from './modules/merge'
 include { MERGE_VARIANTS } from './modules/merge_variants'
 include { UTILS } from './modules/utils'
@@ -58,6 +58,10 @@ def validateParams() {
 }
 
 workflow {
+
+    params.db_mode = null
+    params.db_bcf = null
+
     validateParams()
 
     // Extract sample name from the input file
@@ -82,18 +86,15 @@ workflow {
         // Direct annotation without normalization
         ANNOTATE(
 			vcf,
-			vcf_index,
-            vep_cache,
-            reference,
-            sampleName
+			vcf_index
 		)
 
         // Publish annotated database
-        ANNOTATE.out.vep_bcf.subscribe { bcf ->
-            file(bcf).copyTo("${outputDir}/vepstash_annotated.bcf")
+        ANNOTATE.out.vcf_bcf.subscribe { bcf ->
+            file(bcf).copyTo("${outputDir}/vcfstash_annotated.bcf")
         }
-        ANNOTATE.out.vep_bcf_index.subscribe { idx ->
-            file(idx).copyTo("${outputDir}/vepstash_annotated.bcf.csi")
+        ANNOTATE.out.vcf_bcf_index.subscribe { idx ->
+            file(idx).copyTo("${outputDir}/vcfstash_annotated.bcf.csi")
         }
     } else { // in all other modes were gonna have some sort of input that requires normalization
         vcf = file(params.input)
@@ -134,35 +135,76 @@ workflow {
 
             // Publish final merged BCF without annotation
             MERGE_VARIANTS.out.merged_bcf.subscribe { bcf ->
-                file(bcf).copyTo("${outputDir}/vepstash.bcf")
+                file(bcf).copyTo("${outputDir}/vcfstash.bcf")
             }
             MERGE_VARIANTS.out.merged_bcf_index.subscribe { idx ->
-                file(idx).copyTo("${outputDir}/vepstash.bcf.csi")
+                file(idx).copyTo("${outputDir}/vcfstash.bcf.csi")
             }
         } else if (params.db_mode == 'stash-init') {
             // stash-init: First database creation - just normalize the input
             // No annotation here
             NORMALIZE.out.norm_bcf.subscribe { bcf ->
-                file(bcf).copyTo("${outputDir}/vepstash.bcf")
+                file(bcf).copyTo("${outputDir}/vcfstash.bcf")
             }
             NORMALIZE.out.norm_bcf_index.subscribe { idx ->
-                file(idx).copyTo("${outputDir}/vepstash.bcf.csi")
+                file(idx).copyTo("${outputDir}/vcfstash.bcf.csi")
             }
 		} else if (params.db_mode == 'annotate-nocache') {
-			// annotate: DIRECT_ANNOTATION_WORKFLOW - Direct VEP annotation without database comparison
+			// annotate: DIRECT_ANNOTATION_WORKFLOW - Direct VCF annotation without database comparison
 			ANNOTATE(
 				NORMALIZE.out.norm_bcf,
-				NORMALIZE.out.norm_bcf_index,
-				vep_cache,
-				reference,
-				sampleName
+				NORMALIZE.out.norm_bcf_index
 			)
 
             // Publish annotated database
-            ANNOTATE.out.vep_bcf.subscribe { bcf ->
+            ANNOTATE.out.vcf_bcf.subscribe { bcf ->
                 file(bcf).copyTo("${outputDir}/${sampleName}_vst.bcf")
             }
-            ANNOTATE.out.vep_bcf_index.subscribe { idx ->
+            ANNOTATE.out.vcf_bcf_index.subscribe { idx ->
+                file(idx).copyTo("${outputDir}/${sampleName}_vst.bcf.csi")
+            }
+
+		} else if (params.db_mode == 'annotate') {
+			// annotate: SAMPLE_ANALYSIS_WORKFLOW - Sample comparison against database using bcftools annotate
+            db_bcf = file(params.db_bcf)
+            db_bcf_index = file("${params.db_bcf}.csi")
+
+            // Step 1: Annotate input with database INFO fields
+            AnnotateFromDB(
+                NORMALIZE.out.norm_bcf,
+                NORMALIZE.out.norm_bcf_index,
+                db_bcf,
+                db_bcf_index,
+                sampleName
+            )
+
+            // Step 2: Filter to get variants with missing CSQ annotations
+            FilterMissingAnnotations(
+                AnnotateFromDB.out.annotated_bcf,
+                AnnotateFromDB.out.annotated_bcf_index,
+                sampleName
+            )
+
+            // Step 3: Run standard ANNOTATE workflow on missing annotations
+            ANNOTATE(
+                FilterMissingAnnotations.out.filtered_bcf,
+                FilterMissingAnnotations.out.filtered_bcf_index
+            )
+
+            // Step 4: Merge newly annotated variants back into original file
+            MergeAnnotations(
+                AnnotateFromDB.out.annotated_bcf,
+                AnnotateFromDB.out.annotated_bcf_index,
+                ANNOTATE.out.vcf_bcf,
+                ANNOTATE.out.vcf_bcf_index,
+                sampleName
+            )
+
+            // Publish the results
+            MergeAnnotations.out.merged_bcf.subscribe { bcf ->
+                file(bcf).copyTo("${outputDir}/${sampleName}_vst.bcf")
+            }
+            MergeAnnotations.out.merged_bcf_index.subscribe { idx ->
                 file(idx).copyTo("${outputDir}/${sampleName}_vst.bcf.csi")
             }
 
@@ -180,17 +222,14 @@ workflow {
 
 			ANNOTATE(
 				INTERSECT.out.subset_bcf,
-				INTERSECT.out.subset_bcf_index,
-				vep_cache,
-				reference,
-				sampleName
+				INTERSECT.out.subset_bcf_index
 			)
 
 			MERGE_VARIANTS(
 				INTERSECT.out.annotated_bcf,
 				INTERSECT.out.annotated_bcf_index,
-				ANNOTATE.out.vep_bcf,
-				ANNOTATE.out.vep_bcf_index
+				ANNOTATE.out.vcf_bcf,
+				ANNOTATE.out.vcf_bcf_index
 			)
 
 				// Publish final merged BCF
@@ -200,30 +239,6 @@ workflow {
 				MERGE_VARIANTS.out.merged_bcf_index.subscribe { idx ->
 					file(idx).copyTo("${outputDir}/${sampleName}_vst.bcf.csi")
 				}
-		} else if (params.db_mode == 'annotate') {
-			// annotate: SAMPLE_ANALYSIS_WORKFLOW - Sample comparison against database using bcftools annotate
-            db_bcf = file(params.db_bcf)
-            db_bcf_index = file("${params.db_bcf}.csi")
-
-            // Run the new ANNOTATE_INFO workflow
-            ANNOTATE_INFO(
-                NORMALIZE.out.norm_bcf,
-                NORMALIZE.out.norm_bcf_index,
-                db_bcf,
-                db_bcf_index,
-                vep_cache,
-                reference,
-                sampleName
-            )
-
-            // Publish the results
-            ANNOTATE_INFO.out.merged_bcf.subscribe { bcf ->
-                file(bcf).copyTo("${outputDir}/${sampleName}_vst.bcf")
-            }
-            ANNOTATE_INFO.out.merged_bcf_index.subscribe { idx ->
-                file(idx).copyTo("${outputDir}/${sampleName}_vst.bcf.csi")
-            }
-
 		}
 	}
 }

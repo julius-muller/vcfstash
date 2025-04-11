@@ -7,13 +7,13 @@ mkdir -p /cache /data
 
 # Check if command is provided
 if [ "$1" = "" ]; then
-    echo "Usage: vepstash <command> [options]"
+    echo "Usage: vcfstash <command> [options]"
     exit 1
 fi
 
-# Set VEP environment variables
-export VEP_PATH=/opt/vep
-export VEP_DATA=/opt/vep/.vep
+# Set VCF environment variables
+export VCF_PATH=/opt/vcf
+export VCF_DATA=/opt/vcf/.vcf
 
 # Execute command
 exec "$@"

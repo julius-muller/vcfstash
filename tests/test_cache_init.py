@@ -10,7 +10,7 @@ from pathlib import Path
 
 # Define constants for testing
 TEST_ROOT = os.path.dirname(os.path.abspath(__file__))
-VEPSTASH_CMD = os.path.join(os.path.dirname(TEST_ROOT), "vepstash.py")
+VCFSTASH_CMD = os.path.join(os.path.dirname(TEST_ROOT), "vcfstash.py")
 TEST_DATA_DIR = os.path.join(TEST_ROOT, "data", "nodata")
 TEST_CONFIG = os.path.join(TEST_ROOT, "config", "nextflow_test.config")
 TEST_VCF = os.path.join(TEST_DATA_DIR, "crayz_db.bcf")
@@ -22,9 +22,9 @@ EXPECTED_OUTPUT_DIR = os.path.join(TEST_ROOT, "data", "expected_output", "stash_
 def test_output_dir():
     """Provides a path for a directory that doesn't exist yet."""
     # Create a path for a temporary directory, but don't create it
-    temp_dir = tempfile.mkdtemp(prefix="vepstash_test_")
+    temp_dir = tempfile.mkdtemp(prefix="vcfstash_test_")
 
-    # Remove the directory immediately - vepstash will create it
+    # Remove the directory immediately - vcfstash will create it
     os.rmdir(temp_dir)
 
     # Return the path to the test function
@@ -51,7 +51,7 @@ def run_stash_init(input_vcf, output_dir, config_file, force=False):
         shutil.rmtree(output_dir)
 
     cmd = [
-        VEPSTASH_CMD,
+        VCFSTASH_CMD,
         "stash-init",
         "--vcf", input_vcf,
         "--output", output_dir,
@@ -80,12 +80,12 @@ def compare_directories_ignore_timestamps(dir1, dir2):
         r'^blueprint/init_trace\.txt$',  # Dynamic trace data
         r'^blueprint/\.nextflow\.log$',  # Nextflow log
         r'^blueprint/\.nextflow/history$',  # Nextflow history
-        r'^blueprint/vepstash\.bcf\.csi$'  # Index file that might differ
+        r'^blueprint/vcfstash\.bcf\.csi$'  # Index file that might differ
     ]
 
     # Special files that need custom comparison
     special_files = [
-        r'^blueprint/vepstash\.bcf$',  # BCF file
+        r'^blueprint/vcfstash\.bcf$',  # BCF file
         r'^blueprint/sources\.info$'  # Sources info
     ]
 
@@ -204,6 +204,14 @@ def test_stash_init_against_reference(test_output_dir):
 
     # Use a modified comparison function that ignores timestamps
     comparison_result = compare_directories_ignore_timestamps(output_dir, EXPECTED_OUTPUT_DIR)
+
+    if not comparison_result['success']:
+        if 'different_files' in comparison_result['details']:
+            for file_path in comparison_result['details']['different_files']:
+                test_file = os.path.join(output_dir, file_path)
+                ref_file = os.path.join(EXPECTED_OUTPUT_DIR, file_path)
+                print_file_diff(test_file, ref_file)
+
     assert comparison_result['success'], comparison_result['message']
 
 
@@ -211,6 +219,27 @@ def compare_files_ignoring_timestamps(file1, file2):
     """Compare two files ignoring timestamp differences and path differences."""
     if not os.path.exists(file1) or not os.path.exists(file2):
         return False
+
+    # Special handling for Nextflow files
+    if file1.endswith('.nf'):
+        try:
+            with open(file1, 'r', encoding='utf-8') as f1, open(file2, 'r', encoding='utf-8') as f2:
+                content1 = f1.read().strip()
+                content2 = f2.read().strip()
+
+                # Normalize line endings
+                content1 = content1.replace('\r\n', '\n')
+                content2 = content2.replace('\r\n', '\n')
+
+                if content1 != content2:
+                    print(f"\nDifferences in {os.path.basename(file1)}:")
+                    print(f"Test file ({file1}):\n{content1}")
+                    print(f"\nReference file ({file2}):\n{content2}")
+                    return False
+                return True
+        except UnicodeDecodeError:
+            print(f"Warning: UnicodeDecodeError when reading {file1} or {file2}")
+            return compare_binary_files(file1, file2)
 
     # Special handling for known files
     file_basename = os.path.basename(file1)
@@ -281,8 +310,8 @@ def compare_files_ignoring_timestamps(file1, file2):
         content2 = re.sub(r'[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}', 'UUID', content2)
 
         # Normalize absolute paths
-        content1 = re.sub(r'/tmp/vepstash_test_[a-z0-9]+', '/tmp/test_dir', content1)
-        content2 = re.sub(r'/tmp/vepstash_test_[a-z0-9]+', '/tmp/test_dir', content2)
+        content1 = re.sub(r'/tmp/vcfstash_test_[a-z0-9]+', '/tmp/test_dir', content1)
+        content2 = re.sub(r'/tmp/vcfstash_test_[a-z0-9]+', '/tmp/test_dir', content2)
 
         return content1 == content2
     except UnicodeDecodeError:
@@ -290,6 +319,21 @@ def compare_files_ignoring_timestamps(file1, file2):
         print(f"Warning: UnicodeDecodeError when reading {file1} or {file2}")
         return compare_binary_files(file1, file2)
 
+def print_file_diff(file1, file2):
+    """Print a detailed diff between two files."""
+    import difflib
+
+    with open(file1, 'r', encoding='utf-8') as f1, open(file2, 'r', encoding='utf-8') as f2:
+        lines1 = f1.readlines()
+        lines2 = f2.readlines()
+
+    differ = difflib.Differ()
+    diff = list(differ.compare(lines1, lines2))
+
+    print("\nDetailed diff:")
+    for line in diff:
+        if line.startswith(('+ ', '- ', '? ')):
+            print(line.rstrip())
 
 def compare_binary_files(file1, file2):
     """Compare two binary files byte by byte."""
@@ -384,7 +428,7 @@ def test_key_files_content_matches(test_output_dir):
 
     # Check all the module files too
     module_files = [
-        "workflow/modules/annotate_info.nf",
+        "workflow/modules/annotate_cache.nf",
         "workflow/modules/annotate.nf",
         "workflow/modules/intersect.nf",
         "workflow/modules/merge.nf",

@@ -5,8 +5,8 @@ process MergeAndSort {
     input:
     path annotated_bcf
     path annotated_bcf_index
-    path vep_bcf
-    path vep_bcf_index
+    path vcf_bcf
+    path vcf_bcf_index
     val output_dir
     val sample_name
 
@@ -18,7 +18,7 @@ process MergeAndSort {
     script:
     """
     # Merge and ensure single sample
-    ${params.bcftools_cmd} merge ${annotated_bcf} ${vep_bcf} --threads ${task.cpus} | \
+    ${params.bcftools_cmd} merge ${annotated_bcf} ${vcf_bcf} --threads ${task.cpus} | \
     ${params.bcftools_cmd} view -s mgm_WGS_32 -Ob -o "${sample_name}_norm_final.bcf" --threads ${task.cpus}
     ${params.bcftools_cmd} index "${sample_name}_norm_final.bcf" --threads ${task.cpus}
     """
@@ -49,14 +49,14 @@ workflow MERGE {
     take:
     annotated_bcf
     annotated_bcf_index
-    vep_bcf
-    vep_bcf_index
+    vcf_bcf
+    vcf_bcf_index
     output_dir
     sample_name
     project_path
 
     main:
-    MergeAndSort(annotated_bcf, annotated_bcf_index, vep_bcf, vep_bcf_index, output_dir, sample_name)
+    MergeAndSort(annotated_bcf, annotated_bcf_index, vcf_bcf, vcf_bcf_index, output_dir, sample_name)
     CreateParquet(MergeAndSort.out.final_files[0], MergeAndSort.out.final_files[1], sample_name, output_dir, project_path)
 
     emit:

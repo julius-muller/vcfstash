@@ -26,14 +26,14 @@ process AnnotateIntersection {
     val sample_name
 
     output:
-    path "${sample_name}_norm_vep.bcf", emit: annotated_bcf
-    path "${sample_name}_norm_vep.bcf.csi", emit: annotated_bcf_index
+    path "${sample_name}_norm_vcf.bcf", emit: annotated_bcf
+    path "${sample_name}_norm_vcf.bcf.csi", emit: annotated_bcf_index
 
     script:
     """
     ${params.bcftools_cmd} annotate -a ${isec_dir}/0003.bcf \
       -c INFO/CSQ,INFO/gnomadg_ac,INFO/gnomadg_an,INFO/gnomadg_af,INFO/gnomadg_filter,INFO/gnomade_ac,INFO/gnomade_an,INFO/gnomade_af,INFO/gnomade_filter,INFO/clinvar_clnsig,INFO/clinvar_clnrevstat,INFO/clinvar_clndn \
-      -o ${sample_name}_norm_vep.bcf ${isec_dir}/0000.bcf -O b --threads ${task.cpus} --write-index
+      -o ${sample_name}_norm_vcf.bcf ${isec_dir}/0000.bcf -O b --threads ${task.cpus} --write-index
     """
 }
 

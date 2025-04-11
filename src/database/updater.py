@@ -3,10 +3,10 @@ import shutil
 from pathlib import Path
 import subprocess
 from datetime import datetime
-from src.database.base import VEPDatabase, NextflowWorkflow
+from src.database.base import VCFDatabase, NextflowWorkflow
 from src.utils.validation import compute_md5, get_bcf_stats, check_duplicate_md5
 
-class DatabaseUpdater(VEPDatabase):
+class DatabaseUpdater(VCFDatabase):
     """Handles adding new variants to database"""
     def __init__(self, db_path: Path | str, input_file: Path | str, config_file: Path | str = None,
                  verbosity: int = 0):
@@ -39,8 +39,8 @@ class DatabaseUpdater(VEPDatabase):
         """
         Add new variants to existing database
 
-        self = DatabaseUpdater(db_path=Path('~/projects/vepstash/tests/data/test_out/nftest'),
-        input_file=Path('~/projects/vepstash/tests/data/nodata/dbsnp_test.bcf'),
+        self = DatabaseUpdater(db_path=Path('~/projects/vcfstash/tests/data/test_out/nftest'),
+        input_file=Path('~/projects/vcfstash/tests/data/nodata/dbsnp_test.bcf'),
         verbosity=2)
         profile='test'
         """

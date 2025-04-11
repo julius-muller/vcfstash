@@ -2,12 +2,12 @@ import json
 import shutil
 from pathlib import Path
 from datetime import datetime
-from src.database.base import VEPDatabase, NextflowWorkflow
+from src.database.base import VCFDatabase, NextflowWorkflow
 from src.database.outputs import StashOutput
 from src.utils.validation import compute_md5
 
 
-class DatabaseInitializer(VEPDatabase):
+class DatabaseInitializer(VCFDatabase):
     """Handles database initialization"""
     def __init__(self, input_file: Path | str, config_file: Path | str, output_dir: Path | str = Path("."),
                  verbosity: int = 0, force: bool = False) -> None:
@@ -71,7 +71,7 @@ class DatabaseInitializer(VEPDatabase):
         self.stashed_output.create_structure()
 
     def initialize(self) -> None:
-        """Initialize new VEP database
+        """Initialize new VCF database
         self = DatabaseInitializer(name='nftest', input_file=Path('tests/data/nodata/gnomad_test.bcf'),
         config_file=Path('workflow/nextflow.config'), output_dir=Path('~/tmp/test'), verbosity=2, force=True)
         self.workflow_dir

@@ -2,7 +2,7 @@
 import shutil
 import sys
 import time
-from src.database.base import VEPDatabase, NextflowWorkflow
+from src.database.base import VCFDatabase, NextflowWorkflow
 from src.database.outputs import AnnotatedStashOutput, AnnotatedUserOutput
 from pathlib import Path
 import subprocess
@@ -11,7 +11,7 @@ from multiprocessing import Pool
 import pysam
 from src.utils.logging import setup_logging
 
-class DatabaseAnnotator(VEPDatabase):
+class DatabaseAnnotator(VCFDatabase):
     """Handles database annotation workflows"""
 
     def __init__(self, annotation_name: str, db_path: Path | str, anno_config_file: Path | str,
@@ -27,7 +27,7 @@ class DatabaseAnnotator(VEPDatabase):
 
         super().__init__(db_path, verbosity)
 
-        self.stashed_annotations = AnnotatedStashOutput(str(self.annotations_dir / annotation_name))
+        self.stashed_annotations = AnnotatedStashOutput(str(self.stash_dir / annotation_name))
         self.stashed_annotations.validate_label(annotation_name)
         self.annotation_name = annotation_name
         self.logger = self.connect_loggers()
@@ -112,7 +112,7 @@ class DatabaseAnnotator(VEPDatabase):
 
 
 
-class VCFAnnotator(VEPDatabase):
+class VCFAnnotator(VCFDatabase):
     """Handles annotation of user VCF files using the database"""
 
     INFO_FIELDS = ['GT', 'DP', 'AF', "gnomadg_af", "gnomade_af", "gnomadg_ac", "gnomade_ac", 'clinvar_clnsig',
@@ -170,7 +170,7 @@ class VCFAnnotator(VEPDatabase):
         shutil.copyfile(self.config_file, self.annotation_wfl_path / self.config_file.name)
         self.config_file = self.annotation_wfl_path / self.config_file
 
-        self.stash_file = self.annotation_db_path / "vepstash_annotated.bcf"
+        self.stash_file = self.annotation_db_path / "vcfstash_annotated.bcf"
         if not self.stash_file.exists():
             raise FileNotFoundError(f"Stash file not found: {self.stash_file}")
 
@@ -219,10 +219,10 @@ class VCFAnnotator(VEPDatabase):
         Validates that the database BCF file is compatible with the input VCF file.
         Raises an error if the database BCF file is not indexed or does not match the input VCF file.
 
-                    self = VCFAnnotator(input_vcf="~/projects/vepstash/tests/data/nodata/sample1.vcf",
-             annotation_db = "~/tmp/test/test_out/nftest/annotations/testor",
+                    self = VCFAnnotator(input_vcf="~/projects/vcfstash/tests/data/nodata/sample1.vcf",
+             annotation_db = "~/tmp/test/test_out/nftest/stash/testor",
                  output_dir = "~/tmp/test/aout",force=True, uncached= False, verbosity=10,
-                 config_file="/home/j380r/projects/vepstash/tests/config/nextflow_test.config"
+                 config_file="/home/j380r/projects/vcfstash/tests/config/nextflow_test.config"
                  )
 
 
@@ -340,10 +340,10 @@ class VCFAnnotator(VEPDatabase):
                         # Process clinvar and gnomad fields
                         self._process_variant_annotations(info)
 
-                        # Process VEP annotations
-                        vep_csqs = [dict(zip(vcf.header.info['CSQ'].description.split(' ')[-1].split('|'),
+                        # Process VCF annotations
+                        vcf_csqs = [dict(zip(vcf.header.info['CSQ'].description.split(' ')[-1].split('|'),
                                            x.split("|"))) for x in record.info["CSQ"]]
-                        expanded_transcripts = self.parse_vep_info(vep_csqs)
+                        expanded_transcripts = self.parse_vcf_info(vcf_csqs)
 
                         for transcript in expanded_transcripts:
                             row = {
@@ -413,8 +413,8 @@ class VCFAnnotator(VEPDatabase):
 
         Returns:
             Path to output file (BCF or Parquet)
-            self = VCFAnnotator(input_vcf="~/projects/vepstash/tests/data/nodata/sample4.bcf",
-             annotation_db = "~/tmp/test/test_out/annotations/testor", output_dir="~/tmp/test/aout" ,force=True)
+            self = VCFAnnotator(input_vcf="~/projects/vcfstash/tests/data/nodata/sample4.bcf",
+             annotation_db = "~/tmp/test/test_out/stash/testor", output_dir="~/tmp/test/aout" ,force=True)
 
         """
         start_time = time.time()
@@ -432,7 +432,7 @@ class VCFAnnotator(VEPDatabase):
                 report=True
             )
             duration = time.time() - start_time
-            self.logger.info(f"VEP workflow completed in {duration:.1f}s")
+            self.logger.info(f"VCF workflow completed in {duration:.1f}s")
 
 
         except Exception as e:

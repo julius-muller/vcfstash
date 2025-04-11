@@ -1,3 +1,0 @@
-task_id	hash	native_id	name	status	exit	submit	duration	realtime	%cpu	peak_rss	peak_vmem	rchar	wchar
-1	25/03334a	251509	ANNOTATE:EchtvarAnnotateChr	COMPLETED	0	2025-04-03 10:55:32.308	306ms	256ms	26.8%	7.4 MB	244.6 MB	376.9 KB	29.1 KB
-2	30/64aa5d	251720	ANNOTATE:VEPAnnotate	COMPLETED	0	2025-04-03 10:55:32.676	10.8s	10.8s	1.8%	68 MB	3.9 GB	612 KB	130.9 KB

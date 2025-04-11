@@ -9,25 +9,28 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
+from pathlib import Path
 
 TEST_ROOT = os.path.dirname(os.path.abspath(__file__))
-VEPSTASH_CMD = os.path.join(os.path.dirname(TEST_ROOT), "vepstash.py")
+VCFSTASH_CMD = os.path.join(os.path.dirname(TEST_ROOT), "vcfstash.py")
 TEST_DATA_DIR = os.path.join(TEST_ROOT, "data", "nodata")
 TEST_CONFIG = os.path.join(TEST_ROOT, "config", "nextflow_test.config")
 TEST_VCF = os.path.join(TEST_DATA_DIR, "crayz_db.bcf")
-EXPECTED_OUTPUT_DIR = os.path.join(TEST_ROOT, "data", "expected_output", "stash_init_result")
+EXPECTED_OUTPUT_DIR = os.path.join(TEST_ROOT, "data", "expected_output")
+TEST_ANNO_CONFIG = os.path.join(os.path.dirname(__file__), "config", "annotation.config")
 
 def update_reference_data(force=True):
     """Update the reference data for stash-init function."""
     # Define path constants
-    EXPECTED_OUTPUT_DIR = "/home/j380r/projects/vepstash/tests/data/expected_output"
+
     REFERENCE_DIR = os.path.join(EXPECTED_OUTPUT_DIR, "stash_init_result")
 
     print(f"=== Updating reference data for stash-init ===")
     print(f"Target directory: {REFERENCE_DIR}")
 
     # Create a temporary directory
-    temp_dir = tempfile.mkdtemp(prefix="vepstash_ref_")
+    temp_dir = tempfile.mkdtemp(prefix="vcfstash_ref_")
     print(f"Creating stash in temporary directory: {temp_dir}")
 
     try:
@@ -35,7 +38,7 @@ def update_reference_data(force=True):
         # Main directories
         os.makedirs(os.path.join(temp_dir, "blueprint"), exist_ok=True)
         os.makedirs(os.path.join(temp_dir, "workflow"), exist_ok=True)
-        os.makedirs(os.path.join(temp_dir, "annotations"), exist_ok=True)
+        os.makedirs(os.path.join(temp_dir, "stash"), exist_ok=True)
 
         # Additional subdirectories based on error messages
         os.makedirs(os.path.join(temp_dir, "workflow", "modules"), exist_ok=True)
@@ -47,11 +50,11 @@ def update_reference_data(force=True):
 
         # Run stash-init with the --force flag
         init_cmd = [
-            "/home/j380r/projects/vepstash/vepstash.py",
+            "/home/j380r/projects/vcfstash/vcfstash.py",
             "stash-init",
-            "-i", "/home/j380r/projects/vepstash/tests/data/nodata/crayz_db.bcf",
+            "-i", "/home/j380r/projects/vcfstash/tests/data/nodata/crayz_db.bcf",
             "-o", temp_dir,
-            "-c", "/home/j380r/projects/vepstash/tests/config/nextflow_test.config",
+            "-c", "/home/j380r/projects/vcfstash/tests/config/nextflow_test.config",
             "--force"
         ]
         print(f"Running command: {' '.join(init_cmd)}")
@@ -102,8 +105,8 @@ def update_reference_data(force=True):
 def update_stash_add_reference_data(force=True):
     """Update the reference data for stash-add function."""
     # Define path constants
-    EXPECTED_OUTPUT_DIR = "/home/j380r/projects/vepstash/tests/data/expected_output"
-    REFERENCE_DIR = os.path.join(EXPECTED_OUTPUT_DIR, "stash_add_result")
+    EXPECTED_OUTPUT_DIR = "/home/j380r/projects/vcfstash/tests/data/expected_output"
+    REFERENCE_DIR = os.path.join(EXPECTED_OUTPUT_DIR, "stash_add_annotate_result")
 
     print(f"=== Updating reference data for stash-add ===")
     print(f"Target directory: {REFERENCE_DIR}")
@@ -118,7 +121,7 @@ def update_stash_add_reference_data(force=True):
             return None
 
     # Create a temporary directory for stash-add
-    temp_dir = tempfile.mkdtemp(prefix="vepstash_ref_")
+    temp_dir = tempfile.mkdtemp(prefix="vcfstash_ref_")
 
     try:
         # Copy the existing stash-init reference to our temp directory
@@ -141,11 +144,11 @@ def update_stash_add_reference_data(force=True):
 
         # Run stash-add
         add_cmd = [
-            "/home/j380r/projects/vepstash/vepstash.py",
+            "/home/j380r/projects/vcfstash/vcfstash.py",
             "stash-add",
             "--db", temp_dir,
             "-i", test_vcf2,
-            "-c", "/home/j380r/projects/vepstash/tests/config/nextflow_test.config"
+            "-c", "/home/j380r/projects/vcfstash/tests/config/nextflow_test.config"
         ]
 
         print(f"Running command: {' '.join(add_cmd)}")
@@ -299,8 +302,8 @@ def update_annotation_reference_data(force=False):
     # CHANGE: Define the base output directory without stash_init_result
     # Use TEST_ROOT instead of EXPECTED_OUTPUT_DIR to get the correct base path
     BASE_OUTPUT_DIR = os.path.join(TEST_ROOT, "data", "expected_output")
-    annotation_ref_dir = os.path.join(BASE_OUTPUT_DIR, "stash_annotate_result",
-                                      "annotations", annotation_name)
+    annotation_ref_dir = os.path.join(BASE_OUTPUT_DIR, "stash_add_annotate_result",
+                                      "stash", annotation_name)
 
     print(f"Using annotation reference directory: {annotation_ref_dir}")
 
@@ -310,7 +313,7 @@ def update_annotation_reference_data(force=False):
         return True
 
     # Create a parent temporary directory
-    temp_parent_dir = tempfile.mkdtemp(prefix="vepstash_anno_parent_")
+    temp_parent_dir = tempfile.mkdtemp(prefix="vcfstash_anno_parent_")
     try:
         # Create a unique directory name for the stash database that doesn't exist yet
         unique_id = str(uuid.uuid4())
@@ -322,7 +325,7 @@ def update_annotation_reference_data(force=False):
 
         # Initialize a stash with a non-existent output directory
         init_cmd = [
-            "python", VEPSTASH_CMD,
+            "python", VCFSTASH_CMD,
             "stash-init",
             "-i", TEST_VCF,
             "-o", tmp_dir,
@@ -348,15 +351,11 @@ def update_annotation_reference_data(force=False):
 params {
     // MD5SUMS
     reference_md5sum = '28a3d9f0162be1d5db2011aa30458129'
-    echtvar_gnomad_genome_md5sum= '52158f41b93f691a477db62e50f7cc7b'
-    echtvar_gnomad_exome_md5sum = '75bd13405ab59bb07e8db9836ddc9534'
-    echtvar_clinvar_md5sum = '97f89ae8cd2ee1e9fb95e2fd7703a7ee'
 
     // VERSIONS
-    echtvar_cmd_version = '0.2.1'
     vep_cmd_version = '113.0'
 
-    // VEP Configuration
+    // VCF Configuration
     vep_options = [
         '-a GRCh38',
         '--transcript_version',
@@ -385,7 +384,7 @@ params {
 
         # Run annotation with the config in the correct format
         annotate_cmd = [
-            "python", VEPSTASH_CMD,
+            "python", VCFSTASH_CMD,
             "stash-annotate",
             "--name", annotation_name,
             "-a", annotation_config,
@@ -404,7 +403,7 @@ params {
             return False
 
         # Make sure the expected paths exist
-        tmp_annotation_dir = os.path.join(tmp_dir, "annotations", annotation_name)
+        tmp_annotation_dir = os.path.join(tmp_dir, "stash", annotation_name)
         if not os.path.exists(tmp_annotation_dir):
             print(f"Expected annotation directory was not created: {tmp_annotation_dir}")
             return False
@@ -454,17 +453,65 @@ params {
         if os.path.exists(temp_parent_dir):
             shutil.rmtree(temp_parent_dir)
 
+def update_annotate_input(force: bool = False) -> None:
+    """Store reference files for annotate command.
+
+    Args:
+        force: Whether to overwrite existing reference files
+    """
+    test_input = Path(TEST_DATA_DIR) / "sample4.bcf"
+    test_cache = Path(EXPECTED_OUTPUT_DIR) / "stash_add_annotate_result/stash/test_annotation"
+    annotate_result = Path(EXPECTED_OUTPUT_DIR) / "annotate_result"
+    cached_dir = annotate_result / "cached"
+    uncached_dir = annotate_result / "uncached"
+
+    if annotate_result.exists():
+        if force:
+            shutil.rmtree(annotate_result)
+        else:
+            print(f"Reference directory {annotate_result} already exists. Use --force to overwrite.")
+            return
+
+    # Create reference directories
+    annotate_result.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        sys.executable, VCFSTASH_CMD,
+        "annotate",
+        "-i", str(test_input),
+        "-a", str(test_cache),
+        "-o", cached_dir,
+        "-c", TEST_CONFIG,
+        "-f"
+    ]
+    subprocess.run(cmd, check=True)
+
+    cmd = [
+        sys.executable, VCFSTASH_CMD,
+        "annotate",
+        "-i", str(test_input),
+        "-a", str(test_cache),
+        "-o", uncached_dir,
+        "-c", TEST_CONFIG,
+        "--uncached",
+        "-f"
+    ]
+    subprocess.run(cmd, check=True)
+
+    print("Reference files stored successfully")
+
 # Update the main part of the script to include the new function
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Update reference data for vepstash tests")
+    parser = argparse.ArgumentParser(description="Update reference data for vcfstash tests")
 
     parser.add_argument('--force', action='store_true', help='Force overwrite of existing reference data')
     parser.add_argument('--all', action='store_true', help='Update all reference data')
     parser.add_argument('--init', action='store_true', help='Update stash-init reference data')
     parser.add_argument('--add', action='store_true', help='Update stash-add reference data')
     parser.add_argument('--annotate', action='store_true', help='Update stash-annotate reference data')
+    parser.add_argument('--annotate-input', dest="annotate_input", action='store_true', help='Update stash-annotate reference data')
 
     args = parser.parse_args()
 
@@ -485,3 +532,9 @@ if __name__ == "__main__":
         success = update_annotation_reference_data(force=args.force)
         if not success:
             print("Failed to update stash-annotate reference data")
+
+    if args.annotate_input or args.all:
+        success = update_annotate_input(args.force)
+        if not success:
+            print("Failed to update annotate input vcf reference data")
+

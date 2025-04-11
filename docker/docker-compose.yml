@@ -1,17 +1,17 @@
 version: '3.8'
 
 services:
-  vepstash:
+  vcfstash:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     volumes:
-      - ${VEP_CACHE_DIR}:/opt/vep/.vep:ro
+      - ${vep_cache_DIR}:/opt/vcf/.vcf:ro
       - ${REFERENCE_DIR}:/reference:ro
       - ${DATA_DIR}:/data
       - ${CACHE_DIR}:/cache
     environment:
-      - VEP_CACHE_DIR=/opt/vep/.vep
+      - vep_cache_DIR=/opt/vcf/.vcf
       - REFERENCE_PATH=/reference
     command: ["tail", "-f", "/dev/null"]  # keeps container running
 
