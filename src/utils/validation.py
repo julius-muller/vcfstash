@@ -151,7 +151,7 @@ def generate_test_command(
         vcfstash_path="~/projects/vcfstash/vcfstash.py",
         vcf_path="~/projects/vcfstash/tests/data/nodata/crayz_db.bcf",
         output_dir="~/tmp/vcfstash/test_stash",
-        config_path="~/projects/vcfstash/tests/config/nextflow_test.config",
+        config_path="~/projects/vcfstash/tests/config/env_test.config",
         yaml_path="~/projects/vcfstash/tests/config/user_params.yaml",
         annotation_config = "~/projects/vcfstash/tests/config/annotation.config",
         add_vcf_path="~/projects/vcfstash/tests/data/nodata/crayz_db2.bcf",
@@ -236,7 +236,8 @@ alias stx="{full_cmd}"
 # ~/projects/vcfstash/vcfstash.py annotate --a ~/tmp/test/test_out/nftest/stash/testor --vcf ~/projects/vcfstash/tests/data/nodata/sample4.bcf --output ~/tmp/test/aout --test -f
 
 # as one:
-cmd = """alias stx="~/projects/vcfstash/vcfstash.py stash-init --vcf ~/projects/vcfstash/tests/data/nodata/crayz_db.bcf --output ~/tmp/vcfstash/test_stash -y ~/projects/vcfstash/tests/config/user_params.yaml -f;
+cmd = """alias stx="
+~/projects/vcfstash/vcfstash.py stash-init --vcf ~/projects/vcfstash/tests/data/nodata/crayz_db.bcf --output ~/tmp/vcfstash/test_stash -y ~/projects/vcfstash/tests/config/user_params.yaml -f;
 ~/projects/vcfstash/vcfstash.py stash-add --db ~/tmp/vcfstash/test_stash/ -i ~/projects/vcfstash/tests/data/nodata/crayz_db2.bcf ; 
 ~/projects/vcfstash/vcfstash.py stash-annotate --name testor -a ~/projects/vcfstash/tests/config/annotation.config --db ~/tmp/vcfstash/test_stash -f;
 ~/projects/vcfstash/vcfstash.py annotate -a ~/tmp/vcfstash/test_stash/stash/testor --vcf ~/projects/vcfstash/tests/data/nodata/sample4.bcf --output ~/tmp/vcfstash/aout -f
@@ -251,5 +252,3 @@ cmd2 = """
 ~/projects/vcfstash/vcfstash.py stash-annotate --name gen_ex -a ~/projects/vcfstash/tests/config/annotation.config --db gnomad_1e-1;
 ~/projects/vcfstash/vcfstash.py annotate -a gnomad_1e-1/stash/gen_ex --vcf /mnt/data/samples/test_mgm/mgm_WGS_32.gatkWGS_norm.bcf --output mgm_WGS_32 -p;
 """
-
-

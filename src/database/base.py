@@ -122,7 +122,7 @@ class NextflowWorkflow:
         """
         Validates the main environment configuration file (typically env_xxx.config) loaded into self.config_content.
 
-        Checks for required parameters, valid paths, and proper configuration structure.
+        Checks that the config file only contains a process section, not a params section.
 
         Returns:
             bool: True if configuration is valid
@@ -130,8 +130,6 @@ class NextflowWorkflow:
         Raises:
             ValueError: If critical configuration issues are found
         """
-        warnings = []
-
         # Check if config_content exists
         if not hasattr(self, 'nf_config_content') or not self.nf_config_content:
             raise ValueError(f"No configuration for {self.nf_config} content loaded:\n{self.nf_config_content}")
@@ -142,35 +140,6 @@ class NextflowWorkflow:
             err_msg = f"This config file {self.nf_config} should only contain a process section: {config_params}"
             self.logger.error(err_msg)
             raise ValueError(err_msg)
-
-        # 1. Check required parameters
-        required_params = [
-            'bcftools_cmd', 'bcftools_cmd_version', 'chr_add',
-            'annotation_tool_cmd', 'tool_version_command', 'tool_version_regex'
-        ]
-
-        missing_params = [param for param in required_params if param not in config_params]
-        if missing_params:
-            err_msg = f"Missing required parameters in environment nextflow config: {', '.join(missing_params)}"
-            self.logger.error(err_msg)
-            raise ValueError(err_msg)
-
-        # 2. Check paths for existence
-        file_paths = ['reference', 'chr_add']
-
-        for path_param in file_paths:
-            if path_param in config_params:
-                path_str = config_params[path_param]
-                if path_str and not isinstance(path_str, bool) and not path_str.startswith('${'):
-                    path = Path(path_str).expanduser().resolve()
-                    if not path.exists():
-                        warn_msg = f"Path defined in '{path_param}' does not exist: {str(path)}"
-                        self.logger.warning(warn_msg)
-                        warnings.append(warn_msg)
-
-        # Print summary of validation
-        if warnings:
-            self.logger.warning(f"Configuration validation found {len(warnings)} warning(s).")
 
         self.logger.info("Main configuration validation completed successfully.")
 

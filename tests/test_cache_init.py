@@ -12,7 +12,8 @@ from pathlib import Path
 TEST_ROOT = os.path.dirname(os.path.abspath(__file__))
 VCFSTASH_CMD = os.path.join(os.path.dirname(TEST_ROOT), "vcfstash.py")
 TEST_DATA_DIR = os.path.join(TEST_ROOT, "data", "nodata")
-TEST_CONFIG = os.path.join(TEST_ROOT, "config", "nextflow_test.config")
+TEST_CONFIG = os.path.join(TEST_ROOT, "config", "env_test.config")
+TEST_PARAMS = os.path.join(TEST_ROOT, "config", "user_params.yaml")
 TEST_VCF = os.path.join(TEST_DATA_DIR, "crayz_db.bcf")
 EXPECTED_OUTPUT_DIR = os.path.join(TEST_ROOT, "data", "expected_output", "stash_init_result")
 
@@ -44,7 +45,7 @@ def compute_md5(filename):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
 
-def run_stash_init(input_vcf, output_dir, config_file, force=False):
+def run_stash_init(input_vcf, output_dir, config_file, force=False, params_file=TEST_PARAMS):
     """Run the stash-init command and return the process result."""
     # Make sure the directory doesn't exist (clean start)
     if os.path.exists(output_dir):
@@ -55,7 +56,8 @@ def run_stash_init(input_vcf, output_dir, config_file, force=False):
         "stash-init",
         "--vcf", input_vcf,
         "--output", output_dir,
-        "-c", config_file
+        "-c", config_file,
+        "-y", params_file
     ]
     if force:
         cmd.append("-f")

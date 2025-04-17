@@ -8,7 +8,8 @@ import uuid
 # Define constants
 TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 TEST_VCF = os.path.join(TEST_DATA_DIR, "nodata", "crayz_db.bcf")
-TEST_CONFIG = os.path.join(os.path.dirname(__file__), "config", "nextflow_test.config")
+TEST_CONFIG = os.path.join(os.path.dirname(__file__), "config", "env_test.config")
+TEST_PARAMS = os.path.join(os.path.dirname(__file__), "config", "user_params.yaml")
 VCFSTASH_CMD = os.path.join(os.path.dirname(os.path.dirname(__file__)), "vcfstash.py")
 
 
@@ -42,7 +43,8 @@ def test_stash_init_and_add(fresh_output_dir):
         "stash-init",
         "-i", TEST_VCF,
         "-o", fresh_output_dir,
-        "-c", TEST_CONFIG
+        "-c", TEST_CONFIG,
+        "-y", TEST_PARAMS
     ]
 
     print(f"Running init command: {' '.join(init_cmd)}")
@@ -86,7 +88,8 @@ def test_stash_init_and_add(fresh_output_dir):
         "stash-add",
         "--db", fresh_output_dir,
         "-i", TEST_VCF,
-        "-c", TEST_CONFIG
+        "-c", TEST_CONFIG,
+        "-y", TEST_PARAMS
     ]
 
     print(f"Running add command: {' '.join(add_cmd)}")

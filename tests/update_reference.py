@@ -12,177 +12,17 @@ import subprocess
 import tempfile
 import uuid
 
-TEST_ROOT = os.path.dirname(os.path.abspath(__file__))
-VCFSTASH_CMD = os.path.join(os.path.dirname(TEST_ROOT), "vcfstash.py")
-TEST_DATA_DIR = os.path.join(TEST_ROOT, "data", "nodata")
-TEST_CONFIG = os.path.join(TEST_ROOT, "config", "nextflow_test.config")
-TEST_PARAMS = os.path.join(TEST_ROOT, "config", "user_params.yaml")
-TEST_VCF = os.path.join(TEST_DATA_DIR, "crayz_db.bcf")
-EXPECTED_OUTPUT_DIR = os.path.join(TEST_ROOT, "data", "expected_output")
-TEST_ANNO_CONFIG = os.path.join(os.path.dirname(__file__), "config", "annotation.config")
+# Use Path for better path handling
+TEST_ROOT = Path(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = TEST_ROOT.parent
+VCFSTASH_CMD = str(PROJECT_ROOT / "vcfstash.py")
+TEST_DATA_DIR = str(TEST_ROOT / "data" / "nodata")
+TEST_CONFIG = str(TEST_ROOT / "config" / "env_test.config")
+TEST_PARAMS = str(TEST_ROOT / "config" / "user_params.yaml")
+TEST_VCF = str(Path(TEST_DATA_DIR) / "crayz_db.bcf")
+EXPECTED_OUTPUT_DIR = str(TEST_ROOT / "data" / "expected_output")
+TEST_ANNO_CONFIG = str(TEST_ROOT / "config" / "annotation.config")
 
-def update_reference_data(force=True):
-    """Update the reference data for stash-init function."""
-    # Define path constants
-
-    REFERENCE_DIR = os.path.join(EXPECTED_OUTPUT_DIR, "stash_init_result")
-
-    print(f"=== Updating reference data for stash-init ===")
-    print(f"Target directory: {REFERENCE_DIR}")
-
-    # Create a temporary directory
-    temp_dir = tempfile.mkdtemp(prefix="vcfstash_ref_")
-    print(f"Creating stash in temporary directory: {temp_dir}")
-
-    try:
-
-        # Run stash-init with the --force flag
-        init_cmd = [
-            VCFSTASH_CMD,
-            "stash-init",
-            "-i", TEST_VCF,
-            "-o", temp_dir,
-            "-y", TEST_PARAMS,
-            "--force"
-        ]
-        print(f"Running command: {' '.join(init_cmd)}")
-
-        init_result = subprocess.run(
-            init_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-
-        if init_result.returncode != 0:
-            print(f"stash-init failed with exit code {init_result.returncode}")
-            print(f"stdout: {init_result.stdout}")
-            print(f"stderr: {init_result.stderr}")
-            return None
-
-        print(f"stash-init completed successfully")
-
-        # Create or clear the reference directory
-        if os.path.exists(REFERENCE_DIR):
-            shutil.rmtree(REFERENCE_DIR)
-        os.makedirs(REFERENCE_DIR, exist_ok=True)
-
-        # Copy all files from temp_dir to reference_dir
-        print(f"Copying files from {temp_dir} to {REFERENCE_DIR}")
-        for item in os.listdir(temp_dir):
-            source = os.path.join(temp_dir, item)
-            dest = os.path.join(REFERENCE_DIR, item)
-
-            if os.path.isdir(source):
-                shutil.copytree(source, dest)
-            else:
-                shutil.copy2(source, dest)
-
-        print("Reference data updated successfully.")
-        return REFERENCE_DIR
-
-    except Exception as e:
-        print(f"Error during reference data update: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return None
-    finally:
-        # Always clean up the temporary directory
-        shutil.rmtree(temp_dir, ignore_errors=True)
-
-def update_stash_add_reference_data(force=True):
-    """Update the reference data for stash-add function."""
-    # Define path constants
-
-    REFERENCE_DIR = os.path.join(EXPECTED_OUTPUT_DIR, "stash_add_annotate_result")
-
-    print(f"=== Updating reference data for stash-add ===")
-    print(f"Target directory: {REFERENCE_DIR}")
-
-    # First, ensure stash-init data exists
-    init_reference_dir = os.path.join(EXPECTED_OUTPUT_DIR, "stash_init_result")
-    if not os.path.exists(init_reference_dir):
-        print("Running stash-init first to create reference data...")
-        init_reference_dir = update_reference_data()
-        if init_reference_dir is None:
-            print("Failed to create stash-init data, cannot proceed with stash-add")
-            return None
-
-    # Create a temporary directory for stash-add
-    temp_dir = tempfile.mkdtemp(prefix="vcfstash_ref_")
-
-    try:
-        # Copy the existing stash-init reference to our temp directory
-        print(f"Copying stash-init reference data to {temp_dir}")
-        for item in os.listdir(init_reference_dir):
-            src = os.path.join(init_reference_dir, item)
-            dst = os.path.join(temp_dir, item)
-            if os.path.isdir(src):
-                shutil.copytree(src, dst)
-            else:
-                shutil.copy2(src, dst)
-
-        # Define the second VCF file
-        test_vcf2 = os.path.join(TEST_DATA_DIR, "crayz_db2.bcf")
-
-        # Verify the second VCF file exists
-        if not os.path.exists(test_vcf2):
-            print(f"Error: Second VCF file not found at {test_vcf2}")
-            return None
-
-        # Run stash-add
-        add_cmd = [
-            VCFSTASH_CMD,
-            "stash-add",
-            "--db", temp_dir,
-            "-i", test_vcf2
-        ]
-
-        print(f"Running command: {' '.join(add_cmd)}")
-
-        add_result = subprocess.run(
-            add_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-
-        if add_result.returncode != 0:
-            print(f"stash-add failed with exit code {add_result.returncode}")
-            print(f"stdout: {add_result.stdout}")
-            print(f"stderr: {add_result.stderr}")
-            return None
-
-        print(f"stash-add completed successfully")
-
-        # Create or clear the reference directory
-        if os.path.exists(REFERENCE_DIR):
-            shutil.rmtree(REFERENCE_DIR)
-        os.makedirs(REFERENCE_DIR, exist_ok=True)
-
-        # Copy all files from temp_dir to reference_dir
-        print(f"Copying files from {temp_dir} to {REFERENCE_DIR}")
-        for item in os.listdir(temp_dir):
-            source = os.path.join(temp_dir, item)
-            dest = os.path.join(REFERENCE_DIR, item)
-
-            if os.path.isdir(source):
-                shutil.copytree(source, dest)
-            else:
-                shutil.copy2(source, dest)
-
-        print("Reference data for stash-add updated successfully")
-        print(f"Output saved to: {REFERENCE_DIR}")
-        return REFERENCE_DIR
-
-    except Exception as e:
-        print(f"Error during reference data update: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return None
-    finally:
-        # Clean up the temporary directory
-        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def normalize_bcf_timestamps(bcf_file):
@@ -271,250 +111,175 @@ def normalize_text_file_timestamps(file_path):
         f.write(normalized_content)
 
 
-# Add to update_reference.py
-def update_annotation_reference_data(force=False):
-    """
-    Update the reference data for testing the annotation functionality.
-    This creates a reference database with annotations that can be used in tests.
-    """
+def update_golden_reference_dataset(force=True):
+    """Update the golden reference dataset using test data.
 
-    # Reference annotation name
-    annotation_name = "test_annotation"
-
-    # CHANGE: Define the base output directory without stash_init_result
-    # Use TEST_ROOT instead of EXPECTED_OUTPUT_DIR to get the correct base path
-    BASE_OUTPUT_DIR = os.path.join(TEST_ROOT, "data", "expected_output")
-    annotation_ref_dir = os.path.join(BASE_OUTPUT_DIR, "stash_add_annotate_result",
-                                      "stash", annotation_name)
-
-    print(f"Using annotation reference directory: {annotation_ref_dir}")
-
-    # Check if we already have reference data and not forcing an update
-    if os.path.exists(annotation_ref_dir) and not force:
-        print(f"Annotation reference data exists at {annotation_ref_dir}. Use --force to overwrite.")
-        return True
-
-    # Create a parent temporary directory
-    temp_parent_dir = tempfile.mkdtemp(prefix="vcfstash_anno_parent_")
-    try:
-        # Create a unique directory name for the stash database that doesn't exist yet
-        unique_id = str(uuid.uuid4())
-        tmp_dir = os.path.join(temp_parent_dir, f"stash_db_{unique_id}")
-
-        # Ensure the directory doesn't exist
-        if os.path.exists(tmp_dir):
-            shutil.rmtree(tmp_dir)
-
-        # Initialize a stash with a non-existent output directory
-        init_cmd = [
-            "python", VCFSTASH_CMD,
-            "stash-init",
-            "-i", TEST_VCF,
-            "-o", tmp_dir,
-            "-c", TEST_CONFIG
-        ]
-
-        print(f"Running stash-init: {' '.join(init_cmd)}")
-        try:
-            result = subprocess.run(init_cmd, check=True, capture_output=True, text=True)
-            print(result.stdout)
-        except subprocess.CalledProcessError as e:
-            print(f"stash-init failed: {e}")
-            print(f"stdout: {e.stdout}")
-            print(f"stderr: {e.stderr}")
-            return False
-
-        # Create annotation config with proper format (based on example)
-        # The format is Nextflow configuration format, not INI format
-        annotation_config = os.path.join(temp_parent_dir, "annotation.config")
-        with open(annotation_config, 'w') as f:
-            f.write("""
-// Parameters
-params {
-    // MD5SUMS
-    reference_md5sum = '28a3d9f0162be1d5db2011aa30458129'
-
-    // VERSIONS
-    vep_cmd_version = '113.0'
-
-    // VCF Configuration
-    vep_options = [
-        '-a GRCh38',
-        '--transcript_version',
-        '--total_length',
-        '--flag_pick',
-        '--exclude_predicted',
-        '--hgvs',
-        '--hgvsg',
-        '--spdi',
-        '--variant_class',
-        '--uniprot',
-        '--gene_version',
-        '--protein',
-        '--symbol',
-        '--canonical',
-        '--appris',
-        '--mane',
-        '--biotype',
-        '--domains',
-        '--refseq',
-    ]
-}
-""")
-
-        print(f"Created annotation config at {annotation_config}")
-
-        # Run annotation with the config in the correct format
-        annotate_cmd = [
-            "python", VCFSTASH_CMD,
-            "stash-annotate",
-            "--name", annotation_name,
-            "-a", annotation_config,
-            "--db", tmp_dir,
-            "-f"  # Force flag
-        ]
-
-        print(f"Running stash-annotate: {' '.join(annotate_cmd)}")
-        try:
-            result = subprocess.run(annotate_cmd, check=True, capture_output=True, text=True)
-            print(result.stdout)
-        except subprocess.CalledProcessError as e:
-            print(f"stash-annotate failed: {e}")
-            print(f"stdout: {e.stdout}")
-            print(f"stderr: {e.stderr}")
-            return False
-
-        # Make sure the expected paths exist
-        tmp_annotation_dir = os.path.join(tmp_dir, "stash", annotation_name)
-        if not os.path.exists(tmp_annotation_dir):
-            print(f"Expected annotation directory was not created: {tmp_annotation_dir}")
-            return False
-
-        # Create the target directory structure if it doesn't exist
-        os.makedirs(os.path.dirname(annotation_ref_dir), exist_ok=True)
-
-        # Remove the existing reference directory if it exists
-        if os.path.exists(annotation_ref_dir):
-            shutil.rmtree(annotation_ref_dir)
-
-        # Copy the temporary annotation directory to the reference location
-        shutil.copytree(tmp_annotation_dir, annotation_ref_dir)
-
-        # Normalize the timestamps in BCF files
-        for root, _, files in os.walk(annotation_ref_dir):
-            for file in files:
-                if file.endswith('.bcf'):
-                    bcf_path = os.path.join(root, file)
-                    normalize_bcf_timestamps(bcf_path)
-                elif file.endswith('.html') or file.endswith('.txt') or file.endswith('.config'):
-                    text_path = os.path.join(root, file)
-                    normalize_text_file_timestamps(text_path)
-                elif file == 'blueprint_snapshot.info':
-                    # Handle the JSON snapshot file to remove/normalize timestamps
-                    import json
-                    snapshot_path = os.path.join(root, file)
-                    try:
-                        with open(snapshot_path, 'r') as f:
-                            snapshot_data = json.load(f)
-
-                        # Normalize or remove timestamp information
-                        if 'timestamp' in snapshot_data:
-                            snapshot_data['timestamp'] = "NORMALIZED_TIMESTAMP"
-
-                        # Write back the normalized data
-                        with open(snapshot_path, 'w') as f:
-                            json.dump(snapshot_data, f, indent=2)
-                    except Exception as e:
-                        print(f"Error normalizing snapshot file: {e}")
-
-        print(f"Successfully updated annotation reference data in {annotation_ref_dir}")
-        return True
-
-    finally:
-        # Clean up the temporary parent directory
-        if os.path.exists(temp_parent_dir):
-            shutil.rmtree(temp_parent_dir)
-
-def update_annotate_input(force: bool = False) -> None:
-    """Store reference files for annotate command.
+    This function runs all the commands (stash-init, stash-add, stash-annotate, annotate)
+    in sequence and uses two output directories for the data. It uses relative paths to
+    make it work in any environment.
 
     Args:
-        force: Whether to overwrite existing reference files
+        force: If True, overwrite existing reference data. Defaults to True.
+
+    Returns:
+        bool: True if the update was successful, False otherwise.
     """
-    test_input = Path(TEST_DATA_DIR) / "sample4.bcf"
-    test_cache = Path(EXPECTED_OUTPUT_DIR) / "stash_add_annotate_result/stash/test_annotation"
-    annotate_result = Path(EXPECTED_OUTPUT_DIR) / "annotate_result"
-    cached_dir = annotate_result / "cached"
-    uncached_dir = annotate_result / "uncached"
+    print("=== Updating golden reference dataset ===")
 
-    if annotate_result.exists():
-        if force:
-            shutil.rmtree(annotate_result)
-        else:
-            print(f"Reference directory {annotate_result} already exists. Use --force to overwrite.")
-            return
+    # Use subdirectories in the expected output directory
+    stash_dir = os.path.join(EXPECTED_OUTPUT_DIR, "stash_result")
+    annotate_dir = os.path.join(EXPECTED_OUTPUT_DIR, "annotate_result")
 
-    # Create reference directories
-    annotate_result.mkdir(parents=True, exist_ok=True)
+    # Ensure the directories don't exist
+    for dir_path in [stash_dir, annotate_dir]:
+        if os.path.exists(dir_path):
+            if force:
+                print(f"Removing existing directory: {dir_path}")
+                shutil.rmtree(dir_path)
+            else:
+                print(f"Directory {dir_path} already exists. Use --force to overwrite.")
+                return False
 
-    cmd = [
-        sys.executable, VCFSTASH_CMD,
-        "annotate",
-        "-i", str(test_input),
-        "-a", str(test_cache),
-        "-o", cached_dir,
-        "-f"
-    ]
-    subprocess.run(cmd, check=True)
+    try:
+        # Define the test files
+        test_vcf = str(Path(TEST_DATA_DIR) / "crayz_db.bcf")
+        test_vcf2 = str(Path(TEST_DATA_DIR) / "crayz_db2.bcf")
+        test_sample = str(Path(TEST_DATA_DIR) / "sample4.bcf")
 
-    cmd = [
-        sys.executable, VCFSTASH_CMD,
-        "annotate",
-        "-i", str(test_input),
-        "-a", str(test_cache),
-        "-o", uncached_dir,
-        "--uncached",
-        "-f"
-    ]
-    subprocess.run(cmd, check=True)
+        # Define the annotation name
+        annotate_name = "testor"
 
-    print("Reference files stored successfully")
+        # 1. Run stash-init
+        print("Running stash-init...")
+        init_cmd = [
+            sys.executable,
+            VCFSTASH_CMD,
+            "stash-init",
+            "--vcf", test_vcf,
+            "--output", stash_dir,
+            "-y", TEST_PARAMS,
+            "-f"
+        ]
+
+        init_result = subprocess.run(
+            init_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        if init_result.returncode != 0:
+            print(f"stash-init failed: {init_result.stderr}")
+            return False
+
+        # 2. Run stash-add
+        print("Running stash-add...")
+        add_cmd = [
+            sys.executable,
+            VCFSTASH_CMD,
+            "stash-add",
+            "--db", stash_dir,
+            "-i", test_vcf2
+        ]
+
+        add_result = subprocess.run(
+            add_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        if add_result.returncode != 0:
+            print(f"stash-add failed: {add_result.stderr}")
+            return False
+
+        # 3. Run stash-annotate
+        print("Running stash-annotate...")
+        annotate_cmd = [
+            sys.executable,
+            VCFSTASH_CMD,
+            "stash-annotate",
+            "--name", annotate_name,
+            "-a", TEST_ANNO_CONFIG,
+            "--db", stash_dir,
+            "-y", TEST_PARAMS,
+            "-f"
+        ]
+
+        annotate_result = subprocess.run(
+            annotate_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        if annotate_result.returncode != 0:
+            print(f"stash-annotate failed: {annotate_result.stderr}")
+            return False
+
+        # 4. Run annotate
+        print("Running annotate...")
+        # Use the annotation directory path
+        annotation_db = os.path.join(stash_dir, "stash", annotate_name)
+
+        annotate_vcf_cmd = [
+            sys.executable,
+            VCFSTASH_CMD,
+            "annotate",
+            "-a", annotation_db,
+            "--vcf", test_sample,
+            "--output", annotate_dir,
+            "-y", TEST_PARAMS,
+            "-f"
+        ]
+
+        annotate_vcf_result = subprocess.run(
+            annotate_vcf_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        if annotate_vcf_result.returncode != 0:
+            print(f"annotate failed: {annotate_vcf_result.stderr}")
+            return False
+
+        # Print the commands that were run (similar to the ones in the issue description)
+        print("\nCommands that were run:")
+        print(f"{VCFSTASH_CMD} stash-init --vcf {test_vcf} --output {stash_dir} -y {TEST_PARAMS} -f")
+        print(f"{VCFSTASH_CMD} stash-add --db {stash_dir} -i {test_vcf2}")
+        print(f"{VCFSTASH_CMD} stash-annotate --name {annotate_name} -a {TEST_ANNO_CONFIG} --db {stash_dir} -y {TEST_PARAMS} -f")
+        print(f"{VCFSTASH_CMD} annotate -a {annotation_db} --vcf {test_sample} --output {annotate_dir} -y {TEST_PARAMS} -f")
+
+        print("\nOutput directories:")
+        print(f"Stash directory: {stash_dir}")
+        print(f"Annotate directory: {annotate_dir}")
+
+        return True
+
+    except Exception as e:
+        print(f"Error during golden reference dataset update: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
+    finally:
+        # Don't clean up the temporary directories, as they are the output of the function
+        pass
+
 
 # Update the main part of the script to include the new function
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Update reference data for vcfstash tests")
-
     parser.add_argument('--force', action='store_true', help='Force overwrite of existing reference data')
-    parser.add_argument('--all', action='store_true', help='Update all reference data')
-    parser.add_argument('--init', action='store_true', help='Update stash-init reference data')
-    parser.add_argument('--add', action='store_true', help='Update stash-add reference data')
-    parser.add_argument('--annotate', action='store_true', help='Update stash-annotate reference data')
-    parser.add_argument('--annotate-input', dest="annotate_input", action='store_true', help='Update stash-annotate reference data')
+    parser.add_argument('--golden', action='store_true', help='Update golden reference dataset')
 
     args = parser.parse_args()
 
-    # Update stash-init reference data
-    if args.init or args.all:
-        success = update_reference_data(force=args.force)
-        if not success:
-            print("Failed to update stash-init reference data")
 
-    # Update stash-add reference data
-    if args.add or args.all:
-        success = update_stash_add_reference_data(force=args.force)
+    # Update golden reference dataset
+    if args.golden:
+        success = update_golden_reference_dataset(force=args.force)
         if not success:
-            print("Failed to update stash-add reference data")
-
-    # Update stash-annotate reference data
-    if args.annotate or args.all:
-        success = update_annotation_reference_data(force=args.force)
-        if not success:
-            print("Failed to update stash-annotate reference data")
-
-    if args.annotate_input or args.all:
-        success = update_annotate_input(args.force)
-        if not success:
-            print("Failed to update annotate input vcf reference data")
-
+            print("Failed to update golden reference dataset")

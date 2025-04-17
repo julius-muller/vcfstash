@@ -51,7 +51,7 @@ class DatabaseAnnotator(VCFDatabase):
             shutil.copyfile(anno_config_file.expanduser().resolve() , self.anno_config_file)
 
 
-        self.params_file = self.blueprint_dir / f'annotation.yaml'
+        self.params_file = self.stashed_annotations.stash_dir / f'annotation.yaml'
         if params_file:
             shutil.copyfile(params_file.expanduser().resolve(), self.params_file)
         else:
