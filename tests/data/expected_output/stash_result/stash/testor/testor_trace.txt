@@ -1,2 +1,2 @@
 task_id	hash	native_id	name	status	exit	submit	duration	realtime	%cpu	peak_rss	peak_vmem	rchar	wchar
-1	c6/d20b35	235674	ANNOTATE:Annotate	COMPLETED	0	2025-04-18 11:41:11.518	2s	2s	3.6%	33 MB	2 GB	228.8 KB	33.7 KB
+1	25/5a30ca	290954	ANNOTATE:Annotate	COMPLETED	0	2025-04-18 13:48:48.276	3.3s	3.2s	4.0%	33.3 MB	1.9 GB	228.8 KB	33.7 KB

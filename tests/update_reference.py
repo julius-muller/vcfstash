@@ -22,6 +22,16 @@ TEST_VCF = str(Path(TEST_DATA_DIR) / "crayz_db.bcf")
 EXPECTED_OUTPUT_DIR = str(TEST_ROOT / "data" / "expected_output")
 TEST_ANNO_CONFIG = str(TEST_ROOT / "config" / "annotation.config")
 
+# Set VCFSTASH_ROOT environment variable if not already set
+if 'VCFSTASH_ROOT' not in os.environ:
+    os.environ['VCFSTASH_ROOT'] = str(PROJECT_ROOT)
+    print(f"Set VCFSTASH_ROOT to {PROJECT_ROOT}")
+
+# Set Nextflow-specific environment variables
+os.environ['NXF_VER'] = '24.10.5'
+os.environ['NXF_DISABLE_CHECK_LATEST'] = '1'
+os.environ['NXF_OFFLINE'] = 'true'
+
 
 
 def normalize_bcf_timestamps(bcf_file):
@@ -139,7 +149,28 @@ def update_golden_reference_dataset(force=True):
                 print(f"Directory {dir_path} already exists. Use --force to overwrite.")
                 return False
 
+    # Create a temporary params file with the correct paths
+    temp_params_file = None
     try:
+        # Get the VCFSTASH_ROOT environment variable
+        vcfstash_root = os.environ.get('VCFSTASH_ROOT')
+        if not vcfstash_root:
+            raise ValueError("VCFSTASH_ROOT environment variable is not set")
+
+        # Create a temporary params file with the correct paths
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_file:
+            temp_params_file = temp_file.name
+
+            # Read the original params file
+            with open(TEST_PARAMS, 'r') as f:
+                params_content = f.read()
+
+            # Replace ${VCFSTASH_ROOT} with the actual value
+            params_content = params_content.replace('${VCFSTASH_ROOT}', vcfstash_root)
+
+            # Write the modified content to the temporary file
+            temp_file.write(params_content)
+
         # Define the test files
         test_vcf = str(Path(TEST_DATA_DIR) / "crayz_db.bcf")
         test_vcf2 = str(Path(TEST_DATA_DIR) / "crayz_db2.bcf")
@@ -156,7 +187,7 @@ def update_golden_reference_dataset(force=True):
             "stash-init",
             "--vcf", test_vcf,
             "--output", stash_dir,
-            "-y", TEST_PARAMS,
+            "-y", temp_params_file,
             "-f"
         ]
 
@@ -201,7 +232,7 @@ def update_golden_reference_dataset(force=True):
             "--name", annotate_name,
             "-a", TEST_ANNO_CONFIG,
             "--db", stash_dir,
-            "-y", TEST_PARAMS,
+            "-y", temp_params_file,
             "-f"
         ]
 
@@ -228,7 +259,7 @@ def update_golden_reference_dataset(force=True):
             "-a", annotation_db,
             "--vcf", test_sample,
             "--output", annotate_dir,
-            "-y", TEST_PARAMS,
+            "-y", temp_params_file,
             "-f"
         ]
 
@@ -245,10 +276,10 @@ def update_golden_reference_dataset(force=True):
 
         # Print the commands that were run (similar to the ones in the issue description)
         print("\nCommands that were run:")
-        print(f"{VCFSTASH_CMD} stash-init --vcf {test_vcf} --output {stash_dir} -y {TEST_PARAMS} -f")
+        print(f"{VCFSTASH_CMD} stash-init --vcf {test_vcf} --output {stash_dir} -y {temp_params_file} -f")
         print(f"{VCFSTASH_CMD} stash-add --db {stash_dir} -i {test_vcf2}")
-        print(f"{VCFSTASH_CMD} stash-annotate --name {annotate_name} -a {TEST_ANNO_CONFIG} --db {stash_dir} -y {TEST_PARAMS} -f")
-        print(f"{VCFSTASH_CMD} annotate -a {annotation_db} --vcf {test_sample} --output {annotate_dir} -y {TEST_PARAMS} -f")
+        print(f"{VCFSTASH_CMD} stash-annotate --name {annotate_name} -a {TEST_ANNO_CONFIG} --db {stash_dir} -y {temp_params_file} -f")
+        print(f"{VCFSTASH_CMD} annotate -a {annotation_db} --vcf {test_sample} --output {annotate_dir} -y {temp_params_file} -f")
 
         print("\nOutput directories:")
         print(f"Stash directory: {stash_dir}")
@@ -263,7 +294,9 @@ def update_golden_reference_dataset(force=True):
         return False
     finally:
         # Don't clean up the temporary directories, as they are the output of the function
-        pass
+        # But do clean up the temporary params file
+        if temp_params_file and os.path.exists(temp_params_file):
+            os.unlink(temp_params_file)
 
 
 # Update the main part of the script to include the new function

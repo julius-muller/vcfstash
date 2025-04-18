@@ -1,0 +1,17 @@
+nextflow.trace/v2
+realtime=4
+%cpu=1077
+cpu_model=Intel(R) Core(TM) Ultra 7 155U
+rchar=86401
+wchar=873
+syscr=153
+syscw=13
+read_bytes=0
+write_bytes=0
+%mem=0
+vmem=0
+rss=0
+peak_vmem=0
+peak_rss=0
+vol_ctxt=0
+inv_ctxt=0
