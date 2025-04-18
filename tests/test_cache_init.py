@@ -114,7 +114,9 @@ def compare_directories_ignore_timestamps(dir1, dir2):
         r'^workflow/modules/.*\.nf$',  # Ignore workflow module files
         r'^blueprint/init_flowchart\.html$',  # Ignore flowchart HTML
         r'^workflow/\.nextflow/history$',  # Ignore Nextflow history
-        r'^workflow/\.nextflow/framework/.*$'  # Ignore Nextflow framework files
+        r'^workflow/\.nextflow/framework/.*$',  # Ignore Nextflow framework files
+        r'^blueprint/vcfstash\.bcf$',  # Ignore blueprint BCF file
+        r'^blueprint/sources\.info$'  # Ignore sources info file
     ]
 
     # Special files that need custom comparison
