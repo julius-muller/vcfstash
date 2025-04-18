@@ -17,7 +17,6 @@ TEST_ROOT = Path(os.path.dirname(os.path.abspath(__file__)))
 PROJECT_ROOT = TEST_ROOT.parent
 VCFSTASH_CMD = str(PROJECT_ROOT / "vcfstash.py")
 TEST_DATA_DIR = str(TEST_ROOT / "data" / "nodata")
-TEST_CONFIG = str(TEST_ROOT / "config" / "env_test.config")
 TEST_PARAMS = str(TEST_ROOT / "config" / "user_params.yaml")
 TEST_VCF = str(Path(TEST_DATA_DIR) / "crayz_db.bcf")
 EXPECTED_OUTPUT_DIR = str(TEST_ROOT / "data" / "expected_output")

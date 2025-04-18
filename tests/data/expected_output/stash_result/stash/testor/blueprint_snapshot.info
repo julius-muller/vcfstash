@@ -1,16 +1,16 @@
 {
   "name": "stash_result",
-  "created": "2025-04-17T15:24:26.481503",
+  "created": "2025-04-18T11:40:55.964574",
   "input_files": [
     {
       "path": "/home/j380r/projects/vcfstash/tests/data/nodata/crayz_db.bcf",
       "md5": "ffd37f7238ba66f91e42abea7213a282",
-      "added": "2025-04-17T15:24:26.484144"
+      "added": "2025-04-18T11:40:55.966299"
     },
     {
       "path": "/home/j380r/projects/vcfstash/tests/data/nodata/crayz_db2.bcf",
       "md5": "ddb497f91944bd880b65655594538a2f",
-      "added": "2025-04-17T15:24:34.920805"
+      "added": "2025-04-18T11:41:06.394247"
     }
   ]
 }

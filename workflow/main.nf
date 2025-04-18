@@ -71,7 +71,6 @@ workflow {
 
     chr_add = file(params.chr_add)
     reference = file(params.reference)
-    vep_cache = file(params.vep_cache)
 
     if (params.db_mode == 'stash-annotate') {
         // For annotation mode, use db_bcf as the input
