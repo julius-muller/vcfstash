@@ -30,3 +30,4 @@ htmlcov/
 .nextflow.log*
 
 *.log
+/tests/data/expected_output/

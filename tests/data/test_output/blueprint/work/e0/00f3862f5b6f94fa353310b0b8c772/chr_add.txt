@@ -1,1 +1,0 @@
-/home/j380r/projects/vcfstash/resources/chr_add.txt
