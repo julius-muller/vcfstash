@@ -6,14 +6,13 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     volumes:
-      - ${vep_cache_DIR}:/opt/vcf/.vcf:ro
-      - ${REFERENCE_DIR}:/reference:ro
-      - ${DATA_DIR}:/data
-      - ${CACHE_DIR}:/cache
+      - ${REFERENCE_DIR:-./reference}:/reference:ro
+      - ${DATA_DIR:-./data}:/data
+      - ${CACHE_DIR:-./cache}:/cache
     environment:
-      - vep_cache_DIR=/opt/vcf/.vcf
       - REFERENCE_PATH=/reference
-    command: ["tail", "-f", "/dev/null"]  # keeps container running
+    # The entrypoint is defined in the Dockerfile
+    # Override the command when running with docker-compose
 
 volumes:
   cache:

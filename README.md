@@ -22,6 +22,8 @@ VCFstash manages a variant cache database and runs VCF annotations only on novel
 
 ## Installation
 
+### Standard Installation
+
 ```bash
 # Clone the repository
 git clone https://github.com/julius-muller/vcfstash.git
@@ -36,6 +38,54 @@ pip install -r requirements.txt
 
 # Optional: For Parquet support
 pip install -r requirements_parquet.txt
+```
+
+### Docker Installation
+
+VCFstash can also be run using Docker, which eliminates the need to install dependencies directly on your system.
+
+```bash
+# Clone the repository
+git clone https://github.com/julius-muller/vcfstash.git
+cd vcfstash
+
+# Build the Docker image
+cd docker
+docker-compose build
+```
+
+#### Running VCFstash with Docker
+
+The repository includes a convenient wrapper script for running VCFstash with Docker:
+
+```bash
+# Make the wrapper script executable
+chmod +x docker/run-vcfstash.sh
+
+# Run VCFstash commands through Docker
+./docker/run-vcfstash.sh --help
+
+# Example: Initialize a cache
+./docker/run-vcfstash.sh stash-init --vcf /data/gnomad.bcf --output /cache/my_cache -y /data/params.yaml
+
+# Example: Annotate a sample
+./docker/run-vcfstash.sh annotate -a /cache/my_cache/stash/my_annotation --vcf /data/sample.bcf --output /data/results -y /data/params.yaml
+```
+
+The wrapper script automatically sets up the following directory mappings:
+
+- `./reference` → `/reference` (read-only): For reference genomes
+- `./data` → `/data`: For input/output VCF files and configuration
+- `./cache` → `/cache`: For VCFstash cache databases
+
+You can customize these locations by setting environment variables:
+
+```bash
+# Custom directory setup
+export REFERENCE_DIR=/path/to/reference
+export DATA_DIR=/path/to/data
+export CACHE_DIR=/path/to/cache
+./docker/run-vcfstash.sh [command]
 ```
 
 ## Quick Start
