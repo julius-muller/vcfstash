@@ -1,126 +1,73 @@
-# VCFstash
+# **VCFstash – turbo-charge your variant annotation workflow**
 
-A tool to accelerate VCF annotations of large VCF files by maintaining a cache of frequently shared variants across human WGS samples.
+Stop re-annotating the same common variants over and over.  
+`VCFstash` builds a **local, shareable cache** of already-annotated alleles and
+lets your preferred tool (VEP, ANNOVAR, SnpEff, …) skip straight to the novel
+ones. **Save more than 70% of your annotation time** with minimal changes to your existing pipeline.
 
-## Overview
+---
 
-VCFstash manages a variant cache database and runs VCF annotations only on novel variants not present in the cache. This significantly reduces annotation time for WGS samples since many variants are commonly shared between individuals.
+## ✨ Key Features
 
-## Key Features
-
-- **Speed**: Typically 2-5x faster than raw VCF annotation by caching common variants
-- **Flexibility**: Works with any annotation pipeline (VEP, SnpEff, ANNOVAR, custom scripts)
+- **Speed**: Typically reduces annotation run time by more than 70% by caching common variants
+- **Flexibility**: Works with any annotation tool (VEP, SnpEff, ANNOVAR, custom scripts)
 - **Simplicity**: Easy integration with existing pipelines
 - **Efficiency**: Automatic variant normalization and deduplication
-- **Scalability**: Multi-processing enabled workflows
+- **Reproducibility**: Consistent annotations with hashed and locked cache
 
-## Requirements
+---
 
-- Python 3.11+
-- bcftools (included in `tools/` directory)
-- Nextflow (included in `workflow/.nextflow/framework/24.10.5/`)
-
-## Installation
-
-### Standard Installation
+## 🛠️ Quick Setup
 
 ```bash
-# Clone the repository
+# Clone and install
 git clone https://github.com/julius-muller/vcfstash.git
 cd vcfstash
-
-# Create and activate virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Optional: For Parquet support
-pip install -r requirements_parquet.txt
 ```
 
-### Docker Installation
+That's it! VCFstash includes all required tools (bcftools, Nextflow) in the repository.
 
-VCFstash can also be run using Docker, which eliminates the need to install dependencies directly on your system.
+---
 
+## 🏁 3-step quick-start for setting up a new cache
+
+1. **Create a blueprint** from a representative VCF
+   ```bash
+   vcfstash.py stash-init -i gnomad_4_wgs.vcf -o /my/destination/dir
+   ```
+
+2. **Run your annotation tool once** on the blueprint and freeze it
+   ```bash
+   vcfstash.py stash-annotate -d /my/destination/dir -n vep_gnomad -a annotation.config -y params.yaml
+   ```
+
+3. **Annotate your samples** using the cache
+   ```bash
+   vcfstash.py annotate -a /my/destination/dir/stash/vep_gnomad --vcf sample.vcf --output results -y params.yaml
+   ```
+
+**Optional:** Add more variants to your cache (e.g., merge gnomAD WES into WGS blueprint)
 ```bash
-# Clone the repository
-git clone https://github.com/julius-muller/vcfstash.git
-cd vcfstash
-
-# Build the Docker image
-cd docker
-docker-compose build
+vcfstash.py stash-add -i gnomad_4_wes.vcf -d /my/destination/dir
 ```
 
-#### Running VCFstash with Docker
+Your `annotation.config` contains **exactly** the command you already use – see next section for details.
 
-The repository includes a convenient wrapper script for running VCFstash with Docker:
+---
 
-```bash
-# Make the wrapper script executable
-chmod +x docker/run-vcfstash.sh
+## 🔄 Converting your existing annotation command
 
-# Run VCFstash commands through Docker
-./docker/run-vcfstash.sh --help
+VCFstash works with **any annotation tool** by wrapping your existing command. Just split it into two parts:
 
-# Example: Initialize a cache
-./docker/run-vcfstash.sh stash-init --vcf /data/gnomad.bcf --output /cache/my_cache -y /data/params.yaml
+1. **annotation.config**: Your command structure (fixed)
+2. **params.yaml**: Configurable values (paths, resources)
 
-# Example: Annotate a sample
-./docker/run-vcfstash.sh annotate -a /cache/my_cache/stash/my_annotation --vcf /data/sample.bcf --output /data/results -y /data/params.yaml
-```
+### Example: From VEP command to VCFstash
 
-The wrapper script automatically sets up the following directory mappings:
-
-- `./reference` → `/reference` (read-only): For reference genomes
-- `./data` → `/data`: For input/output VCF files and configuration
-- `./cache` → `/cache`: For VCFstash cache databases
-
-You can customize these locations by setting environment variables:
-
-```bash
-# Custom directory setup
-export REFERENCE_DIR=/path/to/reference
-export DATA_DIR=/path/to/data
-export CACHE_DIR=/path/to/cache
-./docker/run-vcfstash.sh [command]
-```
-
-## Quick Start
-
-VCFstash workflow consists of four main commands:
-
-1. **Initialize a cache database** with common variants
-2. **Add more variants** to the cache (optional)
-3. **Annotate the cache** with your annotation pipeline
-4. **Annotate your samples** using the cache
-
-```bash
-# 1. Initialize cache with common variants (e.g., gnomAD)
-./vcfstash.py stash-init --vcf gnomad.bcf --output my_cache -y params.yaml
-
-# 2. Add more variants (optional)
-./vcfstash.py stash-add --db my_cache -i more_variants.bcf
-
-# 3. Create an annotated cache
-./vcfstash.py stash-annotate --name my_annotation --db my_cache -a annotation.config -y params.yaml
-
-# 4. Annotate your samples using the cache
-./vcfstash.py annotate -a my_cache/stash/my_annotation --vcf sample.bcf --output results -y params.yaml
-```
-
-## Integrating with Your Existing Pipeline
-
-VCFstash makes it easy to integrate with your existing annotation pipeline by splitting it into two parts:
-
-1. **annotation.config**: Contains your annotation commands
-2. **params.yaml**: Contains configurable parameters (paths, resources)
-
-### Example: Converting an Existing Pipeline
-
-Let's say you have an existing VEP annotation pipeline:
+#### Original command:
 
 ```bash
 vep --offline --buffer_size 500000 --fork 4 --cache \
@@ -129,16 +76,14 @@ vep --offline --buffer_size 500000 --fork 4 --cache \
     --transcript_version --symbol --canonical
 ```
 
-To use this with VCFstash, you need to split it into two files:
-
-#### Step 1: Create annotation.config (contains the command structure)
+#### Step 1: Create annotation.config
 
 ```javascript
-// annotation.config - Contains the annotation command structure
+// annotation.config - Fixed command structure
 params {
     annotation_cmd = """
-      ${params.bcftools_cmd} view \${INPUT_BCF} |
-      ${params.annotation_tool_cmd} \
+      ${params.bcftools_cmd} view \${INPUT_BCF} 
+      | ${params.annotation_tool_cmd} \
         --offline \
         --buffer_size ${params.vep_buffer} \
         --fork ${params.vep_forks} \
@@ -158,84 +103,114 @@ params {
 }
 ```
 
-#### Step 2: Create params.yaml (contains the configurable values)
+**Important requirements for annotation.config:**
+
+- **${INPUT_BCF}**: This variable must be used as the input source. It represents an indexed BCF file that VCFstash will provide to your annotation pipeline.
+- **${params.bcftools_cmd}**: Use this to convert or pipe the input as needed for your annotation tool.
+- **${OUTPUT_BCF}**: Your command must output an indexed BCF file using this variable name. The final output must be in BCF format with an index.
+
+The example above shows a typical pattern: read from \${INPUT_BCF}, pipe through your annotation tool, and write the result to ${OUTPUT_BCF} with indexing.
+
+#### Step 2: Create params.yaml
 
 ```yaml
-# params.yaml - Contains the configurable values
+# params.yaml - Configurable values
 
-# Tool paths and commands
+# Tool paths
 annotation_tool_cmd: "vep"
 bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
 
-# Reference data
+# Reference data (edit these!)
 reference: "/path/to/reference.fasta"
 reference_md5sum: "28a3d9f0162be1d5db2011aa30458129"
 
-# Resources
+# Resources (edit these!)
 vep_cache: "/path/to/vep_cache"
 vep_buffer: 500000
 vep_forks: 4
 ```
 
-This separation allows you to:
-1. Keep your annotation logic fixed in annotation.config
-2. Easily change paths and resources in params.yaml when running in different environments
+## 📋 Command Reference
 
-## Database Structure
+VCFstash provides four simple commands that follow the workflow shown in the quick-start:
 
-```
-my_cache/                      # Main cache directory
-├── blueprint/                 # Blueprint database
-│   ├── vcfstash.bcf           # Normalized variant cache
-│   ├── vcfstash.bcf.csi       # Index file
-│   └── sources.info           # Database info and logs
-├── stash/                     # Annotation instances
-│   └── my_annotation/         # Named annotation instance
-│       ├── annotation.config  # Frozen annotation config
-│       └── ...                # Annotation results
-└── workflow/                  # Workflow files
+1. `stash-init`: Create a new cache from a representative VCF (e.g., gnomAD)
+2. `stash-add`: Add more variants to an existing cache
+3. `stash-annotate`: Run your annotation tool once on the cache
+4. `annotate`: Annotate your samples using the cache
+
+Full documentation with all options is available by running:
+```bash
+./vcfstash.py --help
 ```
 
-## Command Reference
+## 🚀 Running annotation anywhere using the cache
 
-### stash-init
-
-Initialize a new cache database with common variants.
+Once your cache is set up, you can run the annotation command **anywhere** the cache is available - perfect for distributed computing environments or sharing with collaborators:
 
 ```bash
-./vcfstash.py stash-init --vcf <input.bcf> --output <cache_dir> -y <params.yaml> [-f]
+vcfstash.py annotate -a /path/to/cache/stash/my_annotation \
+    --vcf sample.vcf \
+    --output results \
+    -y params.yaml
 ```
 
-### stash-add
+Just make sure your `params.yaml` file is properly configured for the new environment. This portability means you can:
 
-Add more variants to an existing cache.
+- Run annotations on different compute clusters
+- Share pre-built annotation caches with team members
+- Integrate with any workflow management system
+
+## 🖥️ Resource Management
+
+VCFstash supports optional resource management through Nextflow configuration. Create a `nextflow.config` file to control CPU, memory, and other resources:
+
+```groovy
+// Process configuration
+process {
+    executor = 'local'
+    cpus = 4               // Default CPUs for all processes
+    memory = '8 GB'        // Default memory for all processes
+
+    // Process-specific settings
+    withName: 'RenameAndNormalizeVCF' {
+        memory = '20 GB'   // More memory for this specific process
+    }
+}
+```
+
+This configuration is optional - VCFstash will work with default settings, but customizing resources can improve performance for your specific environment.
+
+## 💡 Performance Tips
+
+- **Start with quality data**: Use a large, comprehensive variant database (like gnomAD) for initialization
+- **Keep cache size manageable**: Using only common alleles (e.g., 10% allele frequency or higher) provides excellent performance while avoiding huge caches
+- **Benefit from scale**: For large cohorts, the speedup increases with each additional sample - the more you use it, the more time you save
+- **Optimize I/O**: Consider using SSD storage for the cache directory to maximize performance
+- **Parallelize wisely**: Adjust CPU and memory settings in the Nextflow configuration based on your available resources
+
+## 🧪 Testing & Validation
+
+VCFstash includes comprehensive tests to ensure reliability and correctness:
 
 ```bash
-./vcfstash.py stash-add --db <cache_dir> -i <input.bcf>
+# Run all tests
+python -m pytest
+
+# Run specific test with increased verbosity
+python -m pytest -xvs tests/test_validation.py
 ```
 
-### stash-annotate
-
-Create an annotated cache using your annotation pipeline.
+To validate your own setup or create new test references:
 
 ```bash
-./vcfstash.py stash-annotate --name <annotation_name> --db <cache_dir> -a <annotation.config> -y <params.yaml> [-f]
+python tests/update_reference.py --golden
 ```
 
-### annotate
-
-Annotate a sample using the cache.
-
-```bash
-./vcfstash.py annotate -a <cache_dir>/stash/<annotation_name> --vcf <sample.bcf> --output <results_dir> -y <params.yaml> [-f]
-```
-
-## Performance Tips
-
-- Use a large, comprehensive variant database (like gnomAD) for initialization
-- Adjust `vep_forks` and `vep_buffer` in params.yaml based on your system resources
-- For large cohorts, the speedup increases with each additional sample
+This creates reference outputs that serve as the gold standard for tests, helping you verify your installation and configuration are working correctly.
 
 ## License
 
-MIT
+VCFstash is available under the MIT License - see the LICENSE file for details.
+
+
