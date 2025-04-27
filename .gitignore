@@ -24,7 +24,6 @@ htmlcov/
 /.idea/
 /.vscode/
 /.junie/
-/.junie/*
 
 # Nextflow
 /.nextflow/
