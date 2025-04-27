@@ -23,7 +23,7 @@ htmlcov/
 # IDE
 /.idea/
 /.vscode/
-/.junie
+/.junie/
 
 # Nextflow
 /.nextflow/
