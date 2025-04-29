@@ -540,7 +540,7 @@ class NextflowWorkflow:
 
         try:
             # Run without capturing output to show live progress
-            result = subprocess.run(cmd, check=True, cwd=self.output_dir, env=os.environ.copy())
+            result = subprocess.run(cmd, check=True, cwd=self.output_dir, env=env)
             return result
         except subprocess.CalledProcessError as e:
             self.warn_temp_files()
