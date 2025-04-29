@@ -1,7 +1,7 @@
 # pyproject.toml
 [build-system]
-requires = ["uv>=0.1.36"]
-build-backend = "uv.build"
+requires = ["flit_core>=3.9.0"]
+build-backend = "flit_core.buildapi"
 
 [project]
 name = "vcfstash"

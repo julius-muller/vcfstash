@@ -40,15 +40,9 @@ def normalize_bcf_timestamps(bcf_file):
     # Create a temporary VCF file
     temp_vcf = bcf_file + ".temp.vcf"
 
-    # Get bcftools path
-    bcftools_path = get_resource_path('tools/bcftools')
-    if not bcftools_path.exists():
-        # Fall back to system bcftools if the project-specific one doesn't exist
-        bcftools_path = 'bcftools'
-
     # Convert BCF to VCF
     result = subprocess.run(
-        [str(bcftools_path), "view", bcf_file, "-o", temp_vcf],
+        ["bcftools", "view", bcf_file, "-o", temp_vcf],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
 
@@ -77,7 +71,7 @@ def normalize_bcf_timestamps(bcf_file):
 
     # Convert back to BCF
     result = subprocess.run(
-        [str(bcftools_path), "view", "-O", "b", "-o", bcf_file, temp_vcf],
+        ["bcftools", "view", "-O", "b", "-o", bcf_file, temp_vcf],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
 
@@ -137,7 +131,7 @@ def update_golden_reference_dataset(force=True):
     print("=== Updating golden reference dataset ===")
 
     # Use subdirectories in the expected output directory
-    stash_dir = os.path.join(EXPECTED_OUTPUT_DIR, "stash_init_result")
+    stash_dir = os.path.join(EXPECTED_OUTPUT_DIR, "stash_result")
     annotate_dir = os.path.join(EXPECTED_OUTPUT_DIR, "annotate_result")
 
     # Ensure the directories don't exist
