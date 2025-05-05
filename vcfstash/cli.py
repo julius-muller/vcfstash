@@ -19,6 +19,7 @@ Date: 16-03-2025
 
 """
 
+import vcfstash.utils.paths  # This ensures VCFSTASH_ROOT is set
 import argparse
 import sys
 from pathlib import Path
