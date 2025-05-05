@@ -5,6 +5,7 @@ This module provides functions to get the project root directory and resource pa
 regardless of how the package is installed.
 """
 
+import vcfstash.utils.paths  # This ensures VCFSTASH_ROOT is set
 import os
 import sys
 from pathlib import Path
