@@ -141,7 +141,7 @@ class VCFAnnotator(VCFDatabase):
         """Initialize database annotator.
 
         Args:
-            input_vcf: Path to the input VCF file
+            input_vcf: Path to the input BCF/VCF file, needs to be indexed!
             annotation_db: Path to the annotation database
             output_dir: Path to the output directory
             config_file: Optional configuration file with process configurations for resoureces.
@@ -242,18 +242,18 @@ class VCFAnnotator(VCFDatabase):
         self.output_annotations.create_structure()
 
 
-
     def _validate_and_extract_sample_name(self) -> tuple[str, str]:
         """
         Validates the input VCF file has an acceptable extension
         ('.bcf', '.vcf.gz', '.vcf') and extracts the sample name
-        (filename without directory path and extension).
+        (filename without directory path and extension). Also checks that the file is indexed.
 
         Returns:
             str: the extracted sample name
 
         Raises:
             ValueError: if the input file has an invalid extension
+            FileNotFoundError: if the index file is missing
         """
         input_vcf_path = self.input_vcf
 
@@ -265,16 +265,22 @@ class VCFAnnotator(VCFDatabase):
         if input_vcf_path.name.endswith('.vcf.gz'):
             extension = '.vcf.gz'
             sample_name = input_vcf_path.name[:-7]  # Removes '.vcf.gz'
+            index_file = input_vcf_path.with_suffix(input_vcf_path.suffix + '.tbi')
         elif input_vcf_path.name.endswith('.bcf'):
             extension = '.bcf'
             sample_name = input_vcf_path.name[:-4]  # Removes '.bcf'
+            index_file = input_vcf_path.with_suffix('.bcf.csi')
         elif input_vcf_path.name.endswith('.vcf'):
             extension = '.vcf'
             sample_name = input_vcf_path.name[:-4]  # Removes '.vcf'
+            index_file = input_vcf_path.with_suffix('.vcf.tbi')
         else:
             raise ValueError(
                 f"Input VCF file '{input_vcf_path}' must end with one of {self.VALID_VCF_EXTENSIONS}"
             )
+
+        if not index_file.exists():
+            raise FileNotFoundError(f"Index file for '{input_vcf_path}' not found: '{index_file}'")
 
         return sample_name, extension
 

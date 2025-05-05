@@ -20,7 +20,6 @@ class NextflowWorkflow:
     REQUIRED_PARAMS = {  # these are the minimal yaml parameters required to run the workflow
         'bcftools_cmd': Path,
         'bcftools_cmd_version': str,
-        'bcftools_sort_memory': str,
         'annotation_tool_cmd': str,
         'tool_version_command': str,
         'tool_version_regex': str,

@@ -6,7 +6,6 @@ tool_version_regex: "grep -oP \"ensembl-vep\\s+:\\s+\\K\\d+\\.\\d+\""
 # bcftools
 bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
 bcftools_cmd_version: '1.20'
-bcftools_sort_memory: '20G'
 
 # Reference data required for the normalization step
 reference: "${VCFSTASH_ROOT}/tests/data/references/reference.fasta"
@@ -16,7 +15,7 @@ reference_md5sum: "28a3d9f0162be1d5db2011aa30458129"
 chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
 temp_dir: "/tmp"
 
-# User defined variables that can still be overridden by vcfstash annotate -a ???.yaml
+# * OPTIONAL RESOURCES *
 vep_cache: "/home/j380r/references/ensembl-vep/113/cachedir"
 vep_buffer: 500000
 vep_forks: 2

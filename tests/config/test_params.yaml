@@ -6,7 +6,6 @@ tool_version_regex: "grep -oP \"bcftools \\K\\d+\\.\\d+\""
 # bcftools
 bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
 bcftools_cmd_version: '1.20'
-bcftools_sort_memory: '20G'
 
 # Reference data required for the normalization step
 reference: "${VCFSTASH_ROOT}/tests/data/references/reference.fasta"
@@ -16,3 +15,4 @@ reference_md5sum: "28a3d9f0162be1d5db2011aa30458129"
 chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
 temp_dir: "/tmp"
 
+# * OPTIONAL RESOURCES *
