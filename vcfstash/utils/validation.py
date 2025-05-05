@@ -146,7 +146,7 @@ def check_reference_output_exists() -> Tuple[bool, Optional[str]]:
     Returns:
         Tuple of (exists, error_message)
     """
-    from src.utils.paths import get_vcfstash_root
+    from vcfstash.utils.paths import get_vcfstash_root
 
     # Define the expected output directories
     stash_dir = get_vcfstash_root() / "tests" / "data" / "expected_output" / "stash_result"

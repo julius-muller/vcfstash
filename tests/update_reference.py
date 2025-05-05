@@ -11,11 +11,11 @@ import shutil
 import subprocess
 import tempfile
 import uuid
-from src.utils.paths import get_vcfstash_root, get_resource_path
+from vcfstash.utils.paths import get_vcfstash_root, get_resource_path
 
 # Use Path for better path handling
 TEST_ROOT = Path(os.path.dirname(os.path.abspath(__file__)))
-VCFSTASH_CMD = get_vcfstash_root() / "vcfstash.py"
+VCFSTASH_CMD = "vcfstash"
 TEST_DATA_DIR = TEST_ROOT / "data" / "nodata"
 TEST_PARAMS = TEST_ROOT / "config" / "user_params.yaml"
 TEST_VCF = TEST_DATA_DIR / "crayz_db.bcf"
@@ -181,7 +181,6 @@ def update_golden_reference_dataset(force=True):
         # 1. Run stash-init
         print("Running stash-init...")
         init_cmd = [
-            sys.executable,
             VCFSTASH_CMD,
             "stash-init",
             "--vcf", test_vcf,
@@ -204,7 +203,6 @@ def update_golden_reference_dataset(force=True):
         # 2. Run stash-add
         print("Running stash-add...")
         add_cmd = [
-            sys.executable,
             VCFSTASH_CMD,
             "stash-add",
             "--db", stash_dir,
@@ -225,7 +223,6 @@ def update_golden_reference_dataset(force=True):
         # 3. Run stash-annotate
         print("Running stash-annotate...")
         annotate_cmd = [
-            sys.executable,
             VCFSTASH_CMD,
             "stash-annotate",
             "--name", annotate_name,
@@ -252,7 +249,6 @@ def update_golden_reference_dataset(force=True):
         annotation_db = os.path.join(stash_dir, "stash", annotate_name)
 
         annotate_vcf_cmd = [
-            sys.executable,
             VCFSTASH_CMD,
             "annotate",
             "-a", annotation_db,

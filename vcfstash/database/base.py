@@ -7,10 +7,11 @@ from logging import Logger
 from pathlib import Path
 from typing import Tuple, List, Optional
 import yaml
+import importlib.resources
 
-from src.database.outputs import StashOutput
-from src.utils.validation import validate_bcf_header
-from src.utils.logging import setup_logging
+from vcfstash.database.outputs import StashOutput
+from vcfstash.utils.validation import validate_bcf_header
+from vcfstash.utils.logging import setup_logging
 
 
 class NextflowWorkflow:
@@ -52,7 +53,7 @@ class NextflowWorkflow:
             raise FileNotFoundError(f"Workflow file not found: {self.workflow_file}")
 
         self.workflow_dir = self.workflow_file.parent
-        self.workflow_dir_src = Path(__file__).parent.parent.parent / "workflow"
+        self.workflow_dir_src = Path(importlib.resources.files("vcfstash") / "workflow")
 
         self.logger.info(f"Initializing Nextflow workflow in: {self.workflow_dir}")
 
@@ -483,7 +484,7 @@ class NextflowWorkflow:
             raise RuntimeError("VCFSTASH_ROOT environment variable is not set")
         # Set up the Nextflow executable
         nxf_exe = ['java', '-jar', str(Path(env[
-                                                'VCFSTASH_ROOT']) / f'workflow/.nextflow/framework/{self.NXF_VERSION}/nextflow-{self.NXF_VERSION}-one.jar')]
+                                                'VCFSTASH_ROOT']) / f'vcfstash/workflow/.nextflow/framework/{self.NXF_VERSION}/nextflow-{self.NXF_VERSION}-one.jar')]
         # this could also use the executable in PATH with nxf_exe = ['nextflow']
 
         # Clean Nextflow metadata

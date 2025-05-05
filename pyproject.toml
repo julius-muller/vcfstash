@@ -1,6 +1,6 @@
 # pyproject.toml
 [build-system]
-requires = ["hatchling>=1.0.0", "editables>=0.3"]
+requires = ["hatchling>=1.26", "editables>=0.3"]
 build-backend = "hatchling.build"
 
 [project]
@@ -28,7 +28,7 @@ dev = [
 ]
 
 [project.scripts]
-vcfstash = "src.cli:main"
+vcfstash = "vcfstash.cli:main"
 
 [tool.pytest.ini_options]
 pythonpath = [
@@ -37,3 +37,11 @@ pythonpath = [
 testpaths = [
   "tests"
 ]
+
+[tool.hatch.build]
+include = [
+  "vcfstash/**"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["vcfstash"]

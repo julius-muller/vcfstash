@@ -22,18 +22,24 @@ Date: 16-03-2025
 import argparse
 import sys
 from pathlib import Path
-from src.utils.paths import get_vcfstash_root  # This will set VCFSTASH_ROOT
-from src.utils.logging import setup_logging, log_command
-from src.database.initializer import DatabaseInitializer
-from src.database.updater import DatabaseUpdater
-from src.database.annotator import DatabaseAnnotator, VCFAnnotator
-from src.utils.validation import check_bcftools_installed
+from importlib.metadata import version as pkg_version
+from vcfstash.utils.logging import setup_logging, log_command
+from vcfstash.database.initializer import DatabaseInitializer
+from vcfstash.database.updater import DatabaseUpdater
+from vcfstash.database.annotator import DatabaseAnnotator, VCFAnnotator
+from vcfstash.utils.validation import check_bcftools_installed
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Speed up VCF annotation by using pre-cached common variants.",
         formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        '-v', '--version',
+        action='version',
+        version=pkg_version("vcfstash"),
+        help="Show version and exit"
     )
 
     # Create parent parser for shared arguments
@@ -45,6 +51,7 @@ def main() -> None:
                               required=False, help="Path to a nextflow yaml containing environment variables related to paths and resources")
     parent_parser.add_argument("-c", "--config", dest="config",
                               required=False, help="Path to an optional nextflow config containing only a process definition")
+
 
     subparsers = parser.add_subparsers(
         dest="command",
@@ -95,6 +102,7 @@ def main() -> None:
     check_bcftools_installed()
 
     try:
+
         if args.command == "stash-init":
             logger.info(f"Initializing database: {Path(args.output).parent}")
 

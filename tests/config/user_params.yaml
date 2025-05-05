@@ -16,7 +16,7 @@ reference_md5sum: "28a3d9f0162be1d5db2011aa30458129"
 chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
 temp_dir: "/tmp"
 
-# User defined variables that can still be overridden by vcfstash.py annotate -a ???.yaml
+# User defined variables that can still be overridden by vcfstash annotate -a ???.yaml
 vep_cache: "/home/j380r/references/ensembl-vep/113/cachedir"
 vep_buffer: 500000
 vep_forks: 2

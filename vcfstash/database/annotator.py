@@ -2,14 +2,14 @@
 import shutil
 import sys
 import time
-from src.database.base import VCFDatabase, NextflowWorkflow
-from src.database.outputs import AnnotatedStashOutput, AnnotatedUserOutput
+from vcfstash.database.base import VCFDatabase, NextflowWorkflow
+from vcfstash.database.outputs import AnnotatedStashOutput, AnnotatedUserOutput
 from pathlib import Path
 import subprocess
 from datetime import datetime
 from multiprocessing import Pool
 import pysam
-from src.utils.logging import setup_logging
+from vcfstash.utils.logging import setup_logging
 
 class DatabaseAnnotator(VCFDatabase):
     """Handles database annotation workflows"""

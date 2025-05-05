@@ -9,7 +9,7 @@ import os
 import warnings
 from abc import ABC, abstractmethod
 from pathlib import Path
-
+import importlib.resources
 
 class BaseOutput(ABC):
     """
@@ -20,7 +20,11 @@ class BaseOutput(ABC):
     def __init__(self, root_dir: str):
         self.root_dir = Path(root_dir).expanduser().resolve()
         # define the base directory of the module
-        self.module_src_dir = Path(os.getenv('VCFSTASH_ROOT', Path('.').resolve())) if '__file__' not in globals() else Path(__file__).parent.parent.parent
+        # Use importlib.resources instead of environment variable
+        try:
+            self.module_src_dir = Path(importlib.resources.files("vcfstash"))
+        except ModuleNotFoundError:
+            self.module_src_dir = Path(os.getenv('VCFSTASH_ROOT', Path('.').resolve()))
 
     @abstractmethod
     def required_paths(self) -> dir:
@@ -88,9 +92,9 @@ class StashOutput(BaseOutput):
       ├── blueprint/
       ├── stash/
       └── workflow/
-          ├── ... parse from src
+          ├── ... parse from vcfstash
           ├── modules/
-          │   ├── ... parse from src
+          │   ├── ... parse from vcfstash
 
 
     self = StashOutput(stash_root_dir='.')
@@ -102,17 +106,20 @@ class StashOutput(BaseOutput):
         self.workflow_dir = self.stash_root_dir / "workflow"
         self.workflow_src_dir = self.module_src_dir / "workflow"
 
+        if not self.workflow_src_dir.exists():
+            raise RuntimeError(f"Source workflow directory does not exist: {self.workflow_src_dir}")
+
     def required_paths(self) -> dict:
         """
         Returns a dictionary with the required paths for the stash output structure.
         """
 
-        return  {
+        return {
             "blueprint": self.stash_root_dir / "blueprint",
             "stash": self.stash_root_dir / "stash",
             "workflow": self.workflow_dir,
-            "workflow_src": self.module_src_dir / "workflow",
-            "modules": self.workflow_dir / "modules",
+            "workflow_src": self.workflow_src_dir,
+            "modules": self.workflow_dir / "modules"
         }
     
     def create_structure(self) -> None:
@@ -197,7 +204,11 @@ class AnnotatedUserOutput(BaseOutput):
     def __init__(self, output_dir: str):
         super().__init__(output_dir)
         self.workflow_dir = self.root_dir / "workflow"
-        self.workflow_src_dir = self.module_src_dir / "workflow"
+        # Dynamically locate the workflow directory in the installed package
+        try:
+            self.workflow_src_dir = Path(importlib.resources.files("vcfstash") / "workflow")
+        except ModuleNotFoundError:
+            raise RuntimeError("Workflow directory not found in the installed package.")
         self.name = self.root_dir.name
 
     def required_paths(self) -> dict:

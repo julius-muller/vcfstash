@@ -54,22 +54,22 @@ That's it! VCFstash includes all required tools (bcftools, Nextflow) in the repo
 
 1. **Create a blueprint** from a representative VCF
    ```bash
-   vcfstash.py stash-init -i gnomad_4_wgs.vcf -o /my/destination/dir
+   vcfstash stash-init -i gnomad_4_wgs.vcf -o /my/destination/dir
    ```
 
 2. **Run your annotation tool once** on the blueprint and freeze it
    ```bash
-   vcfstash.py stash-annotate -d /my/destination/dir -n vep_gnomad -a annotation.config -y params.yaml
+   vcfstash stash-annotate -d /my/destination/dir -n vep_gnomad -a annotation.config -y params.yaml
    ```
 
 3. **Annotate your samples** using the cache
    ```bash
-   vcfstash.py annotate -a /my/destination/dir/stash/vep_gnomad --vcf sample.vcf --output results -y params.yaml
+   vcfstash annotate -a /my/destination/dir/stash/vep_gnomad --vcf sample.vcf --output results -y params.yaml
    ```
 
 **Optional:** Add more variants to your cache (e.g., merge gnomAD WES into WGS blueprint)
 ```bash
-vcfstash.py stash-add -i gnomad_4_wes.vcf -d /my/destination/dir
+vcfstash stash-add -i gnomad_4_wes.vcf -d /my/destination/dir
 ```
 
 Your `annotation.config` contains **exactly** the command you already use – see next section for details.
@@ -159,7 +159,7 @@ VCFstash provides four simple commands that follow the workflow shown in the qui
 
 Full documentation with all options is available by running:
 ```bash
-./vcfstash.py --help
+vcfstash -h
 ```
 
 ## 🚀 Running annotation anywhere using the cache
@@ -167,7 +167,7 @@ Full documentation with all options is available by running:
 Once your cache is set up, you can run the annotation command **anywhere** the cache is available - perfect for distributed computing environments or sharing with collaborators:
 
 ```bash
-vcfstash.py annotate -a /path/to/cache/stash/my_annotation \
+vcfstash annotate -a /path/to/cache/stash/my_annotation \
     --vcf sample.vcf \
     --output results \
     -y params.yaml
@@ -280,22 +280,20 @@ VCFstash includes comprehensive tests to ensure reliability and correctness:
 
 ```bash
 # Install development dependencies
-pip install ".[dev]"
+uv pip install -e ".[dev]"
 
 # Run all tests
 python -m pytest
 
 # Run specific test with increased verbosity
-python -m pytest -xvs tests/test_validation.py
+python -m pytest -xvs tests/test_core.py
 ```
 
 ### Test Structure
 
-The test suite is organized into several modules:
+The test suite is organized into two modules:
 
-- `test_validation.py`: Tests basic utility functions like MD5 calculation
-- `test_cache_init.py`: Tests the stash-init and stash-add commands
-- `test_stash_annotate.py`: Tests the stash-annotate command
+- `test_core.py`: Tests basic utility functions like MD5 calculation
 - `test_annotate.py`: Tests the annotate command and full workflow
 
 Each test prints information about which part of the code is being tested, making it easier to understand test coverage.
@@ -326,6 +324,21 @@ python -m pytest -xvs tests/test_annotate.py::test_annotate_workflow
 ```
 
 All tests should pass on any system where the package is installed, without requiring any external tools or configuration.
+
+## 📜 Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed list of changes and improvements.
+
+## 🛠️ Contributing
+
+Contributions are welcome! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) file for guidelines on how to contribute to VCFstash.
+
+## 🙏 Acknowledgements
+
+- [uv](Jhttps://github.com/astral-sh/uv) for fast package management
+- [Nextflow](https://www.nextflow.io/) for workflow management
+- [bcftools](https://github.com/samtools/bcftools) for efficient variant processing
+- [pytest](https://docs.pytest.org/) for testing framework
 
 ## License
 

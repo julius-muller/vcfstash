@@ -3,8 +3,8 @@ import shutil
 from pathlib import Path
 import subprocess
 from datetime import datetime
-from src.database.base import VCFDatabase, NextflowWorkflow
-from src.utils.validation import compute_md5, get_bcf_stats, check_duplicate_md5
+from vcfstash.database.base import VCFDatabase, NextflowWorkflow
+from vcfstash.utils.validation import compute_md5, get_bcf_stats, check_duplicate_md5
 
 class DatabaseUpdater(VCFDatabase):
     """Handles adding new variants to database"""

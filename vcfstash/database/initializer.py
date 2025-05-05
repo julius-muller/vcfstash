@@ -3,9 +3,9 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 
-from src.database.base import VCFDatabase, NextflowWorkflow
-from src.database.outputs import StashOutput
-from src.utils.validation import compute_md5
+from vcfstash.database.base import VCFDatabase, NextflowWorkflow
+from vcfstash.database.outputs import StashOutput
+from vcfstash.utils.validation import compute_md5
 
 
 class DatabaseInitializer(VCFDatabase):

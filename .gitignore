@@ -19,6 +19,8 @@ venv/
 .coverage
 htmlcov/
 /test_db/
+tests/data/expected_output/
+tests/config/old/
 
 # IDE
 /.idea/
@@ -30,8 +32,8 @@ htmlcov/
 /work/
 .nextflow.log*
 
+# extra
 *.log
-/tests/data/expected_output/
 
 
 
