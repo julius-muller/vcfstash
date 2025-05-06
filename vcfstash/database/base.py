@@ -460,8 +460,14 @@ class NextflowWorkflow:
         with open(self.params_file) as f:
             content = f.read()
         expanded = os.path.expandvars(content)
+        params_dict = yaml.safe_load(expanded)
+
+        # Always set must_contain_info_tag if missing to default value
+        if "must_contain_info_tag" not in params_dict:
+            params_dict["must_contain_info_tag"] = ""
+
         tmp = tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False)
-        tmp.write(expanded)
+        yaml.safe_dump(params_dict, tmp)
         tmp.close()
         return tmp.name
 
