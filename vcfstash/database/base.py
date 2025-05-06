@@ -508,7 +508,7 @@ class NextflowWorkflow:
             "-w", str(self.work_dir),
             "-name", f"vcfstash_{self.name}",
             "-ansi-log", "true",  # enable colored output
-            "-with-env", "VCFSTASH_ROOT"
+            f"-E"
         ]
 
         # Add params file if specified
