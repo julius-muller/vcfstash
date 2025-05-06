@@ -20,9 +20,12 @@ process RenameAndNormalizeVCF {
     def sort_command = do_sort ? "${params.bcftools_cmd} sort -T ${task.scratch} |" : ""
     def gt_option = remove_gt ? "-G" : ""
     // Only remove specific INFO tag during annotation, otherwise remove all INFO
-    def info_option = remove_info ?
-        (params.containsKey('must_contain_info_tag') ? "-x INFO/${params.must_contain_info_tag}" : "-x INFO") :
-        ""
+	def info_option = remove_info ? "-x INFO" : (
+		// For non-stash modes, must_contain_info_tag is required
+		!params.must_contain_info_tag ?
+		{ error "must_contain_info_tag parameter is required and cannot be empty for annotation mode" } :
+		"-x INFO/${params.must_contain_info_tag}"
+	)
 
     """
 
