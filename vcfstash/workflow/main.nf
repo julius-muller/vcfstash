@@ -42,6 +42,11 @@ def validateParams() {
         error "Database BCF file (--db_bcf) is required for annotate mode"
     }
 
+	// Require must_contain_info_tag for annotation-related modes
+    if ((params.db_mode == 'stash-annotate' || params.db_mode == 'annotate') &&
+        (!params.containsKey('must_contain_info_tag') || params.must_contain_info_tag.trim().isEmpty())) {
+        error "must_contain_info_tag parameter is required and cannot be empty for annotation modes"
+    }
 
     // Validate output directory
     def outDir = file(params.output)

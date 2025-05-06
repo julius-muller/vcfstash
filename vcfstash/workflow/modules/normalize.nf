@@ -19,7 +19,10 @@ process RenameAndNormalizeVCF {
     // -m ${params.bcftools_sort_memory}
     def sort_command = do_sort ? "${params.bcftools_cmd} sort -T ${task.scratch} |" : ""
     def gt_option = remove_gt ? "-G" : ""
-    def info_option = remove_info ? "-x INFO" : "-x INFO/${params.must_contain_info_tag}"
+    // Only remove specific INFO tag during annotation, otherwise remove all INFO
+    def info_option = remove_info ?
+        (params.containsKey('must_contain_info_tag') ? "-x INFO/${params.must_contain_info_tag}" : "-x INFO") :
+        ""
 
     """
 
