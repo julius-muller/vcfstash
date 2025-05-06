@@ -35,7 +35,10 @@ process ValidateInputs {
     script:
     """
 	test -f "${vcf}" || { echo "VCF file not found: ${vcf}"; exit 1; }
-	test -f "${vcf}.csi" || test -f "${vcf}.tbi" || { echo "No valid index found for VCF file: ${vcf} (need .csi or .tbi)"; exit 1; }
+	if ! (test -f "${vcf}.csi" || test -f "${vcf}.tbi"); then
+		echo "No valid index found for VCF file: ${vcf} (need .csi or .tbi)"
+		exit 1
+	fi
 	test -f "${reference}" || { echo "Reference file not found: ${reference}"; exit 1; }
 	test -f "${reference_index}" || { echo "Reference index not found: ${reference_index}"; exit 1; }
 	test -f "${chr_add}" || { echo "Chr add file not found: ${chr_add}"; exit 1; }
