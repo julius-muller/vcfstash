@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Tuple, List, Optional
 import yaml
 import importlib.resources
-
+import tempfile
 from vcfstash.database.outputs import StashOutput
 from vcfstash.utils.validation import validate_bcf_header
 from vcfstash.utils.logging import setup_logging
