@@ -455,6 +455,16 @@ class NextflowWorkflow:
         except subprocess.CalledProcessError as e:
             self.logger.warning(f"Failed to generate workflow DAG: {e}")
 
+    def _expand_and_write_params(self) -> str:
+        """Expand env vars in params YAML and write to a temp file."""
+        with open(self.params_file) as f:
+            content = f.read()
+        expanded = os.path.expandvars(content)
+        tmp = tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False)
+        tmp.write(expanded)
+        tmp.close()
+        return tmp.name
+
     def _create_work_dir(self, parent: Path, dirname: str = 'work') -> None:
         """Create a temporary work directory for Nextflow"""
         self.work_dir = parent / dirname
@@ -511,8 +521,10 @@ class NextflowWorkflow:
         ]
 
         # Add params file if specified
+        params_tfile = None
         if self.params_file:
-            run_opts.extend(["-params-file", str(self.params_file)])
+            params_tfile = self._expand_and_write_params()
+            run_opts.extend(["-params-file", params_tfile])
 
         if db_bcf:
             run_opts.extend(["--db_bcf", str(db_bcf)])
@@ -546,6 +558,9 @@ class NextflowWorkflow:
             self.warn_temp_files()
             self.logger.error(f"Workflow execution failed with exit code: {e.returncode}")
             raise RuntimeError(f"Workflow execution failed with exit code: {e.returncode}")
+        finally:
+            if params_tfile:
+                os.unlink(params_tfile)
 
 
 class VCFDatabase:
