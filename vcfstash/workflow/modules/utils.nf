@@ -35,15 +35,8 @@ process ValidateInputs {
     script:
     """
     # Check if files exist
-	vcf_base=\$(echo "${vcf_index}" | sed 's/\\.csi\$//')
-	if [ ! -f "${vcf_index}" ] && [ ! -f "${vcf_base}.tbi" ]; then
-		echo "No valid index found for VCF file: ${vcf_base}"
-		echo "Please create an index using either:"
-		echo "  bcftools index ${vcf} (for .csi)"
-		echo "  tabix -p vcf ${vcf} (for .tbi)"
-		exit 1
-	fi
-
+    [ -f "${vcf}" ] || { echo "VCF file not found: ${vcf}"; exit 1; }
+	[ -f "${vcf}.csi" -o -f "${vcf}.tbi" ] || { echo "No valid index found for VCF file: ${vcf} (need .csi or .tbi)"; exit 1; }
     [ -f "${reference}" ] || { echo "Reference file not found: ${reference}"; exit 1; }
     [ -f "${reference_index}" ] || { echo "Reference index not found: ${reference_index}"; exit 1; }
     [ -f "${chr_add}" ] || { echo "Chr add file not found: ${chr_add}"; exit 1; }
