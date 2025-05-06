@@ -17,9 +17,6 @@ process RenameAndNormalizeVCF {
 
     script:
 
-    export INPUT_BCF="${vcf_file}"
-    export OUTPUT_BCF="${sample_name}_norm.bcf"
-
     // -m ${params.bcftools_sort_memory}
     def sort_command = do_sort ? "${params.bcftools_cmd} sort -T ${task.scratch} |" : ""
     def gt_option = remove_gt ? "-G" : ""
@@ -32,6 +29,9 @@ process RenameAndNormalizeVCF {
 	)
 
     """
+
+    export INPUT_BCF="${vcf_file}"
+    export OUTPUT_BCF="${sample_name}_norm.bcf"
 
     # First, convert to BCF and index to ensure proper format
     ${params.bcftools_cmd} view ${gt_option} -Ou ${vcf_file} --threads ${(task.cpus).intdiv(3)} |
