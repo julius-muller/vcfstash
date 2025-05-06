@@ -163,6 +163,9 @@ workflow {
             ANNOTATE.out.annotated_bcf_index.subscribe { idx ->
                 file(idx).copyTo("${outputDir}/${sampleName}_vst.bcf.csi")
             }
+            ANNOTATE.out.annotated_bcf_log.subscribe { log ->
+                file(log).copyTo("${outputDir}/${sampleName}_vst.bcf.log")
+            }
 
 		} else if (params.db_mode == 'annotate') {
 			// annotate: SAMPLE_ANALYSIS_WORKFLOW - Sample comparison against database using bcftools annotate
@@ -206,6 +209,9 @@ workflow {
             }
             MergeAnnotations.out.merged_bcf_index.subscribe { idx ->
                 file(idx).copyTo("${outputDir}/${sampleName}_vst.bcf.csi")
+            }
+            ANNOTATE.out.annotated_bcf_log.subscribe { log ->
+                file(log).copyTo("${outputDir}/${sampleName}_vst.bcf.log")
             }
 
 		}

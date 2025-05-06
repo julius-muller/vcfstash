@@ -24,7 +24,6 @@ process CaptureToolVersions {
 process ValidateInputs {
     input:
     path vcf
-    path vcf_index
     path reference
     path reference_index
     path chr_add
@@ -58,7 +57,6 @@ workflow UTILS {
 
     validateInputResult = ValidateInputs(
         vcf,
-        file("${vcf}.csi"),
         reference,
         reference_index,
         chr_add,

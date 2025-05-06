@@ -8,9 +8,11 @@ process Annotate {
     output:
     path "vcfstash_annotated.bcf", emit: anno_bcf
     path "vcfstash_annotated.bcf.csi", emit: anno_bcf_index
+    path "annotation_output.log", emit: logs
 
     script:
     """
+    {
     export INPUT_BCF="${input_bcf}"
     export OUTPUT_BCF="vcfstash_annotated.bcf"
 
@@ -41,6 +43,7 @@ process Annotate {
     input_variants=\$(bcftools index -n "\$INPUT_BCF".csi)
     output_variants=\$(bcftools index -n "\$OUTPUT_BCF".csi)
     echo "Annotation complete: Input variants: \${input_variants}, Output variants: \${output_variants}"
+	} 2>&1 | tee annotation_output.log
 
     """
 }
@@ -59,4 +62,5 @@ workflow ANNOTATE {
     emit:
     annotated_bcf = annotation_result.anno_bcf
     annotated_bcf_index = annotation_result.anno_bcf_index
+    annotated_bcf_log = annotation_result.logs
 }
