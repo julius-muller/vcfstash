@@ -68,7 +68,7 @@ process ValidateInputs {
       
       # Create chromosome mapping lookup tables for efficiency
       echo "Loading chromosome mapping from ${chr_add}..."
-      awk '{ print $1 "\t" $2 }' ${chr_add} > chr_mapping.txt
+      awk '{print \$1"\\t"\$2}' ${chr_add} > chr_mapping.txt
       
       # Check if we need to adjust chromosome names based on the first chromosome
       FIRST_CHR=\$(head -n 1 vcf_chroms.txt)
@@ -91,20 +91,20 @@ process ValidateInputs {
       awk -v needs_prefix=\$NEEDS_CHR_PREFIX -v needs_removal=\$NEEDS_CHR_REMOVAL '
       # First load the reference chromosomes into a lookup hash
       FILENAME == "ref_chroms.txt" {
-          ref_chroms[$1] = 1;
+          ref_chroms[\$1] = 1;
           next;
       }
       
       # Then load chromosome mappings into a lookup hash
       FILENAME == "chr_mapping.txt" {
-          chr_map[$1] = $2;
-          rev_map[$2] = $1;
+          chr_map[\$1] = \$2;
+          rev_map[\$2] = \$1;
           next;
       }
       
       # Finally, check each VCF chromosome against reference
       FILENAME == "vcf_chroms.txt" {
-          chrom = $1;
+          chrom = \$1;
           if (chrom == "") next;
           
           # Try different mappings in this order:
