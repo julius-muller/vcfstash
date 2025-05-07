@@ -63,8 +63,8 @@ process Annotate {
             exit 1
         fi
         
-        # Get input variant count
-        input_variants=\$(bcftools index -n "\$INPUT_BCF".csi || echo "ERROR_COUNTING")
+        # Get input variant count - redirect stderr to /dev/null to suppress warnings
+        input_variants=\$(bcftools index -n "\$INPUT_BCF".csi 2>/dev/null || echo "ERROR_COUNTING")
         if [[ "\$input_variants" == "ERROR_COUNTING" ]]; then
             echo "\$(timestamp) WARNING: Could not count input variants from index. Will try using stats..."
             input_variants=\$(bcftools stats "\$INPUT_BCF" | grep "number of records:" | awk '{print \$4}' || echo "UNKNOWN")
@@ -140,8 +140,8 @@ process Annotate {
             fi
         fi
         
-        # Check output variants
-        output_variants=\$(bcftools index -n "\$OUTPUT_BCF".csi || echo "ERROR_COUNTING")
+        # Check output variants - redirect stderr to /dev/null to suppress warnings
+        output_variants=\$(bcftools index -n "\$OUTPUT_BCF".csi 2>/dev/null || echo "ERROR_COUNTING")
         if [[ "\$output_variants" == "ERROR_COUNTING" ]]; then
             echo "\$(timestamp) WARNING: Could not count output variants from index. Will try using stats..."
             output_variants=\$(bcftools stats "\$OUTPUT_BCF" | grep "number of records:" | awk '{print \$4}' || echo "UNKNOWN")
@@ -172,7 +172,7 @@ process Annotate {
             if (( output_variants < input_variants * 90 / 100 )); then
                 echo "\$(timestamp) WARNING: Output variant count is significantly lower than input count."
                 echo "\$(timestamp) This may indicate data loss during annotation."
-                echo "\$(timestamp) Input: \$input_variants, Output: \$output_variants ($(( output_variants * 100 / input_variants ))% preserved)"
+                echo "\$(timestamp) Input: \$input_variants, Output: \$output_variants (\$((output_variants * 100 / input_variants))% preserved)"
             fi
         fi
         
