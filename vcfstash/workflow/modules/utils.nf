@@ -39,7 +39,7 @@ process ValidateInputs {
       test -e "${vcf}" || { echo "VCF file not found: ${vcf}"; exit 1; }
       test -e "${vcf_index}" || { echo "VCF index file not found: ${vcf_index}"; exit 1; }
       test -e "${reference}" || { echo "Reference file not found: ${reference}"; exit 1; }
-      test -e "${reference_index}" || { echo "Reference index not found: ${reference_index}"; exit 1; }
+      test -e "${reference_index}" || { echo "Reference index file not found: ${reference_index}"; exit 1; }
       test -e "${chr_add}" || { echo "Chr add file not found: ${chr_add}"; exit 1; }
 
       # Basic header check
@@ -64,6 +64,10 @@ process ValidateInputs {
       # Show first few variants for debugging
       echo "First few variants in VCF:"
       ${params.bcftools_cmd} view -H ${vcf} | head -n 3
+      
+      # Load the chromosome mapping from chr_add.txt file
+      echo "Loading chromosome mapping from ${chr_add}..."
+      awk '{print \$1"\t"\$2}' ${chr_add} > chr_mapping.txt
       
       # Check if we need to adjust chromosome names (chr prefix handling)
       NEEDS_CHR_PREFIX=0
@@ -95,17 +99,31 @@ process ValidateInputs {
           
           REF_CHROM="\$chrom"
           
-          # Adjust chromosome name if needed
-          if [ \$NEEDS_CHR_REMOVAL -eq 1 ]; then
+          # First try direct mapping from chr_add.txt
+          MAPPED_CHROM=\$(grep -P "^\$chrom\t" chr_mapping.txt | cut -f2 || echo "")
+          
+          # If mapping exists in chr_add.txt, use it
+          if [ ! -z "\$MAPPED_CHROM" ]; then
+              echo "Found mapping for '\$chrom' to '\$MAPPED_CHROM' in chr_add.txt"
+              REF_CHROM="\$MAPPED_CHROM"
+          # Otherwise apply standard chr prefix adjustments
+          elif [ \$NEEDS_CHR_REMOVAL -eq 1 ]; then
               REF_CHROM=\${chrom#"chr"}
           elif [ \$NEEDS_CHR_PREFIX -eq 1 ]; then
               REF_CHROM="chr\$chrom"
           fi
           
-          # Check if this chromosome exists in reference
+          # Check if the chromosome exists in reference after mapping
           if ! grep -q "^\$REF_CHROM\$" ref_chroms.txt && ! grep -q "^\$REF_CHROM\t" ref_chroms.txt; then
-              echo "ERROR: Chromosome '\$chrom' (adjusted to '\$REF_CHROM' for reference) not found in reference genome!"
-              MISSING_CHROMS=1
+              # If not found directly, check if the reverse mapping exists (to handle cases like MT->chrM->M)
+              REVERSE_MAPPED=\$(grep -P "\t\$REF_CHROM\$" chr_mapping.txt | cut -f1 || echo "")
+              if [ ! -z "\$REVERSE_MAPPED" ] && (grep -q "^\$REVERSE_MAPPED\$" ref_chroms.txt || grep -q "^\$REVERSE_MAPPED\t" ref_chroms.txt); then
+                  echo "Found chromosome '\$chrom' in reference via reverse mapping to '\$REVERSE_MAPPED'"
+              else
+                  echo "ERROR: Chromosome '\$chrom' (adjusted to '\$REF_CHROM') not found in reference genome!"
+                  echo "       Check if this chromosome is in the reference or add a mapping in chr_add.txt."
+                  MISSING_CHROMS=1
+              fi
           fi
       done < vcf_chroms.txt
       
@@ -118,10 +136,13 @@ process ValidateInputs {
           cat ref_chroms.txt
           echo "Chromosomes in VCF:"
           cat vcf_chroms.txt
+          echo "Chromosome mappings from chr_add.txt:"
+          cat chr_mapping.txt
+          echo "Consider updating chr_add.txt to include additional mappings."
           exit 1
       fi
 
-      echo "All chromosomes in VCF are present in the reference genome."
+      echo "All chromosomes in VCF are present in the reference genome or have valid mappings."
       
       # ===========================================
       # Reference allele compatibility check
@@ -148,9 +169,17 @@ process ValidateInputs {
               continue
           fi
           
-          # Adjust chromosome name if needed
+          # Determine reference chromosome name
           QUERY_CHROM="\$CHROM"
-          if [ \$NEEDS_CHR_REMOVAL -eq 1 ]; then
+          
+          # First try direct mapping from chr_add.txt
+          MAPPED_CHROM=\$(grep -P "^\$CHROM\t" chr_mapping.txt | cut -f2 || echo "")
+          
+          # If mapping exists in chr_add.txt, use it
+          if [ ! -z "\$MAPPED_CHROM" ]; then
+              QUERY_CHROM="\$MAPPED_CHROM"
+          # Otherwise apply standard chr prefix adjustments
+          elif [ \$NEEDS_CHR_REMOVAL -eq 1 ]; then
               QUERY_CHROM=\${CHROM#"chr"}
           elif [ \$NEEDS_CHR_PREFIX -eq 1 ]; then
               QUERY_CHROM="chr\$CHROM"
