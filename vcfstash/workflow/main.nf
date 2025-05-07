@@ -159,6 +159,9 @@ workflow {
             NORMALIZE.out.norm_bcf_log.subscribe { log ->
                 file(log).copyTo("${outputDir}/vcfstash.bcf.log")
             }
+            UTILS.out.validation_log.subscribe { log ->
+                file(log).copyTo("${outputDir}/vcfstash.bcf.vlog")
+            }
 		} else if (params.db_mode == 'annotate-nocache') {
 			// annotate: DIRECT_ANNOTATION_WORKFLOW - Direct VCF annotation without database comparison
 			ANNOTATE(
