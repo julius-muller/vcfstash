@@ -22,64 +22,64 @@ process CaptureToolVersions {
 }
 
 process ValidateInputs {
-     stageInMode 'link'  // Use symlinks instead of copying files
+	stageInMode 'symlink'  // Use symbolic links instead of hard links
 
-     input:
-     path vcf
-     path reference
-     path reference_index
-     path chr_add
+	input:
+	path vcf
+	path reference
+	path reference_index
+	path chr_add
 
-     output:
-     val true, emit: validated
+	output:
+	val true, emit: validated
 
-     script:
-     """
-     # Check file existence using test -L to validate symlinks directly
-     test -L "${vcf}" || { echo "VCF file not found or not properly linked: ${vcf}"; exit 1; }
-     test -L "${reference}" || { echo "Reference file not found or not properly linked: ${reference}"; exit 1; }
-     test -L "${reference_index}" || { echo "Reference index not found or not properly linked: ${reference_index}"; exit 1; }
-     test -L "${chr_add}" || { echo "Chr add file not found or not properly linked: ${chr_add}"; exit 1; }
+	script:
+	"""
+	# Check file existence - we can use test -e for symlinks
+	test -e "${vcf}" || { echo "VCF file not found or not properly linked: ${vcf}"; exit 1; }
+	test -e "${reference}" || { echo "Reference file not found or not properly linked: ${reference}"; exit 1; }
+	test -e "${reference_index}" || { echo "Reference index not found or not properly linked: ${reference_index}"; exit 1; }
+	test -e "${chr_add}" || { echo "Chr add file not found or not properly linked: ${chr_add}"; exit 1; }
 
-     # Test for VCF index files
-     test -f "${vcf}.csi" || test -f "${vcf}.tbi" || { echo "No valid index found for VCF file: ${vcf} (need .csi or .tbi)"; exit 1; }
+	# Test for VCF index files
+	test -f "${vcf}.csi" || test -f "${vcf}.tbi" || { echo "No valid index found for VCF file: ${vcf} (need .csi or .tbi)"; exit 1; }
 
-     # Basic header check - just validate without processing entire file
-     ${params.bcftools_cmd} view -h "${vcf}" | head -n 1 >/dev/null || { echo "Invalid VCF/BCF format"; exit 1; }
+	# Basic header check - just validate without processing entire file
+	${params.bcftools_cmd} view -h "${vcf}" | head -n 1 >/dev/null || { echo "Invalid VCF/BCF format"; exit 1; }
 
-     # ===========================================
-     # Reference genome compatibility check
-     # ===========================================
-     echo "Validating reference genome compatibility with VCF..."
+	# ===========================================
+	# Reference genome compatibility check
+	# ===========================================
+	echo "Validating reference genome compatibility with VCF..."
 
-     # Get a sample variant from input VCF for testing
-     FIRST_VAR=\$(${params.bcftools_cmd} view -H ${vcf} | head -n 1)
-     if [ -z "\$FIRST_VAR" ]; then
-         echo "Error: Input VCF appears to be empty"
-         exit 1
-     fi
+	# Get a sample variant from input VCF for testing
+	FIRST_VAR=\$(${params.bcftools_cmd} view -H ${vcf} | head -n 1)
+	if [ -z "\$FIRST_VAR" ]; then
+	  echo "Error: Input VCF appears to be empty"
+	  exit 1
+	fi
 
-     # Extract chromosome, position and reference allele
-     CHROM=\$(echo "\$FIRST_VAR" | cut -f 1)
-     POS=\$(echo "\$FIRST_VAR" | cut -f 2)
-     REF=\$(echo "\$FIRST_VAR" | cut -f 4)
+	# Extract chromosome, position and reference allele
+	CHROM=\$(echo "\$FIRST_VAR" | cut -f 1)
+	POS=\$(echo "\$FIRST_VAR" | cut -f 2)
+	REF=\$(echo "\$FIRST_VAR" | cut -f 4)
 
-     echo "Testing variant: \$CHROM:\$POS \$REF"
+	echo "Testing variant: \$CHROM:\$POS \$REF"
 
-     # Check if reference matches at this position
-     REF_BASE=\$(${params.bcftools_cmd} consensus -f ${reference} -r "\$CHROM:\$POS-\$POS" ${vcf} 2>/dev/null | grep -v ">" | tr -d '\n')
+	# Check if reference matches at this position
+	REF_BASE=\$(${params.bcftools_cmd} consensus -f ${reference} -r "\$CHROM:\$POS-\$POS" ${vcf} 2>/dev/null | grep -v ">" | tr -d '\n')
 
-     if [ "\$REF_BASE" != "\$REF" ]; then
-         echo "ERROR: Reference genome mismatch detected!"
-         echo "VCF reference allele at \$CHROM:\$POS is \$REF, but reference genome has \$REF_BASE"
-         echo "This indicates that the provided reference genome does not match the VCF file"
-         echo "This would cause a segmentation fault in bcftools norm"
-         exit 1
-     fi
+	if [ "\$REF_BASE" != "\$REF" ]; then
+	  echo "ERROR: Reference genome mismatch detected!"
+	  echo "VCF reference allele at \$CHROM:\$POS is \$REF, but reference genome has \$REF_BASE"
+	  echo "This indicates that the provided reference genome does not match the VCF file"
+	  echo "This would cause a segmentation fault in bcftools norm"
+	  exit 1
+	fi
 
-     echo "Reference validation passed."
-     """
- }
+	echo "Reference validation passed."
+	"""
+}
 
 
 workflow UTILS {
