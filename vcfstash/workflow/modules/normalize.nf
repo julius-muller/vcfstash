@@ -46,9 +46,8 @@ process RenameAndNormalizeVCF {
         exit 1
     fi
 
-    # Use stats instead of index for counting variants to avoid any index-related issues
-    input_variants=\$(${params.bcftools_cmd} stats ${vcf_file} | grep "number of records:" | awk '{print \$4}')
-    output_variants=\$(${params.bcftools_cmd} stats ${sample_name}_norm.bcf | grep "number of records:" | awk '{print \$4}')
+    input_variants=\$(${params.bcftools_cmd} index -n "${vcf_file}".csi)
+    output_variants=\$(${params.bcftools_cmd} index -n "${sample_name}_norm.bcf".csi)
 
     echo "Normalization complete: Input variants: \${input_variants}, Output variants: \${output_variants}" | tee -a ${sample_name}_norm.log
     """
