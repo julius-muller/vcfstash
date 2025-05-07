@@ -1,6 +1,13 @@
 process Annotate {
     debug true
-
+    // Add error strategy to retry on failure
+    errorStrategy { task.attempt <= 2 ? 'retry' : 'terminate' }
+    maxRetries 2
+    
+    // Add resource tracking
+    time { params.containsKey('annotation_max_time') ? params.annotation_max_time : '24h' }
+    memory { params.containsKey('annotation_memory') ? params.annotation_memory : '16 GB' }
+    
     input:
     path input_bcf
     path input_bcf_index
@@ -12,39 +19,175 @@ process Annotate {
 
     script:
     """
+    # Create a timestamp function for better logging
+    timestamp() {
+        date +"[%Y-%m-%d %H:%M:%S]"
+    }
+
+    # Setup logging with timestamps and redirections
     {
-    export INPUT_BCF="${input_bcf}"
-    export OUTPUT_BCF="vcfstash_annotated.bcf"
-
-
-    echo "Checking tool version..."
-    TOOL_VERSION_OUTPUT=\$(${params.annotation_tool_cmd} ${params.tool_version_command})
-	TOOL_VERSION=\$(echo "\$TOOL_VERSION_OUTPUT" | ${params.tool_version_regex})
-    if [ -z "\$TOOL_VERSION" ]; then
-        echo "Error: Unable to determine tool version. Output: \$TOOL_VERSION_OUTPUT" >&2
+        echo "\$(timestamp) VCFSTASH ANNOTATION PROCESS STARTED"
+        echo "\$(timestamp) =========================================="
+        echo "\$(timestamp) Task ID: ${task.process} (${task.index})"
+        echo "\$(timestamp) Working directory: ${task.workDir}"
+        echo "\$(timestamp) Input BCF file: ${input_bcf}"
+        echo "\$(timestamp) Input BCF index: ${input_bcf_index}"
+        echo "\$(timestamp) Allocated resources:"
+        echo "\$(timestamp)   - CPUs: ${task.cpus}"
+        echo "\$(timestamp)   - Memory: ${task.memory}"
+        echo "\$(timestamp)   - Time: ${task.time}"
+        echo "\$(timestamp) =========================================="
+        
+        # Export variables for use in the command
+        export INPUT_BCF="${input_bcf}"
+        export OUTPUT_BCF="vcfstash_annotated.bcf"
+        
+        # Check input file integrity
+        echo "\$(timestamp) Checking input file integrity..."
+        if [ ! -f "\$INPUT_BCF" ]; then
+            echo "\$(timestamp) ERROR: Input BCF file not found: \$INPUT_BCF"
+            exit 1
+        fi
+        
+        if [ ! -f "\${INPUT_BCF}.csi" ]; then
+            echo "\$(timestamp) ERROR: Input BCF index not found: \${INPUT_BCF}.csi"
+            exit 1
+        fi
+        
+        # Validate the BCF file can be read
+        echo "\$(timestamp) Validating input BCF file can be read..."
+        HEADER_CHECK=\$(bcftools view -h "\$INPUT_BCF" 2>&1)
+        if [ \$? -ne 0 ]; then
+            echo "\$(timestamp) ERROR: Cannot read input BCF file. Details:"
+            echo "\$HEADER_CHECK"
+            exit 1
+        fi
+        
+        # Get input variant count
+        input_variants=\$(bcftools index -n "\$INPUT_BCF".csi || echo "ERROR_COUNTING")
+        if [[ "\$input_variants" == "ERROR_COUNTING" ]]; then
+            echo "\$(timestamp) WARNING: Could not count input variants from index. Will try using stats..."
+            input_variants=\$(bcftools stats "\$INPUT_BCF" | grep "number of records:" | awk '{print \$4}' || echo "UNKNOWN")
+        fi
+        echo "\$(timestamp) Input file contains \$input_variants variants"
+        
+        # Check tool version
+        echo "\$(timestamp) Checking tool version..."
+        TOOL_VERSION_OUTPUT=\$(${params.annotation_tool_cmd} ${params.tool_version_command} 2>&1)
+        TOOL_VERSION_EXIT_CODE=\$?
+        if [ \$TOOL_VERSION_EXIT_CODE -ne 0 ]; then
+            echo "\$(timestamp) ERROR: Failed to determine tool version. Exit code: \$TOOL_VERSION_EXIT_CODE"
+            echo "\$(timestamp) Command output: \$TOOL_VERSION_OUTPUT"
+            exit 1
+        fi
+        
+        TOOL_VERSION=\$(echo "\$TOOL_VERSION_OUTPUT" | ${params.tool_version_regex})
+        if [ -z "\$TOOL_VERSION" ]; then
+            echo "\$(timestamp) ERROR: Unable to extract tool version using regex. Output: \$TOOL_VERSION_OUTPUT"
+            exit 1
+        fi
+        echo "\$(timestamp) Tool version detected: \$TOOL_VERSION"
+        
+        if [ "\$TOOL_VERSION" != "${params.required_tool_version}" ]; then
+            echo "\$(timestamp) ERROR: Tool version mismatch. Found \$TOOL_VERSION but required ${params.required_tool_version}"
+            exit 1
+        fi
+        
+        # Begin annotation
+        echo "\$(timestamp) =========================================="
+        echo "\$(timestamp) STARTING ANNOTATION COMMAND"
+        echo "\$(timestamp) Command: ${params.annotation_cmd}"
+        echo "\$(timestamp) =========================================="
+        
+        # Wrap the annotation command in time to measure performance
+        # Use set -o pipefail to ensure pipeline errors are caught
+        set -o pipefail
+        START_TIME=\$(date +%s)
+        
+        # Execute the annotation command and capture its exit code
+        { 
+            echo "\$(timestamp) ANNOTATION COMMAND OUTPUT BEGIN:"
+            echo ""
+            ${params.annotation_cmd}
+            ANNOTATION_CMD_STATUS=\$?
+            echo ""
+            echo "\$(timestamp) ANNOTATION COMMAND OUTPUT END"
+        } 2>&1
+        
+        END_TIME=\$(date +%s)
+        DURATION=\$((END_TIME - START_TIME))
+        
+        echo "\$(timestamp) Annotation command completed with exit code: \$ANNOTATION_CMD_STATUS (took \$DURATION seconds)"
+        
+        if [ \$ANNOTATION_CMD_STATUS -ne 0 ]; then
+            echo "\$(timestamp) ERROR: Annotation command failed with exit code \$ANNOTATION_CMD_STATUS"
+            exit \$ANNOTATION_CMD_STATUS
+        fi
+        
+        # Validate output file was created
+        if [ ! -f "\$OUTPUT_BCF" ]; then
+            echo "\$(timestamp) ERROR: Output file \$OUTPUT_BCF was not created"
+            exit 1
+        fi
+        
+        # Create index if it doesn't exist
+        if [ ! -f "\$OUTPUT_BCF.csi" ]; then
+            echo "\$(timestamp) Creating index for output BCF..."
+            bcftools index -f "\$OUTPUT_BCF"
+            if [ \$? -ne 0 ]; then
+                echo "\$(timestamp) ERROR: Failed to create index for output BCF"
+                exit 1
+            fi
+        fi
+        
+        # Check output variants
+        output_variants=\$(bcftools index -n "\$OUTPUT_BCF".csi || echo "ERROR_COUNTING")
+        if [[ "\$output_variants" == "ERROR_COUNTING" ]]; then
+            echo "\$(timestamp) WARNING: Could not count output variants from index. Will try using stats..."
+            output_variants=\$(bcftools stats "\$OUTPUT_BCF" | grep "number of records:" | awk '{print \$4}' || echo "UNKNOWN")
+        fi
+        
+        echo "\$(timestamp) ANNOTATION SUMMARY:"
+        echo "\$(timestamp) - Input variants: \$input_variants"
+        echo "\$(timestamp) - Output variants: \$output_variants"
+        echo "\$(timestamp) - Duration: \$DURATION seconds"
+        
+        # Check if we have the required INFO tag
+        if [[ -n "${params.must_contain_info_tag}" ]]; then
+            echo "\$(timestamp) Checking for required INFO tag: ${params.must_contain_info_tag}"
+            INFO_TAG_CHECK=\$(bcftools view -h "\$OUTPUT_BCF" | grep "ID=${params.must_contain_info_tag}," || echo "")
+            
+            if [ -z "\$INFO_TAG_CHECK" ]; then
+                echo "\$(timestamp) ERROR: Required INFO tag ${params.must_contain_info_tag} not found in output BCF"
+                echo "\$(timestamp) Header contains these INFO tags:"
+                bcftools view -h "\$OUTPUT_BCF" | grep "^##INFO"
+                exit 1
+            else
+                echo "\$(timestamp) Required INFO tag ${params.must_contain_info_tag} found in output BCF"
+            fi
+        fi
+        
+        # Check if output count is too low compared to input (potential data loss)
+        if [[ "\$output_variants" != "UNKNOWN" && "\$input_variants" != "UNKNOWN" ]]; then
+            if (( output_variants < input_variants * 90 / 100 )); then
+                echo "\$(timestamp) WARNING: Output variant count is significantly lower than input count."
+                echo "\$(timestamp) This may indicate data loss during annotation."
+                echo "\$(timestamp) Input: \$input_variants, Output: \$output_variants ($(( output_variants * 100 / input_variants ))% preserved)"
+            fi
+        fi
+        
+        echo "\$(timestamp) =========================================="
+        echo "\$(timestamp) ANNOTATION PROCESS COMPLETED SUCCESSFULLY"
+        echo "\$(timestamp) =========================================="
+        
+    } 2>&1 | tee vcfstash_annotated.log
+    
+    # Final error check - if the log contains ERROR, fail the process
+    grep -q "ERROR:" vcfstash_annotated.log
+    if [ \$? -eq 0 ]; then
+        echo "Critical errors found in log file. Failing process."
         exit 1
     fi
-    echo "Tool version detected: \$TOOL_VERSION"
-
-	if [ "\$TOOL_VERSION" != "${params.required_tool_version}" ]; then
-		echo "Error: Tool version mismatch. Found \$TOOL_VERSION but required ${params.required_tool_version}" >&2
-		exit 1
-	fi
-
-    echo "Executing command: ${params.annotation_cmd}"
-    ${params.annotation_cmd}
-
-    # # Check output files and report variant counts
-    if [ ! -f "\$OUTPUT_BCF" ]; then
-        echo "Error: Output file vcfstash_annotated.bcf was not created" >&2
-        exit 1
-    fi
-
-    input_variants=\$(bcftools index -n "\$INPUT_BCF".csi)
-    output_variants=\$(bcftools index -n "\$OUTPUT_BCF".csi)
-    echo "Annotation complete: Input variants: \${input_variants}, Output variants: \${output_variants}"
-	} 2>&1 | tee vcfstash_annotated.log
-
     """
 }
 
