@@ -38,38 +38,20 @@ process RunAnnotation {
     # Create the annotation command from params
     CMD="${params.annotation_cmd}"
 
-    # Version check - only run if required_tool_version is specified
-    if [ -n "${params.required_tool_version}" ]; then
-        echo "[`date`] Checking tool version..." | tee -a vcfstash_annotated.log
-
-        # Handle tool version check based on whether tool_version_command is provided
-        if [ -n "${params.tool_version_command}" ]; then
-            # Get version output using the specified command
-            TOOL_VERSION_OUTPUT=\$(${params.annotation_tool_cmd} ${params.tool_version_command})
-
-            # Process the output with regex if provided, otherwise use output as-is
-            TOOL_VERSION=\$(if [ ! -z "${params.tool_version_regex}" ]; then echo "\$TOOL_VERSION_OUTPUT" | ${params.tool_version_regex}; else echo "\$TOOL_VERSION_OUTPUT"; fi)
-
-            # Verify we got a version
-            if [ -z "\$TOOL_VERSION" ]; then
-                echo "[`date`] ERROR: Unable to determine tool version. Output: \$TOOL_VERSION_OUTPUT" | tee -a vcfstash_annotated.log
-                exit 1
-            fi
-
-            echo "[`date`] Tool version detected: \$TOOL_VERSION" | tee -a vcfstash_annotated.log
-
-            # Check if the version matches the required version
-            if [ "\$TOOL_VERSION" != "${params.required_tool_version}" ]; then
-                echo "[`date`] ERROR: Tool version mismatch. Found \$TOOL_VERSION but required ${params.required_tool_version}" | tee -a vcfstash_annotated.log
-                exit 1
-            fi
-        else
-            # When tool_version_command is empty, skip actual version check
-            echo "[`date`] INFO: Tool version command is empty. Skipping explicit version check." | tee -a vcfstash_annotated.log
-            echo "[`date`] INFO: Required version: ${params.required_tool_version}" | tee -a vcfstash_annotated.log
-        fi
+    echo "Checking tool version..."
+    TOOL_VERSION_OUTPUT=\$(${params.annotation_tool_cmd} ${params.tool_version_command})
+    REGEX_CMD=\$([ ! -z "${params.tool_version_regex}" ] && echo "| ${params.tool_version_regex}" || echo "")
+	TOOL_VERSION=\$(echo "\$TOOL_VERSION_OUTPUT" \$REGEX_CMD)
+    if [ -z "\$TOOL_VERSION" ]; then
+        echo "Error: Unable to determine tool version. Output: \$TOOL_VERSION_OUTPUT" >&2
+        exit 1
     fi
+    echo "Tool version detected: \$TOOL_VERSION"
 
+	if [[ "\$TOOL_VERSION" != "${params.required_tool_version}"* ]]; then
+		echo "[`date`] ERROR: Tool version mismatch. Found \$TOOL_VERSION but required ${params.required_tool_version}" | tee -a vcfstash_annotated.log
+		exit 1
+	fi
 
     # Execute the annotation command
     eval \$CMD 2> >(tee -a vcfstash_annotated.log >&2)
