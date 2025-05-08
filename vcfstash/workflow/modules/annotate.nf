@@ -38,11 +38,11 @@ process RunAnnotation {
     # Create the annotation command from params
     CMD="${params.annotation_cmd}"
 
-	# Simple one-liner version check
+	# Simplified one-liner version check that properly handles variable scope
 	if [ -n "${params.required_tool_version}" ]; then
-		TOOL_VERSION=`${params.bcftools_cmd} ${params.tool_version_command} | tr -d '\n'` && \
-		if [ -n "${params.tool_version_regex}" ]; then TOOL_VERSION=`echo "$TOOL_VERSION" | eval ${params.tool_version_regex}`; fi && \
-		if [ "$TOOL_VERSION" != "${params.required_tool_version}" ]; then echo "ERROR: Version mismatch: found $TOOL_VERSION, required ${params.required_tool_version}" && exit 1; fi
+		TOOL_VERSION=$(${params.bcftools_cmd} ${params.tool_version_command}) && \
+		[ -n "${params.tool_version_regex}" ] && TOOL_VERSION=$(echo "$TOOL_VERSION" | ${params.tool_version_regex}) || true && \
+		[ "$TOOL_VERSION" = "${params.required_tool_version}" ] || { echo "[`date`] ERROR: Tool version $TOOL_VERSION does not match required version ${params.required_tool_version}" | tee -a vcfstash_annotated.log; exit 1; }
 	fi
 
     # Execute the annotation command
