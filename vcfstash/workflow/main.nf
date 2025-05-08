@@ -34,15 +34,15 @@ def validateParams() {
     }
 
     // Validate db_bcf file exists if specified
-	if (params.db_bcf != null && !file(params.db_bcf).exists()) {
-	   error "Database BCF file not found: ${params.db_bcf}"
-	}
+    if (params.db_bcf != null && !file(params.db_bcf).exists()) {
+       error "Database BCF file not found: ${params.db_bcf}"
+    }
 
     if (params.db_mode == 'annotate' && !params.db_bcf) {
         error "Database BCF file (--db_bcf) is required for annotate mode"
     }
 
-	// Require must_contain_info_tag for annotation-related modes
+    // Require must_contain_info_tag for annotation-related modes
     if ((params.db_mode == 'stash-annotate' || params.db_mode == 'annotate') &&
         (!params.containsKey('must_contain_info_tag') || params.must_contain_info_tag.trim().isEmpty())) {
         error "must_contain_info_tag parameter is required and cannot be empty for annotation modes"
@@ -53,7 +53,6 @@ def validateParams() {
     if (!outDir.exists()) {
         outDir.mkdirs()
     }
-
 }
 
 workflow {
@@ -79,36 +78,46 @@ workflow {
     if (params.db_mode == 'stash-annotate') {
         // For annotation mode, use db_bcf as the input
         vcf = file(params.db_bcf)
+
+        // Handle index file - need to make sure it's a simple file path
         vcf_index = file("${params.db_bcf}.csi")
 
         // Direct annotation without normalization
         ANNOTATE(
-			vcf,
-			vcf_index
-		)
+            vcf,
+            vcf_index
+        )
 
-		// Publish annotated database
-
+        // Publish annotated database
         ANNOTATE.out.annotated_bcf.subscribe { bcf ->
             file(bcf).copyTo("${outputDir}/vcfstash_annotated.bcf")
         }
         ANNOTATE.out.annotated_bcf_index.subscribe { idx ->
             file(idx).copyTo("${outputDir}/vcfstash_annotated.bcf.csi")
         }
-		ANNOTATE.out.annotated_bcf_log.subscribe { log ->
-			file(log).copyTo("${outputDir}/vcfstash_annotated.bcf.log")
-		}
+        ANNOTATE.out.annotated_bcf_log.subscribe { log ->
+            file(log).copyTo("${outputDir}/vcfstash_annotated.bcf.log")
+        }
 
-    } else { // in all other modes were gonna have some sort of input that requires normalization
+        // Copy all auxiliary files using flatten to handle the collection properly
+        ANNOTATE.out.aux_files.flatten().ifEmpty([]).subscribe { aux_file ->
+            if (aux_file != null && file(aux_file).exists()) {
+                // Get just the filename part
+                def filename = file(aux_file).getName()
+                file(aux_file).copyTo("${outputDir}/${filename}")
+            }
+        }
+
+    } else { // in all other modes we're gonna have some sort of input that requires normalization
         vcf = file(params.input)
         vcf_index = file("${params.input}.csi")
 
         UTILS(
-			sampleName,
-			outputDir,
-			vcf,
-			chr_add,
-			reference
+            sampleName,
+            outputDir,
+            vcf,
+            chr_add,
+            reference
         )
 
         def remove_gt = params.db_mode.startsWith('stash-')
@@ -160,12 +169,12 @@ workflow {
                 file(log).copyTo("${outputDir}/vcfstash.bcf.log")
             }
 
-		} else if (params.db_mode == 'annotate-nocache') {
-			// annotate: DIRECT_ANNOTATION_WORKFLOW - Direct VCF annotation without database comparison
-			ANNOTATE(
-				NORMALIZE.out.norm_bcf,
-				NORMALIZE.out.norm_bcf_index
-			)
+        } else if (params.db_mode == 'annotate-nocache') {
+            // annotate: DIRECT_ANNOTATION_WORKFLOW - Direct VCF annotation without database comparison
+            ANNOTATE(
+                NORMALIZE.out.norm_bcf,
+                NORMALIZE.out.norm_bcf_index
+            )
 
             // Publish annotated database
             ANNOTATE.out.annotated_bcf.subscribe { bcf ->
@@ -178,8 +187,17 @@ workflow {
                 file(log).copyTo("${outputDir}/${sampleName}_vst.bcf.log")
             }
 
-		} else if (params.db_mode == 'annotate') {
-			// annotate: SAMPLE_ANALYSIS_WORKFLOW - Sample comparison against database using bcftools annotate
+            // Copy all auxiliary files using flatten to handle the collection properly
+            ANNOTATE.out.aux_files.flatten().ifEmpty([]).subscribe { aux_file ->
+                if (aux_file != null && file(aux_file).exists()) {
+                    // Get just the filename part
+                    def filename = file(aux_file).getName()
+                    file(aux_file).copyTo("${outputDir}/${filename}")
+                }
+            }
+
+        } else if (params.db_mode == 'annotate') {
+            // annotate: SAMPLE_ANALYSIS_WORKFLOW - Sample comparison against database using bcftools annotate
             db_bcf = file(params.db_bcf)
             db_bcf_index = file("${params.db_bcf}.csi")
 
@@ -228,8 +246,14 @@ workflow {
                 file(log).copyTo("${outputDir}/${sampleName}_norm.bcf.log")
             }
 
-		}
-	}
+            // Copy all auxiliary files using flatten to handle the collection properly
+            ANNOTATE.out.aux_files.flatten().ifEmpty([]).subscribe { aux_file ->
+                if (aux_file != null && file(aux_file).exists()) {
+                    // Get just the filename part
+                    def filename = file(aux_file).getName()
+                    file(aux_file).copyTo("${outputDir}/${filename}")
+                }
+            }
+        }
+    }
 }
-
-

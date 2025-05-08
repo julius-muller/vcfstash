@@ -1,8 +1,7 @@
 process Annotate {
     debug true
-    // Add error strategy to retry on failure
-    errorStrategy { task.attempt <= 1 ? 'retry' : 'terminate' }
-    maxRetries 1
+    // No retry strategy as requested
+    errorStrategy 'terminate'
 
     // Add resource tracking
     time { params.containsKey('annotation_max_time') ? params.annotation_max_time : '24h' }
@@ -16,6 +15,7 @@ process Annotate {
     path "vcfstash_annotated.bcf", emit: anno_bcf
     path "vcfstash_annotated.bcf.csi", emit: anno_bcf_index
     path "vcfstash_annotated.log", emit: anno_bcf_log
+    path "auxiliary/*", emit: aux_files, optional: true
 
     script:
     """
@@ -23,6 +23,9 @@ process Annotate {
     timestamp() {
         date +"[%Y-%m-%d %H:%M:%S]"
     }
+
+    # Create auxiliary directory for all additional files
+    mkdir -p auxiliary
 
     # Setup logging with timestamps and redirections
     {
@@ -36,14 +39,15 @@ process Annotate {
         echo "\$(timestamp)   - CPUs: ${task.cpus}"
         echo "\$(timestamp)   - Memory: ${task.memory}"
         echo "\$(timestamp)   - Time: ${task.time}"
-        echo "\$(timestamp) =========================================="
+        echo "\$(timestamp) ==========================================".
 
-        # Use current directory for all files
-        export INPUT_BCF="${input_bcf}"
-        export OUTPUT_BCF="vcfstash_annotated.bcf"
-        export OUTPUT_DIR="\$PWD"
+        # Define key variables locally
+        INPUT_BCF="${input_bcf}"
+        TEMP_OUTPUT_BCF="auxiliary/vcfstash_annotated.bcf"
+        OUTPUT_BCF="vcfstash_annotated.bcf"
+        OUTPUT_DIR="auxiliary"
 
-        echo "\$(timestamp) Using current directory for all output files: \$OUTPUT_DIR"
+        echo "\$(timestamp) Using auxiliary directory for additional output files: \$OUTPUT_DIR"
 
         # Check input file integrity
         echo "\$(timestamp) Checking input file integrity..."
@@ -111,8 +115,15 @@ process Annotate {
         {
             echo "\$(timestamp) ANNOTATION COMMAND OUTPUT BEGIN:"
             echo ""
-            ${params.annotation_cmd}
+
+            # Replace OUTPUT_BCF with our defined path in the annotation command
+            ANNOTATION_CMD="${params.annotation_cmd}"
+            ANNOTATION_CMD=\$(echo "\$ANNOTATION_CMD" | sed "s|vcfstash_annotated.bcf|auxiliary/vcfstash_annotated.bcf|g")
+
+            # Execute the modified command
+            eval "\$ANNOTATION_CMD"
             ANNOTATION_CMD_STATUS=\$?
+
             echo ""
             echo "\$(timestamp) ANNOTATION COMMAND OUTPUT END"
         } 2>&1
@@ -128,15 +139,15 @@ process Annotate {
         fi
 
         # Validate output file was created
-        if [ ! -f "\$OUTPUT_BCF" ]; then
-            echo "\$(timestamp) ERROR: Output file \$OUTPUT_BCF was not created"
+        if [ ! -f "\$TEMP_OUTPUT_BCF" ]; then
+            echo "\$(timestamp) ERROR: Output file \$TEMP_OUTPUT_BCF was not created"
             exit 1
         fi
 
         # Create index if it doesn't exist
-        if [ ! -f "\$OUTPUT_BCF.csi" ]; then
+        if [ ! -f "\$TEMP_OUTPUT_BCF.csi" ]; then
             echo "\$(timestamp) Creating index for output BCF..."
-            bcftools index -f "\$OUTPUT_BCF"
+            bcftools index -f "\$TEMP_OUTPUT_BCF"
             if [ \$? -ne 0 ]; then
                 echo "\$(timestamp) ERROR: Failed to create index for output BCF"
                 exit 1
@@ -144,10 +155,10 @@ process Annotate {
         fi
 
         # Check output variants - redirect stderr to /dev/null to suppress warnings
-        output_variants=\$(bcftools index -n "\$OUTPUT_BCF".csi 2>/dev/null || echo "ERROR_COUNTING")
+        output_variants=\$(bcftools index -n "\$TEMP_OUTPUT_BCF".csi 2>/dev/null || echo "ERROR_COUNTING")
         if [[ "\$output_variants" == "ERROR_COUNTING" ]]; then
             echo "\$(timestamp) WARNING: Could not count output variants from index. Will try using stats..."
-            output_variants=\$(bcftools stats "\$OUTPUT_BCF" | grep "number of records:" | awk '{print \$4}' || echo "UNKNOWN")
+            output_variants=\$(bcftools stats "\$TEMP_OUTPUT_BCF" | grep "number of records:" | awk '{print \$4}' || echo "UNKNOWN")
         fi
 
         echo "\$(timestamp) ANNOTATION SUMMARY:"
@@ -158,12 +169,12 @@ process Annotate {
         # Check if we have the required INFO tag
         if [[ -n "${params.must_contain_info_tag}" ]]; then
             echo "\$(timestamp) Checking for required INFO tag: ${params.must_contain_info_tag}"
-            INFO_TAG_CHECK=\$(bcftools view -h "\$OUTPUT_BCF" | grep "ID=${params.must_contain_info_tag}," || echo "")
+            INFO_TAG_CHECK=\$(bcftools view -h "\$TEMP_OUTPUT_BCF" | grep "ID=${params.must_contain_info_tag}," || echo "")
 
             if [ -z "\$INFO_TAG_CHECK" ]; then
                 echo "\$(timestamp) ERROR: Required INFO tag ${params.must_contain_info_tag} not found in output BCF"
                 echo "\$(timestamp) Header contains these INFO tags:"
-                bcftools view -h "\$OUTPUT_BCF" | grep "^##INFO"
+                bcftools view -h "\$TEMP_OUTPUT_BCF" | grep "^##INFO"
                 exit 1
             else
                 echo "\$(timestamp) Required INFO tag ${params.must_contain_info_tag} found in output BCF"
@@ -179,13 +190,13 @@ process Annotate {
                 echo "\$(timestamp) Input: \$input_variants, Output: \$output_variants (\$percent% preserved)"
             fi
         fi
-        
+
         echo "\$(timestamp) =========================================="
         echo "\$(timestamp) ANNOTATION PROCESS COMPLETED SUCCESSFULLY"
         echo "\$(timestamp) =========================================="
-        
+
     } 2>&1 | tee vcfstash_annotated.log
-    
+
     # Modified error check - only look for critical errors, not warnings
     # Check for ERROR: but ignore lines with "ERROR_COUNTING" which is just a marker for our counting function
     grep "ERROR:" vcfstash_annotated.log | grep -v "ERROR_COUNTING" > error_lines.txt || true
@@ -194,6 +205,13 @@ process Annotate {
         cat error_lines.txt
         exit 1
     fi
+
+    # Copy annotation results back to the main directory
+    cp auxiliary/vcfstash_annotated.bcf vcfstash_annotated.bcf
+    cp auxiliary/vcfstash_annotated.bcf.csi vcfstash_annotated.bcf.csi
+
+    # List all files in auxiliary for debugging
+    ls -la auxiliary/ || true
     """
 }
 
@@ -212,4 +230,5 @@ workflow ANNOTATE {
     annotated_bcf = annotation_result.anno_bcf
     annotated_bcf_index = annotation_result.anno_bcf_index
     annotated_bcf_log = annotation_result.anno_bcf_log
+    aux_files = annotation_result.aux_files
 }
