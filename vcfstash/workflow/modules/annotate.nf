@@ -1,8 +1,8 @@
 process Annotate {
     debug true
     // Add error strategy to retry on failure
-    errorStrategy { task.attempt <= 2 ? 'retry' : 'terminate' }
-    maxRetries 2
+    errorStrategy { task.attempt <= 1 ? 'retry' : 'terminate' }
+    maxRetries 1
     
     // Add resource tracking
     time { params.containsKey('annotation_max_time') ? params.annotation_max_time : '24h' }
