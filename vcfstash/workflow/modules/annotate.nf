@@ -38,13 +38,12 @@ process Annotate {
         echo "\$(timestamp)   - Time: ${task.time}"
         echo "\$(timestamp) =========================================="
         
-        # Export variables for use in the command
+        # Use current directory for all files
         export INPUT_BCF="${input_bcf}"
         export OUTPUT_BCF="vcfstash_annotated.bcf"
-        # Create output directory for annotation tools to write auxiliary files
-        export OUTPUT_DIR="${task.workDir}"
-        mkdir -p "\$OUTPUT_DIR"
-        echo "\$(timestamp) Created output directory for auxiliary files: \$OUTPUT_DIR"
+        export OUTPUT_DIR="\$PWD"
+        
+        echo "\$(timestamp) Using current directory for all output files: \$OUTPUT_DIR"
         
         # Check input file integrity
         echo "\$(timestamp) Checking input file integrity..."
