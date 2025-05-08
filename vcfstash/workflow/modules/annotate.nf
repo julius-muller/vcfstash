@@ -37,41 +37,10 @@ process RunAnnotation {
 
     # Create the annotation command from params
     CMD="${params.annotation_cmd}"
-
-	# Check if required version is specified and valid
 	if [ -n "${params.required_tool_version}" ]; then
-		# Use mktemp for safe temporary files
-		VERSION_OUT=$(mktemp)
-		VERSION_ERR=$(mktemp)
-
-		# Run the version command and capture output and error
-		if ! ${params.bcftools_cmd} ${params.tool_version_command} > "$VERSION_OUT" 2> "$VERSION_ERR"; then
-			echo "[`date`] ERROR: Failed to get tool version. STDERR:" | tee -a vcfstash_annotated.log
-			cat "$VERSION_ERR" | tee -a vcfstash_annotated.log
-			rm -f "$VERSION_OUT" "$VERSION_ERR"
-			exit 2
-		fi
-
-		# If version_regex is set, extract version
-		if [ -n "${params.tool_version_regex}" ]; then
-			TOOL_VERSION=$(cat "$VERSION_OUT" | eval ${params.tool_version_regex})
-		else
-			TOOL_VERSION=$(cat "$VERSION_OUT")
-		fi
-
-		echo "[`date`] DEBUG: Tool version detected: $TOOL_VERSION" | tee -a vcfstash_annotated.log
-
-		if [ "$TOOL_VERSION" != "${params.required_tool_version}" ]; then
-			echo "[`date`] ERROR: Tool version $TOOL_VERSION does not match required version ${params.required_tool_version}" | tee -a vcfstash_annotated.log
-			rm -f "$VERSION_OUT" "$VERSION_ERR"
-			exit 1
-		fi
-
-		rm -f "$VERSION_OUT" "$VERSION_ERR"
-fi
-
-
-
+		TOOL_VERSION=`${params.bcftools_cmd} ${params.tool_version_command} | ${params.tool_version_regex:+${params.tool_version_regex} || cat}` && \
+		[ "$TOOL_VERSION" = "${params.required_tool_version}" ] || { echo "[`date`] ERROR: Tool version $TOOL_VERSION does not match required version ${params.required_tool_version}" | tee -a vcfstash_annotated.log; exit 1; }
+	fi
 
     # Execute the annotation command
     eval \$CMD 2> >(tee -a vcfstash_annotated.log >&2)
