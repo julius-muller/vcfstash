@@ -15,14 +15,28 @@ process Annotate {
     path "vcfstash_annotated.log", emit: anno_bcf_log
 
     script:
-    // Process annotation command to handle variable substitution
-    def processedCmd = params.annotation_cmd
-        .replace('${INPUT_BCF}', input_bcf.toString())
-        .replace('$INPUT_BCF', input_bcf.toString())
-        .replace('${OUTPUT_BCF}', "vcfstash_annotated.bcf")
-        .replace('$OUTPUT_BCF', "vcfstash_annotated.bcf")
-        .replace('${OUTPUT_DIR}', "\$PWD")
-        .replace('$OUTPUT_DIR', "\$PWD")
+    // Create a new method to handle variable substitution in a more robust way
+    // Instead of using string replacement, create a temp file with proper substitution
+    def createProcessedCommandFile() {
+        def tempFile = task.workDir.resolve('annotation_command.sh')
+        def commandText = params.annotation_cmd
+        
+        // Write the command to a file with the variables defined at the top
+        tempFile.text = """
+        	#!/bin/bash
+			# Define variables that will be used in the command
+			INPUT_BCF="${input_bcf}"
+			OUTPUT_BCF="vcfstash_annotated.bcf"
+			OUTPUT_DIR="\$PWD"
+
+			# The actual command follows
+			${commandText}
+		"""
+        return tempFile.toString()
+    }
+    
+    // Generate the command file
+    def commandFile = createProcessedCommandFile()
     
     """
     # Create a timestamp function for better logging
@@ -100,6 +114,9 @@ process Annotate {
         echo "\$(timestamp) STARTING ANNOTATION COMMAND"
         echo "\$(timestamp) =========================================="
         
+        # Make the command file executable
+        chmod +x ${commandFile}
+        
         # Wrap the annotation command in time to measure performance
         # Use set -o pipefail to ensure pipeline errors are caught
         set -o pipefail
@@ -109,7 +126,7 @@ process Annotate {
         { 
             echo "\$(timestamp) ANNOTATION COMMAND OUTPUT BEGIN:"
             echo ""
-            ${processedCmd}
+            ${commandFile}
             ANNOTATION_CMD_STATUS=\$?
             echo ""
             echo "\$(timestamp) ANNOTATION COMMAND OUTPUT END"
