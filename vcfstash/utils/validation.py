@@ -138,32 +138,6 @@ def check_vep_installed(yaml_path: Path) -> Tuple[bool, Optional[str]]:
     except Exception as e:
         return False, f"Error checking VEP installation: {e}"
 
-
-def check_reference_output_exists() -> Tuple[bool, Optional[str]]:
-    """
-    Check if the expected output directories from update_reference.py exist.
-
-    Returns:
-        Tuple of (exists, error_message)
-    """
-    from vcfstash.utils.paths import get_vcfstash_root
-
-    # Define the expected output directories
-    stash_dir = get_vcfstash_root() / "tests" / "data" / "expected_output" / "stash_result"
-    annotate_dir = get_vcfstash_root() / "tests" / "data" / "expected_output" / "annotate_result"
-
-    # Check if both directories exist
-    if not stash_dir.exists():
-        return False, f"Stash directory not found: {stash_dir}"
-
-    if not annotate_dir.exists():
-        return False, f"Annotate directory not found: {annotate_dir}"
-
-    return True, None
-
-
-
-
 def compute_md5(file_path: Path) -> str:
     """
 

@@ -1,4 +1,3 @@
-
 """
 VCF Annotation Cache
 
@@ -162,7 +161,8 @@ def main() -> None:
             annotator.annotate(uncached=args.uncached, convert_parquet = args.parquet)
 
     except Exception as e:
-        logger.error(f"Error during execution: {e}", exc_info=True)
+        # Only log the top-level error without traceback - it will be shown by the raise
+        logger.error(f"Error during execution: {e}")
         raise  # This will show the full traceback
 
 

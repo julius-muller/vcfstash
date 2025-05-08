@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """
-update_reference_data.py - Script to update reference data for tests
+update_reference_data.py - Utility script for generating reference (golden) datasets for vcfstash tests.
+
+This script was originally intended to create a golden dataset for regression testing, but was later deprecated for automated test validation due to issues with versioning and reproducibility. However, it remains useful for generating output from the current test files, which can be used to manually compare results across different vcfstash versions or environments.
+
+The script runs the full vcfstash pipeline (stash-init, stash-add, stash-annotate, annotate) using test data, normalizes timestamps for reproducibility, and writes results to a designated output directory. This allows developers to inspect and compare outputs for debugging or validation purposes.
 """
 
 import re
-import sys
 from pathlib import Path
 import os
 import shutil
 import subprocess
 import tempfile
-import uuid
 from vcfstash.utils.paths import get_vcfstash_root, get_resource_path
 
 # Use Path for better path handling

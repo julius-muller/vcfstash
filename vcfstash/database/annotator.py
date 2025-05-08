@@ -1,11 +1,8 @@
 import os
-import re
 import shutil
 import sys
 import time
-
 import yaml
-
 from vcfstash.database.base import VCFDatabase, NextflowWorkflow
 from vcfstash.database.outputs import AnnotatedStashOutput, AnnotatedUserOutput
 from pathlib import Path
@@ -14,6 +11,7 @@ from datetime import datetime
 from multiprocessing import Pool
 import pysam
 from vcfstash.utils.logging import setup_logging
+from typing import Tuple, Optional
 
 class DatabaseAnnotator(VCFDatabase):
     """Handles database annotation workflows"""
@@ -121,7 +119,6 @@ class DatabaseAnnotator(VCFDatabase):
         """Validate input files, directories, and YAML parameters"""
         self.logger.debug("Validating inputs")
 
-
         # Validate VCF reference
         try:
             # Load YAML file to get reference path
@@ -148,12 +145,16 @@ class DatabaseAnnotator(VCFDatabase):
             valid, error_msg = self.validate_vcf_reference(self.blueprint_bcf, reference_path)
 
             if not valid:
-                self.logger.error(f"VCF reference validation failed: {error_msg}")
+                # Only log once and raise directly - don't log first and then raise
                 raise ValueError(f"VCF reference validation failed: {error_msg}")
 
             self.logger.info("VCF reference validation successful")
+        except ValueError:
+            # Don't log here, just re-raise the ValueError
+            raise
         except Exception as e:
-            self.logger.error(f"Error during VCF reference validation: {e}")
+            # For unexpected errors, log once and convert to RuntimeError
+            self.logger.error(f"Unexpected error during VCF reference validation: {e}")
             raise RuntimeError(f"Error during VCF reference validation: {e}")
 
         self.logger.debug("Input validation successful")
@@ -309,14 +310,6 @@ class VCFAnnotator(VCFDatabase):
         """Validate input files, directories, and YAML parameters"""
         self.logger.debug("Validating inputs")
 
-        # Check input VCF/BCF if provided
-        if self.input_vcf:
-            if not self.input_vcf.exists():
-                msg = f"Input VCF/BCF file not found: {self.input_vcf}"
-                self.logger.error(msg)
-                raise FileNotFoundError(msg)
-            self.ensure_indexed(self.input_vcf)
-
         # Validate VCF reference
         try:
             # Load YAML file to get reference path
@@ -325,33 +318,135 @@ class VCFAnnotator(VCFDatabase):
             # Get reference path from YAML
             reference_path_str = params_yaml.get('reference')
             if not reference_path_str:
-                self.logger.error("Reference path not found in YAML file")
                 raise ValueError("Reference path not found in YAML file")
 
             # Expand environment variables in reference path
             if "${VCFSTASH_ROOT}" in reference_path_str:
                 vcfstash_root = os.environ.get("VCFSTASH_ROOT")
                 if not vcfstash_root:
-                    self.logger.error("VCFSTASH_ROOT environment variable not set")
                     raise ValueError("VCFSTASH_ROOT environment variable not set")
                 reference_path_str = reference_path_str.replace("${VCFSTASH_ROOT}", vcfstash_root)
 
             reference_path = Path(reference_path_str).expanduser().resolve()
 
-            # Validate VCF reference
-            self.logger.info(f"Validating VCF reference: {reference_path}")
-            valid, error_msg = self.validate_vcf_reference(self.input_vcf, reference_path)
+            # Get chr_add mapping file
+            chr_add_path_str = params_yaml.get('chr_add')
+            if not chr_add_path_str:
+                self.logger.warning("chr_add path not found in YAML file, chromosome mapping will not be used")
+                chr_add_map = {}
+            else:
+                # Load chromosome mapping from chr_add file
+                chr_add_path = Path(chr_add_path_str).expanduser().resolve()
+                if not chr_add_path.exists():
+                    self.logger.warning(f"chr_add file not found at {chr_add_path}, chromosome mapping will not be used")
+                    chr_add_map = {}
+                else:
+                    chr_add_map = {}
+                    with open(chr_add_path, 'r') as f:
+                        for line in f:
+                            parts = line.strip().split()
+                            if len(parts) >= 2:
+                                chr_add_map[parts[0]] = parts[1]
+                self.logger.debug(f"Loaded {len(chr_add_map)} chromosome mappings from {chr_add_path}")
 
+            # Validate VCF reference with chromosome mapping consideration
+            self.logger.info(f"Validating VCF reference: {reference_path}")
+            valid, error_msg = self._validate_with_chr_mapping(self.input_vcf, reference_path, chr_add_map)
+        
             if not valid:
-                self.logger.error(f"VCF reference validation failed: {error_msg}")
                 raise ValueError(f"VCF reference validation failed: {error_msg}")
 
             self.logger.info("VCF reference validation successful")
+        except ValueError as e:
+            # Don't add extra error context, just re-raise
+            raise
         except Exception as e:
-            self.logger.error(f"Error during VCF reference validation: {e}")
-            raise RuntimeError(f"Error during VCF reference validation: {e}")
+            # For unexpected errors, create a clearer message
+            self.logger.error(f"Unexpected error during VCF reference validation: {str(e)}")
+            raise RuntimeError(f"Error during VCF reference validation: {str(e)}")
 
         self.logger.debug("Input validation successful")
+
+    def _validate_with_chr_mapping(self, vcf_path: Path, ref_fasta: Path, chr_map: dict) -> Tuple[bool, Optional[str]]:
+        """
+        Validates a VCF file against a reference with chromosome name mapping.
+        
+        Args:
+            vcf_path: Path to the VCF/BCF file
+            ref_fasta: Path to the reference FASTA file
+            chr_map: Dictionary mapping VCF chromosome names to reference chromosome names
+            
+        Returns:
+            Tuple of (valid, error_message)
+        """
+        # Check if files exist
+        if not vcf_path.exists():
+            return False, f"VCF file not found: {vcf_path}"
+        if not ref_fasta.exists():
+            return False, f"Reference genome not found: {ref_fasta}"
+            
+        # Check for index files
+        vcf_index_csi = Path(str(vcf_path) + ".csi")
+        vcf_index_tbi = Path(str(vcf_path) + ".tbi")
+        ref_index = Path(str(ref_fasta) + ".fai")
+        
+        if not (vcf_index_csi.exists() or vcf_index_tbi.exists()):
+            return False, f"VCF index not found for {vcf_path}"
+        if not ref_index.exists():
+            return False, f"Reference index not found for {ref_fasta}"
+            
+        try:
+            # Load reference contigs from .fai
+            ref_contigs = set()
+            with open(ref_index, 'r') as f:
+                for line in f:
+                    contig = line.split('\t')[0]
+                    ref_contigs.add(contig)
+            
+            # Get VCF contigs
+            vcf_contigs = set()
+            vcf_index_file = vcf_index_csi if vcf_index_csi.exists() else vcf_index_tbi
+            
+            # Use bcftools to extract chromosomes from the index
+            cmd = ["bcftools", "index", "--stats", str(vcf_path)]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            # Parse chromosome names
+            for line in result.stdout.splitlines():
+                if '[' not in line and ']' not in line:
+                    parts = line.strip().split()
+                    if parts and parts[0]:
+                        vcf_contigs.add(parts[0])
+            
+            # Map VCF contigs to reference format using chr_map
+            mapped_vcf_contigs = set()
+            for contig in vcf_contigs:
+                # Try to map using chr_add.txt
+                if contig in chr_map:
+                    mapped_vcf_contigs.add(chr_map[contig])
+                # Or keep original if no mapping exists
+                else:
+                    mapped_vcf_contigs.add(contig)
+            
+            # Check if all mapped VCF contigs are in reference
+            missing_contigs = mapped_vcf_contigs - ref_contigs
+            if missing_contigs:
+                # Try reverse lookup in case we need to go the other way
+                reverse_mapped = set()
+                reverse_map = {v: k for k, v in chr_map.items()}
+                for contig in missing_contigs:
+                    if contig in reverse_map:
+                        reverse_mapped.add(reverse_map[contig])
+                    else:
+                        reverse_mapped.add(contig)
+            
+            still_missing = reverse_mapped - ref_contigs
+            if still_missing:
+                return False, f"Contigs in VCF not found in reference even after mapping: {', '.join(still_missing)}"
+            
+            return True, None
+        except Exception as e:
+            return False, f"Error validating VCF against reference: {str(e)}"
 
 
     def _setup_output(self, force:bool) -> None:
@@ -629,17 +724,3 @@ class VCFAnnotator(VCFDatabase):
                 "Please install them with: pip install pandas pyarrow"
             )
 
-    @staticmethod
-    def wavg(f1: float | None, f2: float | None, n1: int, n2: int) -> float | None:
-        """Weighted average for Allele Frequencies."""
-        total_weight = n1 + n2
-        if total_weight == 0:
-            return None
-        if f1 is not None and f2 is not None:
-            return (f1 * n1 + f2 * n2) / total_weight
-        elif f1 is None and f2 is None:
-            return None
-        elif f1 is None:
-            return f2
-        elif f2 is None:
-            return f1
