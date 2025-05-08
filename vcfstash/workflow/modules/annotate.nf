@@ -38,23 +38,6 @@ process RunAnnotation {
     # Create the annotation command from params
     CMD="${params.annotation_cmd}"
 
-    # Check if required version is specified and valid
-    if [ ! -z "${params.required_tool_version}" ]; then
-        # Safely handle command execution with or without regex
-        if [ -z "${params.tool_version_regex}" ]; then
-            TOOL_VERSION=\$(${params.bcftools_cmd} ${params.tool_version_command})
-        else
-            TOOL_VERSION=\$(${params.bcftools_cmd} ${params.tool_version_command} | ${params.tool_version_regex})
-        fi
-
-        echo "[`date`] Annotation tool version: \$TOOL_VERSION" | tee -a vcfstash_annotated.log
-
-        # Check if version meets requirement using bash version comparison
-        if [[ "\$TOOL_VERSION" != "${params.required_tool_version}" ]]; then
-            echo "[`date`] ERROR: Tool version \$TOOL_VERSION does not match required version ${params.required_tool_version}" | tee -a vcfstash_annotated.log
-            exit 1
-        fi
-    fi
 
 
     # Execute the annotation command
@@ -65,14 +48,6 @@ process RunAnnotation {
         echo "[`date`] ERROR: Annotation failed! Output file not created." | tee -a vcfstash_annotated.log
         exit 1
     fi
-
-
-    # Capture any other log files that might have been created
-    for log_file in *.log; do
-        if [ "\$log_file" != "vcfstash_annotated.log" ] && [ -f "\$log_file" ]; then
-            cp "\$log_file" \${AUXILIARY_DIR}/
-        fi
-    done
 
     # Check for required INFO tag
     if [ ! -z "${params.must_contain_info_tag}" ]; then
