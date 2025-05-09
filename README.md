@@ -74,6 +74,8 @@ VCFstash can also be run using Docker:
 ```bash
 # Build the Docker image
 docker build -f docker/Dockerfile -t vcfstash .
+# or using docker-compose
+docker-compose -f docker/docker-compose.yml build
 
 # Run VCFstash with Docker
 docker run --rm -v $(pwd):/data vcfstash --help
