@@ -55,6 +55,32 @@ uv pip install -e ".[dev]"
 
 That's it! VCFstash includes all required tools (bcftools, Nextflow) in the repository.
 
+### Testing Your Installation
+
+After installation, it's recommended to run the test suite to verify everything is working correctly:
+
+```bash
+# Run all tests (takes about a minute)
+python -m pytest
+
+# Run specific tests with increased verbosity
+python -m pytest -xvs tests/test_core.py
+```
+
+### Docker Installation
+
+VCFstash can also be run using Docker:
+
+```bash
+# Build the Docker image
+docker build -f docker/Dockerfile -t vcfstash .
+
+# Run VCFstash with Docker
+docker run --rm -v $(pwd):/data vcfstash --help
+```
+
+For more detailed Docker instructions, see the [Using Docker](#using-docker) section below or the [Wiki](WIKI.md#using-docker).
+
 ---
 
 ## 🏁 3-step quick-start for setting up a new cache
@@ -283,6 +309,7 @@ Just make sure your `params.yaml` file is properly configured for the new enviro
 - Run annotations on different compute clusters
 - Share pre-built annotation caches with team members
 - Integrate with any workflow management system
+- Use Docker for consistent environments (see [Using Docker](#using-docker))
 
 ## 🖥️ Resource Management
 
@@ -378,6 +405,58 @@ The cache is designed to be portable - you can copy an entire cache directory to
 - **Benefit from scale**: For large cohorts, the speedup increases with each additional sample added to the cache 
 - **Optimize I/O**: Consider using SSD storage for the cache directory to maximize performance
 - **Parallelize wisely**: Adjust CPU and memory settings in the Nextflow configuration based on your available resources
+
+## 🐳 Using Docker
+
+VCFstash provides Docker support for easy deployment and consistent execution across different environments.
+
+### Basic Docker Usage
+
+```bash
+# Build the Docker image
+docker build -f docker/Dockerfile -t vcfstash .
+
+# Run VCFstash with Docker
+docker run --rm vcfstash --help
+
+# Mount volumes for data access
+docker run --rm \
+  -v /path/to/reference:/reference:ro \
+  -v /path/to/data:/data \
+  -v /path/to/cache:/cache \
+  vcfstash stash-init \
+  --vcf /data/gnomad.vcf.gz \
+  --output /cache \
+  -y /data/params.yaml
+```
+
+### Using Docker Compose
+
+VCFstash includes a Docker Compose configuration for easier management of volumes and environment variables:
+
+```bash
+# Set environment variables (optional)
+export REFERENCE_DIR=/path/to/reference
+export DATA_DIR=/path/to/data
+export CACHE_DIR=/path/to/cache
+
+# Run VCFstash with Docker Compose
+docker-compose -f docker/docker-compose.yml run --rm vcfstash <command> <options>
+```
+
+### Helper Script
+
+For convenience, use the provided helper script:
+
+```bash
+# Make the script executable
+chmod +x docker/run-vcfstash.sh
+
+# Run VCFstash using the helper script
+./docker/run-vcfstash.sh <command> <options>
+```
+
+For more detailed Docker instructions and examples, see the [Wiki](WIKI.md#using-docker).
 
 ## 🧪 Testing & Validation
 

@@ -11,8 +11,9 @@ services:
       - ${CACHE_DIR:-./cache}:/cache
     environment:
       - REFERENCE_PATH=/reference
-    # The entrypoint is defined in the Dockerfile
-    # Override the command when running with docker-compose
+    # This container will stop after running the command
+    # Use "docker-compose run" to execute specific commands
+    command: --help
 
 volumes:
   cache:

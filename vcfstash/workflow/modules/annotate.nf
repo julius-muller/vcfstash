@@ -20,7 +20,6 @@ process RunAnnotation {
     echo "[`date`] VCFSTASH ANNOTATION PROCESS STARTED" | tee vcfstash_annotated.log
     echo "[`date`] ==========================================" | tee -a vcfstash_annotated.log
     echo "[`date`] Task ID: ${task.process} (${task.index})" | tee -a vcfstash_annotated.log
-    echo "[`date`] Working directory: ${task.workDir}" | tee -a vcfstash_annotated.log
     echo "[`date`] Input BCF file: ${input_bcf}" | tee -a vcfstash_annotated.log
     echo "[`date`] Input BCF index: ${input_bcf_index}" | tee -a vcfstash_annotated.log
     echo "[`date`] Allocated resources:" | tee -a vcfstash_annotated.log

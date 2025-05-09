@@ -1,13 +1,9 @@
 """Test annotate functionality of VCFstash."""
 
 import os
-import sys
-import json
-import pytest
 from pathlib import Path
 import subprocess
 import shutil
-import tempfile
 from vcfstash.utils.paths import get_vcfstash_root, get_resource_path
 
 # Constants
@@ -68,18 +64,19 @@ def run_stash_add(db_dir, input_vcf):
 def run_stash_annotate(db_dir, name, force=False):
     """Run the stash-annotate command and return the process result."""
 
-    try:
-        cmd = [
-            str(VCFSTASH_CMD),
-            "stash-annotate",
-            "--name", name,
-            "-a", str(TEST_ANNO_CONFIG),
-            "--db", str(db_dir),
-            "-y", TEST_PARAMS
-        ]
+    cmd = [
+        str(VCFSTASH_CMD),
+        "stash-annotate",
+        "--name", name,
+        "-a", str(TEST_ANNO_CONFIG),
+        "--db", str(db_dir),
+        "-y", TEST_PARAMS
+    ]
 
-        if force:
-            cmd.append("-f")
+    if force:
+        cmd.append("-f")
+
+    try:
 
         result = subprocess.run(
             cmd,
@@ -123,7 +120,7 @@ def test_sample_file_validity(test_output_dir):
     print("\n=== Testing sample file validity ===")
 
     # Get bcftools path for verification
-    bcftools_path = get_resource_path('tools/bcftools')
+    bcftools_path = get_resource_path(Path('tools/bcftools'))
     if not bcftools_path.exists():
         # Fall back to system bcftools if the project-specific one doesn't exist
         bcftools_path = 'bcftools'
@@ -192,7 +189,7 @@ def test_full_annotation_workflow(test_output_dir):
     assert annotate_result.returncode == 0, f"stash-annotate failed: {annotate_result.stderr}"
 
     # Get bcftools path for verification
-    bcftools_path = get_resource_path('tools/bcftools')
+    bcftools_path = get_resource_path(Path('tools/bcftools'))
     if not bcftools_path.exists():
         # Fall back to system bcftools if the project-specific one doesn't exist
         bcftools_path = 'bcftools'
@@ -322,7 +319,7 @@ def test_cached_vs_uncached_annotation(test_output_dir, params_file):
     print("Comparing outputs...")
 
     # Get bcftools path for comparison
-    bcftools_path = get_resource_path('tools/bcftools')
+    bcftools_path = get_resource_path(Path('tools/bcftools'))
     if not bcftools_path.exists():
         bcftools_path = 'bcftools'
 

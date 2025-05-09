@@ -1,21 +1,24 @@
 #!/bin/bash
-# run-vcfstash.sh - A wrapper script for running VCFstash with Docker Compose
+set -e
 
-# Set default directories or use environment variables if already set
-export REFERENCE_DIR=${REFERENCE_DIR:-"$(pwd)/reference"}
-export DATA_DIR=${DATA_DIR:-"$(pwd)/data"}
-export CACHE_DIR=${CACHE_DIR:-"$(pwd)/cache"}
+# Get the directory of this script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-# Ensure directories exist
-mkdir -p "$REFERENCE_DIR" "$DATA_DIR" "$CACHE_DIR"
+# Default directories
+DEFAULT_REFERENCE_DIR="./reference"
+DEFAULT_DATA_DIR="./data"
+DEFAULT_CACHE_DIR="./cache"
 
-# Print configuration
-echo "VCFstash Docker configuration:"
-echo "  Reference directory: $REFERENCE_DIR"
-echo "  Data directory: $DATA_DIR"
-echo "  Cache directory: $CACHE_DIR"
-echo ""
+# Use environment variables if set, otherwise use defaults
+REFERENCE_DIR=${REFERENCE_DIR:-$DEFAULT_REFERENCE_DIR}
+DATA_DIR=${DATA_DIR:-$DEFAULT_DATA_DIR}
+CACHE_DIR=${CACHE_DIR:-$DEFAULT_CACHE_DIR}
 
-# Run docker-compose with all arguments passed to this script
-cd "$(dirname "$0")" # Change to the script directory
-docker-compose run --rm vcfstash "$@"
+# Export variables for docker-compose
+export REFERENCE_DIR
+export DATA_DIR
+export CACHE_DIR
+
+# Run docker-compose with the provided arguments
+cd "$SCRIPT_DIR/.."
+docker-compose -f docker/docker-compose.yml run --rm vcfstash "$@"
