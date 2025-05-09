@@ -17,14 +17,6 @@ TEST_VCF = TEST_DATA_DIR / "crayz_db.bcf"
 TEST_VCF2 = TEST_DATA_DIR / "crayz_db2.bcf"
 VCFSTASH_CMD = "vcfstash"
 
-@pytest.fixture
-def test_output_dir():
-    """Provides a temporary directory for testing."""
-    temp_dir = tempfile.mkdtemp(prefix="vcfstash_test_")
-    os.rmdir(temp_dir)
-    yield temp_dir
-    if os.path.exists(temp_dir):
-        shutil.rmtree(temp_dir, ignore_errors=True)
 
 def test_basic_workflow(test_output_dir, params_file):
     """Test the basic stash workflow: init and add."""

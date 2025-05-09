@@ -9,15 +9,16 @@ include { UTILS } from './modules/utils'
 
 // Then create a function to copy auxiliary files
 def copyAuxiliaryFiles(auxFiles, targetDir) {
-	auxFiles.flatten().ifEmpty([]).subscribe { aux_file ->
-		if (aux_file && file(aux_file).exists()) {
-			def auxiliaryDir = file(targetDir)
-			if (!auxiliaryDir.exists()) {
-				auxiliaryDir.mkdirs()
-			}
-			file(aux_file).copyTo("${auxiliaryDir}/${file(aux_file).name}")
-		}
-	}
+    auxFiles.flatten().ifEmpty([]).subscribe { aux_file ->
+        if (aux_file && file(aux_file).exists()) {
+            def auxiliaryDir = file(targetDir)
+            if (!auxiliaryDir.exists()) {
+                auxiliaryDir.mkdirs()
+            }
+            // Copy the file directly to the auxiliary directory without creating subdirectories
+            file(aux_file).copyTo("${auxiliaryDir}/${file(aux_file).name}")
+        }
+    }
 }
 
 def validateParams() {

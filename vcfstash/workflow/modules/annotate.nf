@@ -10,11 +10,12 @@ process RunAnnotation {
     path "vcfstash_annotated.bcf", emit: annotated_bcf
     path "vcfstash_annotated.bcf.csi", emit: annotated_bcf_index
     path "vcfstash_annotated.log", emit: annotated_bcf_log
-    path "auxiliary", optional: true, emit: aux_files  // This will ensure directory exists
+    path "auxiliary/*", emit: aux_files
 
     script:
     """
-    set -e
+	# Execute the annotation command with strict error handling
+	set -euo pipefail
 
     echo "[`date`] VCFSTASH ANNOTATION PROCESS STARTED" | tee vcfstash_annotated.log
     echo "[`date`] ==========================================" | tee -a vcfstash_annotated.log
@@ -52,9 +53,17 @@ process RunAnnotation {
 		exit 1
 	fi
 
-    # Execute the annotation command
-    echo "[`date`] Running annotation command: \$CMD" | tee -a vcfstash_annotated.log
-    eval \$CMD 2> >(tee -a vcfstash_annotated.log >&2)
+
+	{
+		echo "[`date`] Running annotation command: \$CMD"
+		eval "\$CMD"
+	} 2>&1 | tee -a vcfstash_annotated.log
+
+	CMD_EXIT=\${PIPESTATUS[1]:-0}
+	if [ "\$CMD_EXIT" -ne 0 ]; then
+		echo "[`date`] ERROR: Annotation command failed with exit code \$CMD_EXIT" | tee -a vcfstash_annotated.log
+		exit \$CMD_EXIT
+	fi
 
     # Check for success
     if [ ! -f "\${OUTPUT_BCF}" ]; then
