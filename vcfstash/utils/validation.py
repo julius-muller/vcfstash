@@ -1,15 +1,21 @@
-import re
-import sys
+"""Validation utilities for the vcfstash package.
+
+This module provides functions for validating VCF/BCF files, checking dependencies,
+computing MD5 checksums, and other validation-related tasks.
+"""
+
 import os
-import yaml
-from typing import Tuple, Optional, Dict
-from pathlib import Path
 import subprocess
+import sys
+from pathlib import Path
+from typing import Dict, Optional, Tuple
+
 import pysam
+import yaml
 
 
 def check_duplicate_md5(db_info: dict, new_md5: str) -> bool:
-    """Check if a file with the same MD5 was already added"""
+    """Check if a file with the same MD5 was already added."""
     try:
         return any(f["md5"] == new_md5 for f in db_info.get("input_files", []))
     except KeyError:
@@ -17,13 +23,10 @@ def check_duplicate_md5(db_info: dict, new_md5: str) -> bool:
 
 
 def get_bcf_stats(bcf_path: Path) -> Dict[str, str]:
-    """Get statistics from BCF file using bcftools stats"""
+    """Get statistics from BCF file using bcftools stats."""
     try:
         result = subprocess.run(
-            ["bcftools", "stats", bcf_path],
-            capture_output=True,
-            text=True,
-            check=True
+            ["bcftools", "stats", bcf_path], capture_output=True, text=True, check=True
         )
         stats = {}
         for line in result.stdout.splitlines():
@@ -38,9 +41,11 @@ def get_bcf_stats(bcf_path: Path) -> Dict[str, str]:
         return {"error": f"Failed to get statistics: {e}"}
 
 
-def validate_bcf_header(bcf_path: Path, norm: bool = True) -> Tuple[bool, Optional[str]]:
-    """
-    Validate BCF header for required normalization command and contig format.
+def validate_bcf_header(
+    bcf_path: Path, norm: bool = True
+) -> Tuple[bool, Optional[str]]:
+    """Validate BCF header for required normalization command and contig format.
+
     Returns tuple (is_valid, error_message).
     """
     try:
@@ -48,13 +53,16 @@ def validate_bcf_header(bcf_path: Path, norm: bool = True) -> Tuple[bool, Option
             ["bcftools", "view", "-h", bcf_path],
             check=True,
             capture_output=True,
-            text=True
+            text=True,
         ).stdout
 
         if norm:
             # Check normalization command
-            norm_lines = [line for line in header.splitlines()
-                         if line.startswith("##bcftools_normCommand")]
+            norm_lines = [
+                line
+                for line in header.splitlines()
+                if line.startswith("##bcftools_normCommand")
+            ]
 
             if not norm_lines:
                 return False, "Missing bcftools_normCommand in header"
@@ -64,17 +72,22 @@ def validate_bcf_header(bcf_path: Path, norm: bool = True) -> Tuple[bool, Option
             missing_options = [opt for opt in required_options if opt not in norm_cmd]
 
             if missing_options:
-                return False, f"Missing required normalization options: {', '.join(missing_options)}"
+                return (
+                    False,
+                    f"Missing required normalization options: {', '.join(missing_options)}",
+                )
 
         # Check contig format
-        contig_lines = [line for line in header.splitlines()
-                       if line.startswith("##contig=")]
+        contig_lines = [
+            line for line in header.splitlines() if line.startswith("##contig=")
+        ]
 
         if not contig_lines:
             return False, "No contig lines found in header"
 
-        invalid_contigs = [line for line in contig_lines
-                          if not line.startswith("##contig=<ID=chr")]
+        invalid_contigs = [
+            line for line in contig_lines if not line.startswith("##contig=<ID=chr")
+        ]
 
         if invalid_contigs:
             example = invalid_contigs[0] if invalid_contigs else ""
@@ -86,8 +99,11 @@ def validate_bcf_header(bcf_path: Path, norm: bool = True) -> Tuple[bool, Option
         return False, f"Error reading BCF header: {e}"
 
 
-
 def check_bcftools_installed() -> None:
+    """Check if bcftools is installed and available in the PATH.
+
+    Exits the program with an error message if bcftools is not found.
+    """
     try:
         subprocess.run(["bcftools", "--version"], check=True, capture_output=True)
     except FileNotFoundError:
@@ -95,8 +111,7 @@ def check_bcftools_installed() -> None:
 
 
 def check_vep_installed(yaml_path: Path) -> Tuple[bool, Optional[str]]:
-    """
-    Check if VEP is installed and properly configured.
+    """Check if VEP is installed and properly configured.
 
     Args:
         yaml_path: Path to the YAML file containing VEP configuration
@@ -107,28 +122,26 @@ def check_vep_installed(yaml_path: Path) -> Tuple[bool, Optional[str]]:
     try:
         # First check if Docker is installed
         docker_result = subprocess.run(
-            ["docker", "--version"],
-            capture_output=True,
-            text=True
+            ["docker", "--version"], capture_output=True, text=True
         )
         if docker_result.returncode != 0:
             return False, "Docker is not installed or not in PATH."
 
         # Load the YAML file to get the VEP configuration
-        with open(yaml_path, 'r') as f:
+        with open(yaml_path, "r") as f:
             config = yaml.safe_load(f)
 
         # Check if annotation_tool_cmd is defined
-        if 'annotation_tool_cmd' not in config:
+        if "annotation_tool_cmd" not in config:
             return False, "annotation_tool_cmd not defined in YAML file."
 
         # Check if the command contains 'vep'
-        if 'vep' not in config['annotation_tool_cmd']:
+        if "vep" not in config["annotation_tool_cmd"]:
             return False, "VEP not found in annotation_tool_cmd."
 
         # Check if vep_cache is defined and exists
-        if 'vep_cache' in config:
-            vep_cache = config['vep_cache']
+        if "vep_cache" in config:
+            vep_cache = config["vep_cache"]
             # Replace environment variables in the path
             vep_cache = os.path.expandvars(vep_cache)
             if not os.path.exists(vep_cache):
@@ -138,24 +151,28 @@ def check_vep_installed(yaml_path: Path) -> Tuple[bool, Optional[str]]:
     except Exception as e:
         return False, f"Error checking VEP installation: {e}"
 
-def compute_md5(file_path: Path) -> str:
-    """
 
-    :param file_path:
-    :return:
-    file_path = Path('~/projects/vcfstash/tests/data/nodata/dbsnp_test.bcf')
+def compute_md5(file_path: Path) -> str:
+    """Compute MD5 checksum for a file.
+
+    Args:
+        file_path: Path to the file to compute MD5 for
+
+    Returns:
+        MD5 checksum as a string
+
+    Example:
+        >>> compute_md5(Path('~/projects/vcfstash/tests/data/nodata/dbsnp_test.bcf'))
     """
     try:
-        print(f'Computing MD5 for {file_path} ...')
+        print(f"Computing MD5 for {file_path} ...")
         result = subprocess.run(
-            ["md5sum", file_path],
-            check=True,
-            capture_output=True,
-            text=True
+            ["md5sum", file_path], check=True, capture_output=True, text=True
         )
         return result.stdout.split()[0]  # The MD5 hash is the first word in the output
     except subprocess.CalledProcessError as e:
         sys.exit(f"Error computing MD5 checksum: {e}")
+
 
 def validate_vcf_format(vcf_path: Path) -> tuple[bool, str | None]:
     """Validate VCF format fields.
@@ -178,12 +195,15 @@ def validate_vcf_format(vcf_path: Path) -> tuple[bool, str | None]:
             return False, f"Error reading VCF file: {e}"
 
         # Check for minimal required FORMAT fields
-        required_formats = {'GT', 'AD'}  # Removed DP requirement
+        required_formats = {"GT", "AD"}  # Removed DP requirement
         available_formats = set(vcf.header.formats.keys())
 
         missing_formats = required_formats - available_formats
         if missing_formats:
-            return False, f"Missing required FORMAT fields: {', '.join(missing_formats)}"
+            return (
+                False,
+                f"Missing required FORMAT fields: {', '.join(missing_formats)}",
+            )
 
         return True, None
 
@@ -192,26 +212,24 @@ def validate_vcf_format(vcf_path: Path) -> tuple[bool, str | None]:
 
 
 def generate_test_command(
-        vcfstash_path="${VCFSTASH_ROOT}/vcfstash.py",
-        vcf_path="${VCFSTASH_ROOT}/tests/data/nodata/crayz_db.bcf",
-        output_dir="/tmp/vcfstash/test_stash",
-        config_path="${VCFSTASH_ROOT}/tests/config/nextflow_test.config",
-        yaml_path="${VCFSTASH_ROOT}/tests/config/user_params.yaml",
-        annotation_config = "${VCFSTASH_ROOT}/tests/config/annotation.config",
-        add_vcf_path="${VCFSTASH_ROOT}/tests/data/nodata/crayz_db2.bcf",
-        input_vcf_path="${VCFSTASH_ROOT}/tests/data/nodata/sample4.bcf",
-        annotate_name="testor",
-        annotation_db="/tmp/vcfstash/test_stash/stash/testor",
-        annotation_output="/tmp/vcfstash/aout",
-        force=True
+    vcfstash_path="${VCFSTASH_ROOT}/vcfstash.py",
+    vcf_path="${VCFSTASH_ROOT}/tests/data/nodata/crayz_db.bcf",
+    output_dir="/tmp/vcfstash/test_stash",
+    config_path="${VCFSTASH_ROOT}/tests/config/nextflow_test.config",
+    yaml_path="${VCFSTASH_ROOT}/tests/config/user_params.yaml",
+    annotation_config="${VCFSTASH_ROOT}/tests/config/annotation.config",
+    add_vcf_path="${VCFSTASH_ROOT}/tests/data/nodata/crayz_db2.bcf",
+    input_vcf_path="${VCFSTASH_ROOT}/tests/data/nodata/sample4.bcf",
+    annotate_name="testor",
+    annotation_db="/tmp/vcfstash/test_stash/stash/testor",
+    annotation_output="/tmp/vcfstash/aout",
+    force=True,
 ):
-    """
-    Generate a nicely formatted test command string for vcfstash operations.
+    """Generate a nicely formatted test command string for vcfstash operations.
 
     Returns:
         str: A copy-pastable command string with proper formatting
     """
-
     cmd_init = (
         f"{vcfstash_path} stash-init "
         f"--vcf {vcf_path} "
@@ -221,9 +239,7 @@ def generate_test_command(
     ).strip()
 
     cmd_add = (
-        f"{vcfstash_path} stash-add "
-        f"--db {output_dir} "
-        f"-i {add_vcf_path} "
+        f"{vcfstash_path} stash-add " f"--db {output_dir} " f"-i {add_vcf_path} "
     ).strip()
 
     cmd_annotate = (
@@ -266,6 +282,7 @@ alias stx="{full_cmd}"
     print(formatted_cmds)
     return full_cmd
 
+
 # generate_test_command()
 
 
@@ -286,7 +303,6 @@ cmd = """alias stx="
 ~/projects/vcfstash/vcfstash.py stash-annotate --name testor -a ~/projects/vcfstash/tests/config/annotation.config --db ~/tmp/vcfstash/test_stash -f;
 ~/projects/vcfstash/vcfstash.py annotate -a ~/tmp/vcfstash/test_stash/stash/testor --vcf ~/projects/vcfstash/tests/data/nodata/sample4.bcf --output ~/tmp/vcfstash/aout -f
 """
-
 
 
 # on gvpre

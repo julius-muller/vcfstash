@@ -1,34 +1,69 @@
 import json
 import os
 import shutil
-from pathlib import Path
 import subprocess
 from datetime import datetime
+from pathlib import Path
+from typing import Optional
 
 import yaml
 
-from vcfstash.database.base import VCFDatabase, NextflowWorkflow
-from vcfstash.utils.validation import compute_md5, get_bcf_stats, check_duplicate_md5
+from vcfstash.database.base import NextflowWorkflow, VCFDatabase
+from vcfstash.utils.validation import check_duplicate_md5, compute_md5, get_bcf_stats
+
 
 class DatabaseUpdater(VCFDatabase):
-    """Handles adding new variants to database"""
-    def __init__(self, db_path: Path | str, input_file: Path | str, config_file: Path | str = None,
-                 params_file: Path | str = None, verbosity: int = 0, debug: bool = False):
+    """Represents a specialized utility for updating a VCF/BCF database.
+
+    This class extends the functionality of the VCFDatabase to facilitate the addition
+    of new variants into the existing database. It validates input files, manages input
+    configuration and parameters, and implements workflows to integrate new data into
+    the database. The primary purpose is to ensure VCF/BCF files are merged seamlessly
+    into the database while maintaining consistency and log tracking. It also keeps
+    metadata around input files and database statistics up-to-date. Validation of input
+    VCF reference files against YAML configuration is supported as well.
+
+    Attributes:
+        db_path (Path): Path to the database directory.
+        input_file (Path): File path to the input VCF/BCF file.
+        config_file (Optional[Path]): Optional configuration file path.
+        params_file (Optional[Path]): Optional parameters file path.
+        verbosity (int): Verbosity level for logging. Higher numbers increase detail.
+        debug (bool): Debug flag indicating whether debugging is enabled.
+    """
+
+    def __init__(
+        self,
+        db_path: Path | str,
+        input_file: Path | str,
+        config_file: Optional[Path] | Optional[str] = None,
+        params_file: Optional[Path] | Optional[str] = None,
+        verbosity: int = 0,
+        debug: bool = False,
+    ):
         super().__init__(Path(db_path), verbosity, debug)
         self.stashed_output.validate_structure()
         self.logger = self.connect_loggers()
         self.input_file = Path(input_file).expanduser().resolve()
-        self.input_md5 = compute_md5(self.input_file) # might take too long to do here
+        self.input_md5 = compute_md5(self.input_file)  # might take too long to do here
+        self.config_file: Optional[Path] = None
+        self.params_file: Optional[Path] = None
         if config_file:
-            self.config_file = self.blueprint_dir / f'add_{self.input_md5}.config'
-            shutil.copyfile(config_file.expanduser().resolve(), self.config_file)
+            self.config_file = self.blueprint_dir / f"add_{self.input_md5}.config"
+            config_path = (
+                Path(config_file) if isinstance(config_file, str) else config_file
+            )
+            shutil.copyfile(config_path.expanduser().resolve(), self.config_file)
         else:
             wfini = self.workflow_dir / "init.config"
             self.config_file = wfini if wfini.exists() else None
 
         if params_file:
-            self.params_file = self.blueprint_dir / f'add_{self.input_md5}.yaml'
-            shutil.copyfile(params_file.expanduser().resolve(), self.params_file)
+            self.params_file = self.blueprint_dir / f"add_{self.input_md5}.yaml"
+            params_path = (
+                Path(params_file) if isinstance(params_file, str) else params_file
+            )
+            shutil.copyfile(params_path.expanduser().resolve(), self.params_file)
         else:
             wfini = self.workflow_dir / "init.yaml"
             self.params_file = wfini if wfini.exists() else None
@@ -37,117 +72,145 @@ class DatabaseUpdater(VCFDatabase):
         self.nx_workflow = NextflowWorkflow(
             input_file=self.input_file,
             output_dir=self.blueprint_dir,
-            name=f'add_{self.input_md5}',
+            name=f"add_{self.input_md5}",
             workflow=self.workflow_dir / "main.nf",
             config_file=self.config_file,
             params_file=self.params_file,
-            verbosity=self.verbosity
+            verbosity=self.verbosity,
         )
 
         self._validate_inputs()
         # Log initialization parameters
-        self.logger.info("Initializing database update")
-        self.logger.debug(f"Input file: {input_file}")
+        if self.logger:
+            self.logger.info("Initializing database update")
+            self.logger.debug(f"Input file: {input_file}")
 
     def _validate_inputs(self) -> None:
         """Validate input files, directories, and YAML parameters"""
-        self.logger.debug("Validating inputs")
+        if self.logger:
+            self.logger.debug("Validating inputs")
 
         # Check input VCF/BCF if provided
         if self.input_file:
             if not self.input_file.exists():
                 msg = f"Input VCF/BCF file not found: {self.input_file}"
-                self.logger.error(msg)
+                if self.logger:
+                    self.logger.error(msg)
                 raise FileNotFoundError(msg)
             self.ensure_indexed(self.input_file)
 
         # Validate VCF reference
         try:
             # Load YAML file to get reference path
-            params_yaml = yaml.safe_load(Path(self.params_file).expanduser().resolve().read_text())
+            if not self.params_file:
+                raise ValueError("Parameters file is required for validation")
+            params_yaml = yaml.safe_load(
+                self.params_file.expanduser().resolve().read_text()
+            )
 
             # Get reference path from YAML
-            reference_path_str = params_yaml.get('reference')
+            reference_path_str = params_yaml.get("reference")
             if not reference_path_str:
-                self.logger.error("Reference path not found in YAML file")
+                if self.logger:
+                    self.logger.error("Reference path not found in YAML file")
                 raise ValueError("Reference path not found in YAML file")
 
             # Expand environment variables in reference path
             if "${VCFSTASH_ROOT}" in reference_path_str:
                 vcfstash_root = os.environ.get("VCFSTASH_ROOT")
                 if not vcfstash_root:
-                    self.logger.error("VCFSTASH_ROOT environment variable not set")
+                    if self.logger:
+                        self.logger.error("VCFSTASH_ROOT environment variable not set")
                     raise ValueError("VCFSTASH_ROOT environment variable not set")
-                reference_path_str = reference_path_str.replace("${VCFSTASH_ROOT}", vcfstash_root)
+                reference_path_str = reference_path_str.replace(
+                    "${VCFSTASH_ROOT}", vcfstash_root
+                )
 
             reference_path = Path(reference_path_str).expanduser().resolve()
 
             # Validate VCF reference
-            self.logger.info(f"Validating VCF reference: {reference_path}")
-            valid, error_msg = self.validate_vcf_reference(self.input_file, reference_path)
+            if self.logger:
+                self.logger.info(f"Validating VCF reference: {reference_path}")
+            valid, error_msg = self.validate_vcf_reference(
+                self.input_file, reference_path
+            )
 
             if not valid:
-                self.logger.error(f"VCF reference validation failed: {error_msg}")
+                if self.logger:
+                    self.logger.error(f"VCF reference validation failed: {error_msg}")
                 raise ValueError(f"VCF reference validation failed: {error_msg}")
 
-            self.logger.info("VCF reference validation successful")
+            if self.logger:
+                self.logger.info("VCF reference validation successful")
         except Exception as e:
-            self.logger.error(f"Error during VCF reference validation: {e}")
-            raise RuntimeError(f"Error during VCF reference validation: {e}")
+            if self.logger:
+                self.logger.error(f"Error during VCF reference validation: {e}")
+            raise RuntimeError(f"Error during VCF reference validation: {e}") from e
 
-        self.logger.debug("Input validation successful")
+        if self.logger:
+            self.logger.debug("Input validation successful")
 
     def add(self) -> None:
-        """
-        Add new variants to existing database
+        """Add new variants to existing database
 
         self = DatabaseUpdater(db_path=Path('~/projects/vcfstash/tests/data/test_out/nftest'),
         input_file=Path('~/projects/vcfstash/tests/data/nodata/dbsnp_test.bcf'),
         verbosity=2)
         profile='test'
         """
-        self.logger.info("Starting database update")
+        if self.logger:
+            self.logger.info("Starting database update")
 
         try:
             # Check for duplicate before validation
             if check_duplicate_md5(db_info=self.db_info, new_md5=self.input_md5):
-                self.logger.warning(f"Skipping duplicate file (MD5 match): {self.input_file}")
+                if self.logger:
+                    self.logger.warning(
+                        f"Skipping duplicate file (MD5 match): {self.input_file}"
+                    )
                 return
 
-            self._validate_inputs()
+            self._validate_input_files()
             self._merge_variants()
-            self.logger.info("Database update completed successfully")
+            if self.logger:
+                self.logger.info("Database update completed successfully")
 
         except FileNotFoundError as e:
-            self.logger.error(str(e))
+            if self.logger:
+                self.logger.error(str(e))
             raise
         except ValueError as e:
-            self.logger.error(str(e))
+            if self.logger:
+                self.logger.error(str(e))
             raise
 
-    def _validate_inputs(self) -> None:
+    def _validate_input_files(self) -> None:
         """Validate input files and check for duplicates"""
-        self.logger.debug("Validating inputs")
+        if self.logger:
+            self.logger.debug("Validating inputs")
 
         # First check database BCF
         if not self.blueprint_bcf.exists():
-            self.logger.error("Database BCF file does not exist")
+            if self.logger:
+                self.logger.error("Database BCF file does not exist")
             raise FileNotFoundError("Database BCF file does not exist")
 
         # Check input VCF/BCF
         if not self.input_file.exists():
-            self.logger.error("Input VCF/BCF file does not exist")
+            if self.logger:
+                self.logger.error("Input VCF/BCF file does not exist")
             raise FileNotFoundError("Input VCF/BCF file does not exist")
 
         # Validate remaining inputs
         self.ensure_indexed(self.blueprint_bcf)
         self.ensure_indexed(self.input_file)
-        self.logger.debug("Input validation successful")
+        if self.logger:
+            self.logger.debug("Input validation successful")
 
     def _merge_variants(self) -> None:
         """Merge new variants into the database"""
-
-        self.logger.info("Starting variant merge")
+        if self.logger:
+            self.logger.info("Starting variant merge")
 
         try:
             # Get statistics before merge
@@ -160,7 +223,7 @@ class DatabaseUpdater(VCFDatabase):
                 trace=True,
                 dag=True,
                 report=True,
-                db_bcf=self.blueprint_bcf
+                db_bcf=self.blueprint_bcf,
             )
             duration = datetime.now() - start_time
 
@@ -177,29 +240,37 @@ class DatabaseUpdater(VCFDatabase):
                 except ValueError:
                     continue
 
-            self.logger.debug("Merge completed, updating database files")
+            if self.logger:
+                self.logger.debug("Merge completed, updating database files")
 
-            self.db_info["input_files"].append({
-                "path": str(self.input_file),
-                "md5": self.input_md5,
-                "added": datetime.now().isoformat()
-            })
+            self.db_info["input_files"].append(
+                {
+                    "path": str(self.input_file),
+                    "md5": self.input_md5,
+                    "added": datetime.now().isoformat(),
+                }
+            )
 
             with open(self.info_file, "w") as f:
                 json.dump(self.db_info, f, indent=2)
 
             # Log update details
-            self.logger.info("Database update summary:")
-            self.logger.info(f"- Added file: {self.input_file}")
-            self.logger.info(f"- Input MD5: {self.input_md5}")
-            self.logger.info("- Database statistics changes:")
-            for key, diff in diff_stats.items():
-                prefix = "+" if diff > 0 else ""
-                self.logger.info(f"  {key}: {prefix}{diff:d} ({pre_stats[key]} -> {post_stats[key]})")
-            self.logger.info(f"- Processing time: {duration.total_seconds():.2f}s")
+            if self.logger:
+                self.logger.info("Database update summary:")
+                self.logger.info(f"- Added file: {self.input_file}")
+                self.logger.info(f"- Input MD5: {self.input_md5}")
+                self.logger.info("- Database statistics changes:")
+                for key, diff in diff_stats.items():
+                    prefix = "+" if diff > 0 else ""
+                    self.logger.info(
+                        f"  {key}: {prefix}{diff:d} ({pre_stats[key]} -> {post_stats[key]})"
+                    )
+                self.logger.info(f"- Processing time: {duration.total_seconds():.2f}s")
+
             if not self.debug:
                 self.nx_workflow.cleanup_work_dir()
 
         except subprocess.CalledProcessError as e:
-            self.logger.error(f"Failed to merge variants: {e}")
-            raise RuntimeError(f"Failed to add variants: {e}")
+            if self.logger:
+                self.logger.error(f"Failed to merge variants: {e}")
+            raise RuntimeError(f"Failed to add variants: {e}") from e

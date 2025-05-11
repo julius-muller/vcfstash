@@ -1,13 +1,12 @@
-"""
-Utility module for handling project paths and environment variables.
+"""Utility module for handling project paths and environment variables.
 
 This module provides functions to get the project root directory and resource paths
 regardless of how the package is installed.
 """
 
 import os
-from pathlib import Path
 from importlib import resources
+from pathlib import Path
 
 
 def get_project_root():

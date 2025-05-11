@@ -1,11 +1,17 @@
+"""Logging utilities for the vcfstash package.
+
+This module provides functions for setting up logging with different verbosity levels
+and for logging command execution.
+"""
+
 import logging
 import sys
 from pathlib import Path
 from typing import Optional
 
+
 def setup_logging(verbosity: int, log_file: Optional[Path] = None) -> logging.Logger:
-    """
-    Setup logging with verbosity levels
+    """Setup logging with verbosity levels.
 
     Args:
         verbosity: Verbosity level (0-2)
@@ -18,12 +24,12 @@ def setup_logging(verbosity: int, log_file: Optional[Path] = None) -> logging.Lo
     console_levels = {
         0: logging.WARNING,  # Default
         1: logging.INFO,  # -v
-        2: logging.DEBUG  # -vv
+        2: logging.DEBUG,  # -vv
     }
     file_levels = {
         0: logging.INFO,  # Default
         1: logging.DEBUG,  # -v
-        2: logging.DEBUG  # -vv
+        2: logging.DEBUG,  # -vv
     }
 
     console_level = console_levels.get(min(verbosity, 2), logging.WARNING)
@@ -35,7 +41,7 @@ def setup_logging(verbosity: int, log_file: Optional[Path] = None) -> logging.Lo
     # Create formatters and handlers
     formatter = logging.Formatter(
         "[%(asctime)s] %(levelname)s [%(name)s.%(filename)s.%(funcName)s:%(lineno)d] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
 
     # Prevent adding handlers multiple times
@@ -53,41 +59,32 @@ def setup_logging(verbosity: int, log_file: Optional[Path] = None) -> logging.Lo
         # raise ValueError(f"This was passed: {log_file}")
         # Create parent directory if it doesn't exist
         log_file.parent.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(log_file, mode='a')
+        file_handler = logging.FileHandler(log_file, mode="a")
         file_handler.setLevel(file_level)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
         logger.debug(f"File logging enabled at: {log_file}")
         if not log_file.exists():
-            raise FileNotFoundError(f"File logging enabled but log file does not exist: {log_file}")
+            raise FileNotFoundError(
+                f"File logging enabled but log file does not exist: {log_file}"
+            )
 
-    logger.debug(f"Log levels - Console: {logging.getLevelName(console_level)}" +
-                 (f", File: {logging.getLevelName(file_level)}" if log_file else ""))
+    logger.debug(
+        f"Log levels - Console: {logging.getLevelName(console_level)}"
+        + (f", File: {logging.getLevelName(file_level)}" if log_file else "")
+    )
     return logger
 
-def log_command(logger: logging.Logger, info:bool = False) -> None:
-    """
-    Log the command used to execute the script.
+
+def log_command(logger: logging.Logger, info: bool = False) -> None:
+    """Log the command used to execute the script.
 
     Args:
-        :param logger: Logger instance to use
-        :param info:
+        logger: Logger instance to use for logging
+        info: If True, log at INFO level; otherwise, log at DEBUG level
     """
     command = f"python3 {sys.argv[0]} {' '.join(sys.argv[1:])}"
     if info:
         logger.info("Script command: %s", command)
     else:
         logger.debug("Script command: %s", command)
-
-
-# Example usage
-if __name__ == "__main__":
-    logger = setup_logging(
-        log_file=Path("vcfstash.log"),
-        level=logging.DEBUG,
-    )
-    logger.debug("Debug message")
-    logger.info("Info message")
-    logger.warning("Warning message")
-    logger.error("Error message")
-    log_command(logger)

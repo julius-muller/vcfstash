@@ -5,15 +5,15 @@
 # NOT CURRENTLY USED.                                            #
 #                                                                        #
 ##########################################################################
+import importlib.resources
 import os
 import warnings
 from abc import ABC, abstractmethod
 from pathlib import Path
-import importlib.resources
+
 
 class BaseOutput(ABC):
-    """
-    Partially abstract base for output structures. 
+    """Partially abstract base for output structures.
     Subclasses define the exact dirs/files to create or check.
     """
 
@@ -22,12 +22,12 @@ class BaseOutput(ABC):
         # define the base directory of the module
         # Use importlib.resources instead of environment variable
         try:
-            self.module_src_dir = Path(importlib.resources.files("vcfstash"))
+            self.module_src_dir = Path(str(importlib.resources.files("vcfstash")))
         except ModuleNotFoundError:
-            self.module_src_dir = Path(os.getenv('VCFSTASH_ROOT', Path('.').resolve()))
+            self.module_src_dir = Path(os.getenv("VCFSTASH_ROOT", Path(".").resolve()))
 
     @abstractmethod
-    def required_paths(self) -> dir:
+    def required_paths(self) -> dict:
         """Dict with structure {'label':Path(),...} of required paths to check for existence."""
         pass
 
@@ -43,16 +43,17 @@ class BaseOutput(ABC):
 
     @staticmethod
     def validate_label(label: str) -> None:
-        """
-        Validates that the label is valid in this context.
-        """
+        """Validates that the label is valid in this context."""
         if len(label) > 30:
-            raise ValueError(f"Annotation name must be less than 30 characters, but has {len(label)}: {label}")
+            raise ValueError(
+                f"Annotation name must be less than 30 characters, but has {len(label)}: {label}"
+            )
         if " " in label:
             raise ValueError(f"Annotation name must not contain white spaces: {label}")
         if not all(c.isalnum() or c in "_-." for c in label):
-            raise ValueError(f"Annotation name must only contain alphanumeric characters, underscores, dots, or dashes: {label}")
-
+            raise ValueError(
+                f"Annotation name must only contain alphanumeric characters, underscores, dots, or dashes: {label}"
+            )
 
     @staticmethod
     def create_directories(dirs_to_create: dict) -> None:
@@ -65,11 +66,15 @@ class BaseOutput(ABC):
 
                     # Verify the directory exists after creation
                     if not dir_path.exists():
-                        raise RuntimeError(f"Failed to create {name} directory: {dir_path}")
+                        raise RuntimeError(
+                            f"Failed to create {name} directory: {dir_path}"
+                        )
 
                     # Verify it's actually a directory
                     if not dir_path.is_dir():
-                        raise RuntimeError(f"Path exists but is not a directory: {dir_path}")
+                        raise RuntimeError(
+                            f"Path exists but is not a directory: {dir_path}"
+                        )
 
                     # Verify we have write access by creating and removing a test file
                     test_file = dir_path / ".write_test"
@@ -77,16 +82,19 @@ class BaseOutput(ABC):
                         test_file.touch()
                         test_file.unlink()
                     except (IOError, PermissionError) as e:
-                        raise RuntimeError(f"No write permission in {name} directory {dir_path}: {e}")
+                        raise RuntimeError(
+                            f"No write permission in {name} directory {dir_path}: {e}"
+                        ) from e
 
                 except Exception as e:
                     # Catch any other exceptions that might occur during directory setup
-                    raise RuntimeError(f"Error setting up {name} directory {dir_path}: {e}")
+                    raise RuntimeError(
+                        f"Error setting up {name} directory {dir_path}: {e}"
+                    ) from e
 
 
 class StashOutput(BaseOutput):
-    """
-    Encapsulates the structure for stash-init / stash-add:
+    """Encapsulates the structure for stash-init / stash-add:
 
       <stash_root_dir>/
       ├── blueprint/
@@ -107,23 +115,24 @@ class StashOutput(BaseOutput):
         self.workflow_src_dir = self.module_src_dir / "workflow"
 
         if not self.workflow_src_dir.exists():
-            raise RuntimeError(f"Source workflow directory does not exist: {self.workflow_src_dir}")
+            raise RuntimeError(
+                f"Source workflow directory does not exist: {self.workflow_src_dir}"
+            )
 
     def required_paths(self) -> dict:
-        """
-        Returns a dictionary with the required paths for the stash output structure.
-        """
-
+        """Returns a dictionary with the required paths for the stash output structure."""
         return {
             "blueprint": self.stash_root_dir / "blueprint",
             "stash": self.stash_root_dir / "stash",
             "workflow": self.workflow_dir,
             "workflow_src": self.workflow_src_dir,
-            "modules": self.workflow_dir / "modules"
+            "modules": self.workflow_dir / "modules",
         }
-    
+
     def create_structure(self) -> None:
-        req_dirs = {k:v for k,v in self.required_paths().items() if k != "workflow_src"}
+        req_dirs = {
+            k: v for k, v in self.required_paths().items() if k != "workflow_src"
+        }
         self.create_directories(req_dirs)
 
     def validate_structure(self) -> bool:
@@ -137,17 +146,17 @@ class StashOutput(BaseOutput):
 
         for pname, path in required_paths.items():
             if not path.exists():
-                warnings.warn(f"Missing required path {pname}: {path}")
+                warnings.warn(f"Missing required path {pname}: {path}", stacklevel=2)
                 return False
         return True
 
-class AnnotatedStashOutput(BaseOutput):
-    """
-    Encapsulates the structure for annotation stash from stash-annotate. Example:
 
-      <stash_root_dir>/
-      ├── stash/
-      │   └── <any subfolders, e.g. 'test'>  <- annotation_dir
+class AnnotatedStashOutput(BaseOutput):
+    """Encapsulates the structure for annotation stash from stash-annotate. Example:
+
+    <stash_root_dir>/
+    ├── stash/
+    │   └── <any subfolders, e.g. 'test'>  <- annotation_dir
 
     """
 
@@ -159,45 +168,43 @@ class AnnotatedStashOutput(BaseOutput):
         self.stash_output = StashOutput(str(self.stash_root_dir))
         self.name = self.annotation_dir.name
 
-
     def required_paths(self) -> dict:
-        """
-        Returns a dictionary with the required paths for the stash output structure.
+        """Returns a dictionary with the required paths for the stash output structure.
         These come on top of self.stash_ouptput.required_paths()
         """
-        return {# we don't really need blueprint at this stage anymore
+        return {  # we don't really need blueprint at this stage anymore
             "annotation": self.annotation_dir,
-            "initial_config": self.stash_output.workflow_dir / 'init.yaml'
+            "initial_config": self.stash_output.workflow_dir / "init.yaml",
         }
 
     def create_structure(self) -> None:
-        self.create_directories({'annotation': self.annotation_dir})
-    
+        self.create_directories({"annotation": self.annotation_dir})
+
     def validate_structure(self) -> bool:
         # this is valid if it sits inside stash of a valid stash output
         valid_structure = self.stash_output.validate_structure()
         required_paths = self.required_paths()
         for pname, path in required_paths.items():
             if not path.exists():
-                warnings.warn(f"Missing required path {pname}: {path}")
+                warnings.warn(f"Missing required path {pname}: {path}", stacklevel=2)
                 valid_structure = False
                 break
 
         try:
             self.validate_label(label=self.name)
         except ValueError as e:
-            warnings.warn(f"Invalid annotation name {self.name}: {e}")
+            warnings.warn(f"Invalid annotation name {self.name}: {e}", stacklevel=2)
             valid_structure = False
 
         return valid_structure
 
-class AnnotatedUserOutput(BaseOutput):
-    """
-    Encapsulates the structure for annotation workflows. Example:
 
-      <stash_root_dir>/
-      ├── stash/
-      │   └── <any subfolders, e.g. 'testor'>
+class AnnotatedUserOutput(BaseOutput):
+    """Encapsulates the structure for annotation workflows. Example:
+
+    <stash_root_dir>/
+    ├── stash/
+    │   └── <any subfolders, e.g. 'testor'>
 
     """
 
@@ -206,43 +213,45 @@ class AnnotatedUserOutput(BaseOutput):
         self.workflow_dir = self.root_dir / "workflow"
         # Dynamically locate the workflow directory in the installed package
         try:
-            self.workflow_src_dir = Path(importlib.resources.files("vcfstash") / "workflow")
+            self.workflow_src_dir = (
+                Path(str(importlib.resources.files("vcfstash"))) / "workflow"
+            )
+
         except ModuleNotFoundError:
-            raise RuntimeError("Workflow directory not found in the installed package.")
+            raise RuntimeError(
+                "Workflow directory not found in the installed package."
+            ) from None
         self.name = self.root_dir.name
 
     def required_paths(self) -> dict:
-        """
-        Returns a dictionary with the required paths for the stash output structure.
-        """
-        required_paths = {
-            "workflow": self.workflow_dir
-        }
+        """Returns a dictionary with the required paths for the stash output structure."""
+        required_paths = {"workflow": self.workflow_dir}
         # for path in self.workflow_src_dir.rglob("*"):  # Recursively find all files and dirs
         #     if not path.name.endswith(".config"):  # Exclude .config files
         #         required_paths[f"{path.parent.stem}>{path.name}"] = self.workflow_dir / path.name
         return required_paths
 
     def create_structure(self) -> None:
+        """Create the required directories for the annotated user output structure."""
         dirs_to_create = {
-            "workflow": self.workflow_dir # remaining sub dirs are created by the copytree in VCFDatabase._copy_workflow_srcfiles()
+            "workflow": self.workflow_dir  # remaining sub dirs are created by the copytree in VCFDatabase._copy_workflow_srcfiles()
         }
         self.create_directories(dirs_to_create)
 
-
     def validate_structure(self) -> bool:
+        """Validate the structure of the annotated user output directory."""
         valid_structure = True
 
         for pname, path in self.required_paths().items():
             if not path.exists():
-                warnings.warn(f"Missing required path {pname}: {path}")
+                warnings.warn(f"Missing required path {pname}: {path}", stacklevel=2)
                 valid_structure = False
                 break
 
         try:
             self.validate_label(label=self.name)
         except ValueError as e:
-            warnings.warn(f"Invalid annotation name {self.name}: {e}")
+            warnings.warn(f"Invalid annotation name {self.name}: {e}", stacklevel=2)
             valid_structure = False
 
         return valid_structure

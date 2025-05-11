@@ -1,26 +1,72 @@
+"""Database annotation module for the vcfstash package.
+
+This module provides classes for annotating the variant database and for annotating
+user VCF files using the annotated database.
+"""
+
 import os
-import re
 import shutil
+import subprocess
 import sys
 import time
+from datetime import datetime
+from logging import Logger
+from multiprocessing import Pool
+from pathlib import Path
+from typing import Optional, Union
 
+import pandas as pd
+import pysam
 import yaml
 
-from vcfstash.database.base import VCFDatabase, NextflowWorkflow
+from vcfstash.database.base import NextflowWorkflow, VCFDatabase
 from vcfstash.database.outputs import AnnotatedStashOutput, AnnotatedUserOutput
-from pathlib import Path
-import subprocess
-from datetime import datetime
-from multiprocessing import Pool
-import pysam
 from vcfstash.utils.logging import setup_logging
 
-class DatabaseAnnotator(VCFDatabase):
-    """Handles database annotation workflows"""
 
-    def __init__(self, annotation_name: str, db_path: Path | str, anno_config_file: Path | str,
-                 params_file: Path | str = None, config_file: Path | str = None, verbosity: int = 0,
-                 force: bool = False, debug: bool = False):
+class DatabaseAnnotator(VCFDatabase):
+    """A class for annotating variant data using a VCF database.
+
+    DatabaseAnnotator is built for managing the annotation workflow of variant data.
+    It integrates with a VCF database and leverages configuration files for setting
+    up the workflow parameters. The class supports validation of input files, creation
+    of necessary directories, and setting up configurations for annotation.
+
+    Attributes:
+        annotation_name (str): Name of the annotation operation.
+        stashed_annotations (AnnotatedStashOutput): Object managing annotation stashed data.
+        logger (Logger): Logging utility for the annotator.
+        output_dir (Path): Output directory for annotation-related files.
+        config_file (Optional[Path]): Path to the processed configuration file (if provided/available).
+        info_snapshot_file (Path): Path for storing snapshot information about the blueprint in use.
+        anno_config_file (Path): Preprocessed annotation configuration file path.
+        params_file (Path): Path to the annotation parameters YAML file.
+        nx_workflow (NextflowWorkflow): Object for managing the actual workflow.
+
+    Methods:
+        _preprocess_annotation_config(user_config: Path) -> Path
+            Preprocesses the given annotation configuration file to address variable substitution issues.
+
+        _validate_inputs() -> None
+            Validates the presence and structure of input files, annotation YAML parameters,
+            and other critical resources.
+
+        _setup_annotation_stash(force: bool) -> None
+            Ensures the stashed directory structure is properly set up for the annotation
+            process. Deletes existing directories if `force` is set.
+    """
+
+    def __init__(
+        self,
+        annotation_name: str,
+        db_path: Path | str,
+        anno_config_file: Path | str,
+        params_file: Optional[Path | str] = None,
+        config_file: Optional[Path | str] = None,
+        verbosity: int = 0,
+        force: bool = False,
+        debug: bool = False,
+    ):
         """Initialize database annotator.
 
         self = DatabaseAnnotator(annotation_name="testor", anno_config_file=Path('~/projects/vcfstash/tests/config/annotation.config'),
@@ -32,35 +78,46 @@ class DatabaseAnnotator(VCFDatabase):
             params_file: Optional parameters file
             verbosity: Logging verbosity level (0=WARNING, 1=INFO, 2=DEBUG)
         """
+        super().__init__(
+            Path(db_path) if isinstance(db_path, str) else db_path, verbosity, debug
+        )
 
-        super().__init__(db_path, verbosity, debug)
-
-        self.stashed_annotations = AnnotatedStashOutput(str(self.stash_dir / annotation_name))
+        self.stashed_annotations = AnnotatedStashOutput(
+            str(self.stash_dir / annotation_name)
+        )
         self.stashed_annotations.validate_label(annotation_name)
         self.annotation_name = annotation_name
-        self.logger = self.connect_loggers()
+        self.logger: Logger = self.connect_loggers()
         self._setup_annotation_stash(force)
         self.output_dir = self.stashed_annotations.annotation_dir
 
         self.config_file = None
         if config_file:
-            self.config_file = self.output_dir / 'process.config'
-            shutil.copyfile(config_file.expanduser().resolve(), self.config_file)
+            self.config_file = self.output_dir / "process.config"
+            config_path = (
+                Path(config_file) if isinstance(config_file, str) else config_file
+            )
+            shutil.copyfile(config_path.expanduser().resolve(), self.config_file)
 
         self.info_snapshot_file = self.output_dir / "blueprint_snapshot.info"
 
-        self.anno_config_file = self._preprocess_annotation_config(user_config=Path(anno_config_file).expanduser().resolve())
+        self.anno_config_file = self._preprocess_annotation_config(
+            user_config=Path(anno_config_file).expanduser().resolve()
+        )
 
-
-        self.params_file = self.output_dir / f'annotation.yaml'
+        self.params_file = self.output_dir / "annotation.yaml"
         if params_file:
-            shutil.copyfile(params_file.expanduser().resolve(), self.params_file)
+            params_path = (
+                Path(params_file) if isinstance(params_file, str) else params_file
+            )
+            shutil.copyfile(params_path.expanduser().resolve(), self.params_file)
         else:
             wfi = self.workflow_dir / "init.yaml"
             assert wfi.exists(), f"Workflow init params file not found: {wfi}"
             shutil.copyfile(wfi, self.params_file)
-            assert self.params_file.exists(), f"Workflow params file not found: {self.params_file}"
-
+            assert (
+                self.params_file.exists()
+            ), f"Workflow params file not found: {self.params_file}"
 
         # Initialize NextflowWorkflow
         self.nx_workflow = NextflowWorkflow(
@@ -68,22 +125,22 @@ class DatabaseAnnotator(VCFDatabase):
             output_dir=self.output_dir,
             name=self.annotation_name,
             workflow=self.workflow_dir / "main.nf",
-            config_file=self.config_file,
+            config_file=self.config_file if self.config_file is not None else None,
             anno_config_file=self.anno_config_file,
             params_file=self.params_file,
-            verbosity=self.verbosity
+            verbosity=self.verbosity,
         )
 
         self._validate_inputs()
 
         # Log initialization parameters
-        self.logger.info("Initializing database annotation")
-        self.logger.debug(f"Annotation directory: {self.output_dir}")
-        self.logger.debug(f"Config file: {self.config_file}")
+        if self.logger:
+            self.logger.info("Initializing database annotation")
+            self.logger.debug(f"Annotation directory: {self.output_dir}")
+            self.logger.debug(f"Config file: {self.config_file}")
 
     def _preprocess_annotation_config(self, user_config: Path) -> Path:
-        """
-        Preprocess annotation.config to fix variable substitution issues.
+        """Preprocess annotation.config to fix variable substitution issues.
         Replaces problematic variable references with their escaped versions.
         This only has to be done once, as the config is copied to the output directory and used for all subsequent vcfstash annotate runs
 
@@ -93,17 +150,17 @@ class DatabaseAnnotator(VCFDatabase):
         """
         assert user_config.exists(), f"Annotation config file not found: {user_config}"
 
-        with open(user_config, 'r') as f:
+        with open(user_config, "r") as f:
             content = f.read()
 
         # Direct replacements for all possible forms
         replacements = [
-            ('${INPUT_BCF', '\\${INPUT_BCF'),
-            ('$INPUT_BCF', '\\$INPUT_BCF'),
-            ('${OUTPUT_BCF', '\\${OUTPUT_BCF'),
-            ('$OUTPUT_BCF', '\\$OUTPUT_BCF'),
-            ('${AUXILIARY_DIR', '\\${AUXILIARY_DIR'),
-            ('$AUXILIARY_DIR', '\\$AUXILIARY_DIR')
+            ("${INPUT_BCF", "\\${INPUT_BCF"),
+            ("$INPUT_BCF", "\\$INPUT_BCF"),
+            ("${OUTPUT_BCF", "\\${OUTPUT_BCF"),
+            ("$OUTPUT_BCF", "\\$OUTPUT_BCF"),
+            ("${AUXILIARY_DIR", "\\${AUXILIARY_DIR"),
+            ("$AUXILIARY_DIR", "\\$AUXILIARY_DIR"),
         ]
 
         # Apply each replacement
@@ -111,134 +168,214 @@ class DatabaseAnnotator(VCFDatabase):
         for old, new in replacements:
             modified_content = modified_content.replace(old, new)
 
-        output_cfg = self.output_dir / 'annotation.config'
-        with open(output_cfg, 'w') as f:
+        output_cfg = self.output_dir / "annotation.config"
+        with open(output_cfg, "w") as f:
             f.write(modified_content)
 
         return output_cfg
 
     def _validate_inputs(self) -> None:
-        """Validate input files, directories, and YAML parameters"""
-        self.logger.debug("Validating inputs")
+        """Validate input files, directories, and YAML parameters."""
+        if self.logger:
+            self.logger.debug("Validating inputs")
 
         # Validate VCF reference
         try:
             # Load YAML file to get reference path
-            params_yaml = yaml.safe_load(Path(self.params_file).expanduser().resolve().read_text())
+            params_yaml = yaml.safe_load(
+                Path(self.params_file).expanduser().resolve().read_text()
+            )
 
             # Get reference path from YAML
-            reference_path_str = params_yaml.get('reference')
+            reference_path_str = params_yaml.get("reference")
             if not reference_path_str:
-                self.logger.error("Reference path not found in YAML file")
+                if self.logger:
+                    self.logger.error("Reference path not found in YAML file")
                 raise ValueError("Reference path not found in YAML file")
 
             # Expand environment variables in reference path
             if "${VCFSTASH_ROOT}" in reference_path_str:
                 vcfstash_root = os.environ.get("VCFSTASH_ROOT")
                 if not vcfstash_root:
-                    self.logger.error("VCFSTASH_ROOT environment variable not set")
+                    if self.logger:
+                        self.logger.error("VCFSTASH_ROOT environment variable not set")
                     raise ValueError("VCFSTASH_ROOT environment variable not set")
-                reference_path_str = reference_path_str.replace("${VCFSTASH_ROOT}", vcfstash_root)
+                reference_path_str = reference_path_str.replace(
+                    "${VCFSTASH_ROOT}", vcfstash_root
+                )
 
             reference_path = Path(reference_path_str).expanduser().resolve()
 
             # Get chromosome mapping file path
             chr_add_path = None
-            chr_add_path_str = params_yaml.get('chr_add')
+            chr_add_path_str = params_yaml.get("chr_add")
             if chr_add_path_str:
                 # Expand environment variables in chr_add path
                 if "${VCFSTASH_ROOT}" in chr_add_path_str:
                     vcfstash_root = os.environ.get("VCFSTASH_ROOT")
                     if vcfstash_root:
-                        chr_add_path_str = chr_add_path_str.replace("${VCFSTASH_ROOT}", vcfstash_root)
+                        chr_add_path_str = chr_add_path_str.replace(
+                            "${VCFSTASH_ROOT}", vcfstash_root
+                        )
                 chr_add_path = Path(chr_add_path_str).expanduser().resolve()
                 if not chr_add_path.exists():
-                    self.logger.warning(f"Chromosome mapping file not found: {chr_add_path}")
+                    if self.logger:
+                        self.logger.warning(
+                            f"Chromosome mapping file not found: {chr_add_path}"
+                        )
                     chr_add_path = None
 
             # Validate VCF reference with chromosome mapping
-            self.logger.info(f"Validating VCF reference: {reference_path}")
+            if self.logger:
+                self.logger.info(f"Validating VCF reference: {reference_path}")
             valid, error_msg = self.validate_vcf_reference(
-                self.blueprint_bcf,
-                reference_path,
-                chr_add_path
+                self.blueprint_bcf, reference_path, chr_add_path
             )
 
             if not valid:
                 # Only log once and raise directly - don't log first and then raise
                 raise ValueError(f"VCF reference validation failed: {error_msg}")
 
-            self.logger.info("VCF reference validation successful")
+            if self.logger:
+                self.logger.info("VCF reference validation successful")
         except ValueError:
             # Don't log here, just re-raise the ValueError
             raise
         except Exception as e:
             # For unexpected errors, log once and convert to RuntimeError
-            self.logger.error(f"Unexpected error during VCF reference validation: {e}")
-            raise RuntimeError(f"Error during VCF reference validation: {e}")
+            if self.logger:
+                self.logger.error(
+                    f"Unexpected error during VCF reference validation: {e}"
+                )
+            raise RuntimeError(f"Error during VCF reference validation: {e}") from e
 
-        self.logger.debug("Input validation successful")
+        if self.logger:
+            self.logger.debug("Input validation successful")
 
-    def _setup_annotation_stash(self, force:bool) -> None:
+    def _setup_annotation_stash(self, force: bool) -> None:
         # Remove destination directory if it exists to ensure clean copy
         if self.stashed_annotations.annotation_dir.exists():
-            if self.stashed_output.validate_structure():  # we dont want to remove a random dir....
+            if (
+                self.stashed_output.validate_structure()
+            ):  # we dont want to remove a random dir....
                 if force:
-                    print(f"Stash directory already exists, removing: {self.stashed_output.root_dir}")
+                    print(
+                        f"Stash directory already exists, removing: {self.stashed_output.root_dir}"
+                    )
                     shutil.rmtree(self.stashed_annotations.annotation_dir)
                 else:
                     raise FileExistsError(
-                        f"Output directory already exists: {self.stashed_annotations.annotation_dir}\nIf intended, use --force to overwrite.")
+                        f"Output directory already exists: {self.stashed_annotations.annotation_dir}\nIf intended, use --force to overwrite."
+                    )
             else:
                 if not force:
                     raise FileNotFoundError(
-                        f"Output directory must not exist if --force is not set and a valid stash directory: {self.stashed_annotations.annotation_dir}")
+                        f"Output directory must not exist if --force is not set and a valid stash directory: {self.stashed_annotations.annotation_dir}"
+                    )
 
         print(f"Creating stash structure: {self.stashed_annotations.annotation_dir}")
         self.stashed_annotations.create_structure()
 
-    def annotate(self, extra_files:bool = True) -> None:
+    def annotate(self, extra_files: bool = True) -> None:
         """Run annotation workflow on database"""
-
         # Store blueprint snapshot and workflow files
         shutil.copy2(self.info_file, self.info_snapshot_file)
 
         try:
-            self.logger.info("Starting annotation workflow")
+            if self.logger:
+                self.logger.info("Starting annotation workflow")
 
             start_time = datetime.now()
             self.nx_workflow.run(
-                db_mode='stash-annotate',
-                db_bcf= self.blueprint_bcf,
+                db_mode="stash-annotate",
+                db_bcf=self.blueprint_bcf,
                 trace=extra_files,
                 dag=extra_files,
-                report=extra_files
+                report=extra_files,
             )
             if not self.debug:
                 self.nx_workflow.cleanup_work_dir()
 
             duration = datetime.now() - start_time
-            self.logger.info(f"Annotation to {self.output_dir} completed in {duration.total_seconds():.2f} seconds")
-
+            if self.logger:
+                self.logger.info(
+                    f"Annotation to {self.output_dir} completed in {duration.total_seconds():.2f} seconds"
+                )
 
         except subprocess.CalledProcessError as e:
-            self.logger.error(f"Workflow execution failed: {e.stderr}")
-            self.logger.warning(f"Removing output directory: {self.output_dir}")
+            if self.logger:
+                self.logger.error(f"Workflow execution failed: {e.stderr}")
+                self.logger.warning(f"Removing output directory: {self.output_dir}")
             shutil.rmtree(self.output_dir)
             sys.exit(1)
 
 
-
 class VCFAnnotator(VCFDatabase):
-    """Handles annotation of user VCF files using the database"""
+    """Provides functionality to annotate VCF/BCF files using a predefined annotation
+    database while managing output directories and workflows.
 
-    INFO_FIELDS = ['GT', 'DP', 'AF', "gnomadg_af", "gnomade_af", "gnomadg_ac", "gnomade_ac", 'clinvar_clnsig',
-                   "deeprvat_score"]
+    This class is designed for handling large-scale genomic data annotations.
+    It integrates with a Nextflow workflow for automated processing and includes
+    methods for validating input files, managing output directories, and setting
+    up configuration files. It requires an annotation database and an input VCF/BCF
+    file, both of which should be prepared and structured correctly beforehand.
+
+    Attributes:
+        input_vcf (Path): Path to the input VCF/BCF file.
+        annotation_db_path (Path): Path to the structured annotation database directory.
+        annotation_name (str): Name derived from the annotation database.
+        output_dir (Path): Directory where annotated output files will be stored.
+        config_file (Optional[Path]): Path to the configuration file, if used.
+        params_file (Path): Path to the parameters YAML file.
+        logger (Logger): Logging instance for the class.
+        nx_workflow (NextflowWorkflow): Instance of the workflow manager.
+
+    Args:
+        input_vcf (Path | str): Path to the input VCF/BCF file, which must be indexed.
+        annotation_db (Path | str): Path to the annotation database.
+        output_dir (Path | str): Path where annotated results will be stored.
+        config_file (Optional[Path | str]): Optional configuration file; defaults
+            to the process configuration from the annotation database.
+        params_file (Optional[Path | str]): Path to a custom parameters file; if
+            not provided, defaults to "annotation.yaml" from the annotation database.
+        verbosity (int): Logging verbosity level; 0 (WARNING), 1 (INFO), or 2 (DEBUG).
+        force (bool): Indicates whether to overwrite the existing output directory.
+        debug (bool): Enables extensive logging and debug mode for troubleshooting.
+
+    Raises:
+        FileNotFoundError: Raised if input VCF/BCF, annotation database, or
+            required reference/configuration files are not found.
+        FileExistsError: Raised if output directory exists but force flag is not set.
+        ValueError: Raised if invalid parameters or VCF reference information
+            is encountered during validation.
+        RuntimeError: Raised for unexpected errors during validation or setup.
+    """
+
+    VALID_VCF_EXTENSIONS = (".bcf", ".vcf.gz", ".vcf")
+    INFO_FIELDS = [
+        "GT",
+        "DP",
+        "AF",
+        "gnomadg_af",
+        "gnomade_af",
+        "gnomadg_ac",
+        "gnomade_ac",
+        "clinvar_clnsig",
+        "deeprvat_score",
+    ]
     BASES = {"A", "C", "G", "T"}
 
-    def __init__(self, input_vcf: Path | str, annotation_db: Path | str, output_dir: Path | str,
-                 config_file: Path | str = None, params_file: Path | str = None, verbosity: int = 0,
-                 force: bool = False, debug: bool = False):
+    def __init__(
+        self,
+        input_vcf: Path | str,
+        annotation_db: Path | str,
+        output_dir: Path | str,
+        config_file: Optional[Path | str] = None,
+        params_file: Optional[Path | str] = None,
+        verbosity: int = 0,
+        force: bool = False,
+        debug: bool = False,
+    ):
         """Initialize database annotator.
 
         Args:
@@ -251,7 +388,6 @@ class VCFAnnotator(VCFDatabase):
             debug: Whether to enable debug mode
             verbosity: Logging verbosity level (0=WARNING, 1=INFO, 2=DEBUG)
         """
-
         self.input_vcf = Path(input_vcf).expanduser().resolve()
         self.vcf_name, fext = self._validate_and_extract_sample_name()
 
@@ -260,18 +396,21 @@ class VCFAnnotator(VCFDatabase):
 
         self.stashed_annotations = AnnotatedStashOutput(str(annotation_db))
         if not self.stashed_annotations.validate_structure():
-            raise FileNotFoundError(f"Annotation database annotation_db not valid: {self.stashed_annotations.annotation_dir}")
+            raise FileNotFoundError(
+                f"Annotation database annotation_db not valid: {self.stashed_annotations.annotation_dir}"
+            )
         self.annotation_db_path = self.stashed_annotations.annotation_dir
         self.annotation_name = self.stashed_annotations.name
-        super().__init__(self.stashed_annotations.stash_output.root_dir, verbosity, debug)
-
+        super().__init__(
+            self.stashed_annotations.stash_output.root_dir, verbosity, debug
+        )
 
         self.output_annotations = AnnotatedUserOutput(str(output_dir))
         self.output_annotations.validate_label(self.output_annotations.name)
 
         self._setup_output(force=force)
         self.output_dir = self.output_annotations.root_dir
-        self.logger = setup_logging(
+        self.logger: Logger = setup_logging(
             verbosity=self.verbosity,
             log_file=self.output_dir / "annotation.log",
         )
@@ -279,29 +418,49 @@ class VCFAnnotator(VCFDatabase):
         self.annotation_wfl_path = self.output_annotations.workflow_dir
         self.annotation_wfl_path.mkdir(parents=True, exist_ok=True)
 
-        self.output_vcf = Path(self.output_dir / f'{self.vcf_name}_vst{fext}')
+        self.output_vcf = Path(self.output_dir / f"{self.vcf_name}_vst{fext}")
 
         # now also import the mandatory annotation file, that cannot be provided by the user at this stage
-        self.anno_config_file = self.annotation_db_path / 'annotation.config'
+        self.anno_config_file = self.annotation_db_path / "annotation.config"
         if not self.anno_config_file.exists():
-            raise FileNotFoundError(f"Annotation config file not found: {self.anno_config_file}")
+            raise FileNotFoundError(
+                f"Annotation config file not found: {self.anno_config_file}"
+            )
 
-        self.config_file = Path(config_file).expanduser().resolve() if config_file else self.annotation_db_path / 'process.config'
+        # Define config_file as Optional[Path]
+        self.config_file: Optional[Path] = (
+            Path(config_file).expanduser().resolve()
+            if config_file and isinstance(config_file, str)
+            else (
+                config_file.expanduser().resolve()
+                if config_file
+                else self.annotation_db_path / "process.config"
+            )
+        )
+        # Update config_file to be Optional[Path]
         if not self.config_file or not self.config_file.exists():
             self.config_file = None
         else:
-            shutil.copyfile(self.config_file, self.annotation_wfl_path / self.config_file.name)
+            shutil.copyfile(
+                self.config_file, self.annotation_wfl_path / self.config_file.name
+            )
             self.config_file = self.annotation_wfl_path / self.config_file
 
-        self.params_file = self.annotation_wfl_path / f'annotation.yaml'
+        self.params_file = self.annotation_wfl_path / "annotation.yaml"
         if params_file:
-            shutil.copyfile(params_file.expanduser().resolve(), self.params_file)
+            params_path = (
+                Path(params_file) if isinstance(params_file, str) else params_file
+            )
+            shutil.copyfile(params_path.expanduser().resolve(), self.params_file)
         else:
             wfi = self.annotation_db_path / "annotation.yaml"
-            assert wfi.exists(), f"Workflow annotation params file not found: {wfi}, required if no yaml provided!"
+            assert (
+                wfi.exists()
+            ), f"Workflow annotation params file not found: {wfi}, required if no yaml provided!"
             shutil.copyfile(wfi, self.params_file)
-        assert self.params_file.exists(), f"Workflow params file not found: {self.params_file}"
-
+        assert (
+            self.params_file.exists()
+        ), f"Workflow params file not found: {self.params_file}"
 
         self.stash_file = self.annotation_db_path / "vcfstash_annotated.bcf"
         if not self.stash_file.exists():
@@ -316,90 +475,110 @@ class VCFAnnotator(VCFDatabase):
             config_file=self.config_file,
             anno_config_file=self.anno_config_file,
             params_file=self.params_file,
-            verbosity=self.verbosity
+            verbosity=self.verbosity,
         )
 
         self._validate_inputs()
 
         # Log initialization parameters
-        self.logger.info(f"Initializing annotation of {self.input_vcf.name}")
-        self.logger.debug(f"Cache file: {self.stash_file}")
-        self.logger.debug(f"Config file: {self.config_file}")
+        if self.logger:
+            self.logger.info(f"Initializing annotation of {self.input_vcf.name}")
+            self.logger.debug(f"Cache file: {self.stash_file}")
+            self.logger.debug(f"Config file: {self.config_file}")
 
     def _validate_inputs(self) -> None:
-        """Validate input files, directories, and YAML parameters"""
-        self.logger.debug("Validating inputs")
+        """Validate input files, directories, and YAML parameters."""
+        if self.logger:
+            self.logger.debug("Validating inputs")
 
         # Check input VCF/BCF if provided
         if self.input_vcf:
             if not self.input_vcf.exists():
                 msg = f"Input VCF/BCF file not found: {self.input_vcf}"
-                self.logger.error(msg)
+                if self.logger:
+                    self.logger.error(msg)
                 raise FileNotFoundError(msg)
             self.ensure_indexed(self.input_vcf)
 
         # Validate VCF reference
         try:
             # Load YAML file to get reference path
-            params_yaml = yaml.safe_load(Path(self.params_file).expanduser().resolve().read_text())
+            params_yaml = yaml.safe_load(
+                Path(self.params_file).expanduser().resolve().read_text()
+            )
 
             # Get reference path from YAML
-            reference_path_str = params_yaml.get('reference')
+            reference_path_str = params_yaml.get("reference")
             if not reference_path_str:
-                self.logger.error("Reference path not found in YAML file")
+                if self.logger:
+                    self.logger.error("Reference path not found in YAML file")
                 raise ValueError("Reference path not found in YAML file")
 
             # Expand environment variables in reference path
             if "${VCFSTASH_ROOT}" in reference_path_str:
                 vcfstash_root = os.environ.get("VCFSTASH_ROOT")
                 if not vcfstash_root:
-                    self.logger.error("VCFSTASH_ROOT environment variable not set")
+                    if self.logger:
+                        self.logger.error("VCFSTASH_ROOT environment variable not set")
                     raise ValueError("VCFSTASH_ROOT environment variable not set")
-                reference_path_str = reference_path_str.replace("${VCFSTASH_ROOT}", vcfstash_root)
+                reference_path_str = reference_path_str.replace(
+                    "${VCFSTASH_ROOT}", vcfstash_root
+                )
 
             reference_path = Path(reference_path_str).expanduser().resolve()
 
             # Validate VCF reference
-            self.logger.info(f"Validating VCF reference: {reference_path}")
-            valid, error_msg = self.validate_vcf_reference(self.input_vcf, reference_path)
+            if self.logger:
+                self.logger.info(f"Validating VCF reference: {reference_path}")
+            valid, error_msg = self.validate_vcf_reference(
+                self.input_vcf, reference_path
+            )
 
             if not valid:
                 # Only log once and raise directly - don't log first and then raise
                 raise ValueError(f"VCF reference validation failed: {error_msg}")
 
-            self.logger.info("VCF reference validation successful")
+            if self.logger:
+                self.logger.info("VCF reference validation successful")
         except ValueError:
             # Don't log here, just re-raise the ValueError
             raise
         except Exception as e:
             # For unexpected errors, log once and convert to RuntimeError
-            self.logger.error(f"Unexpected error during VCF reference validation: {e}")
-            raise RuntimeError(f"Error during VCF reference validation: {e}")
+            if self.logger:
+                self.logger.error(
+                    f"Unexpected error during VCF reference validation: {e}"
+                )
+            raise RuntimeError(f"Error during VCF reference validation: {e}") from e
 
-        self.logger.debug("Input validation successful")
+        if self.logger:
+            self.logger.debug("Input validation successful")
 
-
-    def _setup_output(self, force:bool) -> None:
+    def _setup_output(self, force: bool) -> None:
         # Remove destination directory if it exists to ensure clean copy
         if self.output_annotations.root_dir.exists():
-            if self.output_annotations.validate_structure():  # we dont want to remove a random dir....
+            if (
+                self.output_annotations.validate_structure()
+            ):  # we dont want to remove a random dir....
                 if force:
-                    print(f"Output directory already exists, removing: {self.output_annotations.root_dir}")
+                    print(
+                        f"Output directory already exists, removing: {self.output_annotations.root_dir}"
+                    )
                     shutil.rmtree(self.output_annotations.root_dir)
                 else:
                     raise FileExistsError(
-                        f"Output directory already exists: {self.output_annotations.root_dir}\nIf intended, use --force to overwrite.")
+                        f"Output directory already exists: {self.output_annotations.root_dir}\nIf intended, use --force to overwrite."
+                    )
             else:
                 raise FileNotFoundError(
-                    f"Output directory must not exist if --force is not set and a valid output directory: {self.output_annotations.root_dir}")
+                    f"Output directory must not exist if --force is not set and a valid output directory: {self.output_annotations.root_dir}"
+                )
 
         print(f"Creating output structure: {self.output_annotations.root_dir}")
         self.output_annotations.create_structure()
 
-
     def _validate_and_extract_sample_name(self) -> tuple[str, str]:
-        """
-        Validates the input VCF file has an acceptable extension
+        """Validates the input VCF file has an acceptable extension
         ('.bcf', '.vcf.gz', '.vcf') and extracts the sample name
         (filename without directory path and extension). Also checks that the file is indexed.
 
@@ -414,31 +593,34 @@ class VCFAnnotator(VCFDatabase):
 
         # Validate file extension
         if not input_vcf_path.suffixes:
-            raise ValueError(f"Input VCF file '{input_vcf_path}' lacks a file extension.")
+            raise ValueError(
+                f"Input VCF file '{input_vcf_path}' lacks a file extension."
+            )
 
         # Check for valid extensions, considering multi-part extensions
-        if input_vcf_path.name.endswith('.vcf.gz'):
-            extension = '.vcf.gz'
+        if input_vcf_path.name.endswith(".vcf.gz"):
+            extension = ".vcf.gz"
             sample_name = input_vcf_path.name[:-7]  # Removes '.vcf.gz'
-            index_file = input_vcf_path.with_suffix(input_vcf_path.suffix + '.tbi')
-        elif input_vcf_path.name.endswith('.bcf'):
-            extension = '.bcf'
+            index_file = input_vcf_path.with_suffix(input_vcf_path.suffix + ".tbi")
+        elif input_vcf_path.name.endswith(".bcf"):
+            extension = ".bcf"
             sample_name = input_vcf_path.name[:-4]  # Removes '.bcf'
-            index_file = input_vcf_path.with_suffix('.bcf.csi')
-        elif input_vcf_path.name.endswith('.vcf'):
-            extension = '.vcf'
+            index_file = input_vcf_path.with_suffix(".bcf.csi")
+        elif input_vcf_path.name.endswith(".vcf"):
+            extension = ".vcf"
             sample_name = input_vcf_path.name[:-4]  # Removes '.vcf'
-            index_file = input_vcf_path.with_suffix('.vcf.tbi')
+            index_file = input_vcf_path.with_suffix(".vcf.tbi")
         else:
             raise ValueError(
                 f"Input VCF file '{input_vcf_path}' must end with one of {self.VALID_VCF_EXTENSIONS}"
             )
 
         if not index_file.exists():
-            raise FileNotFoundError(f"Index file for '{input_vcf_path}' not found: '{index_file}'")
+            raise FileNotFoundError(
+                f"Index file for '{input_vcf_path}' not found: '{index_file}'"
+            )
 
         return sample_name, extension
-
 
     def _process_region(self, args: tuple) -> "pd.DataFrame":
         """Process a single genomic region from BCF file."""
@@ -446,7 +628,8 @@ class VCFAnnotator(VCFDatabase):
             import pandas as pd
 
             bcf_path, region = args
-            self.logger.debug(f"Processing region: {region}")
+            if self.logger:
+                self.logger.debug(f"Processing region: {region}")
 
             vcf = pysam.VariantFile(str(bcf_path))
             records = []
@@ -459,38 +642,48 @@ class VCFAnnotator(VCFDatabase):
                     try:
                         # Extract basic variant fields
                         chrom = record.chrom
-                        if chrom[:3] != 'chr':
+                        if chrom[:3] != "chr":
                             continue
 
                         pos = record.pos
                         ref = record.ref
-                        alt = record.alts[0]  # Assuming single ALT
+                        alt = (
+                            record.alts[0] if record.alts else ""
+                        )  # Assuming single ALT
                         if not all([x in self.BASES for x in alt]):
                             continue
 
                         # Process INFO fields
                         info = {key: None for key in self.INFO_FIELDS}
-                        info |= {key: record.info.get(key, None) for key in self.INFO_FIELDS if key in record.info}
+                        info |= {
+                            key: record.info.get(key, None)
+                            for key in self.INFO_FIELDS
+                            if key in record.info
+                        }
 
                         # Extract FORMAT fields
                         if len(record.samples):
 
                             sample = record.samples[0]
-                            ad = sample.get('AD', None)
-                            dp = sample.get('DP', None)
+                            ad = sample.get("AD", None)
+                            dp = sample.get("DP", None)
 
                             # Calculate AF
                             af = None
                             if ad and len(ad) >= 2:
                                 ref_depth = ad[0]
                                 alt_depth = ad[1]
-                                af = alt_depth / (ref_depth + alt_depth) if (ref_depth + alt_depth) > 0 else None
+                                af = (
+                                    alt_depth / (ref_depth + alt_depth)
+                                    if (ref_depth + alt_depth) > 0
+                                    else None
+                                )
 
                             info |= {
-                                'GT': sample.get('GT', None),
-                                'AD': ad[1] if ad and len(ad) > 1 else None,
-                                'DP': dp,
-                                'AF': af
+                                "GT": sample.get("GT", None),
+                                "AD": ad[1] if ad and len(ad) > 1 else None,
+                                "DP": dp,
+                                "AF": af,
                             }
 
                         # Process clinvar and gnomad fields
@@ -498,44 +691,63 @@ class VCFAnnotator(VCFDatabase):
 
                         # Process VCF annotations
                         # TODO: currently does not work for any Tag apart from CSQ, need to pull from .config via ${params.must_contain_info_tag}
-                        vcf_csqs = [dict(zip(vcf.header.info['CSQ'].description.split(' ')[-1].split('|'),
-                                           x.split("|"))) for x in record.info["CSQ"]]
-                        # TODO: This currently only works with VEP annotations, need to be more flexible
-                        expanded_transcripts = self.parse_vcf_info(vcf_csqs)
+                        if "CSQ" in record.info:
+                            csq_values = record.info["CSQ"]
+                            if csq_values:
+                                description = vcf.header.info["CSQ"].description
+                                if description:
+                                    fields = (
+                                        description.split(" ")[-1].split("|")
+                                        if " " in description
+                                        else []
+                                    )
+                                    vcf_csqs = [
+                                        dict(zip(fields, x.split("|"), strict=False))
+                                        for x in csq_values
+                                    ]
+                                    # TODO: This currently only works with VEP annotations, need to be more flexible
+                                    expanded_transcripts = self.parse_vcf_info(vcf_csqs)
 
-                        for transcript in expanded_transcripts:
-                            row = {
-                                "CHROM": chrom,
-                                "POS": pos,
-                                "REF": ref,
-                                "ALT": alt,
-                                **info,
-                                **transcript
-                            }
-                            records.append(row)
+                                    for transcript in expanded_transcripts:
+                                        row = {
+                                            "CHROM": chrom,
+                                            "POS": pos,
+                                            "REF": ref,
+                                            "ALT": alt,
+                                            **info,
+                                            **transcript,
+                                        }
+                                        records.append(row)
 
                     except Exception as e:
                         excluded_count += 1
-                        self.logger.error(f"Error processing variant at {record.chrom}:{record.pos}: {e}")
+                        if self.logger:
+                            self.logger.error(
+                                f"Error processing variant at {record.chrom}:{record.pos}: {e}"
+                            )
                         continue
 
-                self.logger.debug(f"Processed {variant_count} variants, excluded {excluded_count} in {region}")
+                if self.logger:
+                    self.logger.debug(
+                        f"Processed {variant_count} variants, excluded {excluded_count} in {region}"
+                    )
                 return pd.DataFrame(records)
 
             except Exception as e:
-                self.logger.error(f"Error processing region {region}: {e}")
+                if self.logger:
+                    self.logger.error(f"Error processing region {region}: {e}")
                 raise
         except ImportError:
             raise ImportError(
                 "This feature requires pandas and pyarrow. "
                 "Install with 'pip install pandas pyarrow'"
-            )
+            ) from None
 
     def _process_variant_annotations(self, info: dict) -> None:
         """Process clinvar and gnomad annotations."""
         # Process clinvar
         clinvar_clnsig = info.get("clinvar_clnsig", None)
-        if clinvar_clnsig and clinvar_clnsig[0] != 'null':
+        if clinvar_clnsig and clinvar_clnsig[0] != "null":
             info["clinvar_clnsig"] = ", ".join(clinvar_clnsig)
         else:
             info["clinvar_clnsig"] = None
@@ -550,7 +762,9 @@ class VCFAnnotator(VCFDatabase):
 
         # Calculate weighted average
         gnomadg_ac = float(info["gnomadg_af"]) if info.get("gnomadg_ac", None) else 0
-        gnomade_ac = int(info.get("gnomade_ac", 0)) if info.get("gnomade_ac", None) else 0
+        gnomade_ac = (
+            int(info.get("gnomade_ac", 0)) if info.get("gnomade_ac", None) else 0
+        )
         gnomadg_af = float(info["gnomadg_af"]) if info.get("gnomadg_af", None) else None
         gnomade_af = float(info["gnomade_af"]) if info.get("gnomade_af", None) else None
 
@@ -559,8 +773,6 @@ class VCFAnnotator(VCFDatabase):
         # Remove individual gnomad fields
         for field in gnomad_fields:
             info.pop(field, None)
-
-
 
     def annotate(self, uncached: bool = False, convert_parquet: bool = False) -> None:
         """Run annotation workflow on input VCF file.
@@ -576,49 +788,52 @@ class VCFAnnotator(VCFDatabase):
 
         """
         start_time = time.time()
-        self.logger.info("Starting VCF annotation")
+        if self.logger:
+            self.logger.info("Starting VCF annotation")
 
         try:
 
-
             # Run the workflow in database mode
             self.nx_workflow.run(
-                db_mode='annotate' if not uncached else 'annotate-nocache',
+                db_mode="annotate" if not uncached else "annotate-nocache",
                 db_bcf=self.stash_file,
                 trace=True,
                 dag=True,
-                report=True
+                report=True,
             )
             duration = time.time() - start_time
-            self.logger.info(f"VCF workflow completed in {duration:.1f}s")
+            if self.logger:
+                self.logger.info(f"VCF workflow completed in {duration:.1f}s")
 
-
-        except Exception as e:
-            self.logger.error("Annotation failed", exc_info=True)
+        except Exception:
+            if self.logger:
+                self.logger.error("Annotation failed", exc_info=True)
             raise
 
         if convert_parquet:
             # This should be implemented in nextflow in the long run to leverage resource management
-            #threads = self.nx_workflow.nf_config_content['params'].get('vep_max_forks',1) * self.nx_workflow.nf_config_content['params'].get('vep_max_chr_parallel', 1)
-            self._convert_to_parquet(self.output_vcf)# , threads=threads)
+            # threads = self.nx_workflow.nf_config_content['params'].get('vep_max_forks',1) * self.nx_workflow.nf_config_content['params'].get('vep_max_chr_parallel', 1)
+            self._convert_to_parquet(self.output_vcf)  # , threads=threads)
 
         if not self.debug:
             self.nx_workflow.cleanup_work_dir()
 
-
-    def _convert_to_parquet(self, bcf_path: Path, threads:int = 2) -> Path:
+    def _convert_to_parquet(self, bcf_path: Path, threads: int = 2) -> Path:
         """Convert annotated BCF to optimized Parquet format"""
         try:
             import pandas as pd
-            import pyarrow as pa
-            import pyarrow.parquet as pq
+            import pyarrow as pa  # type: ignore
+            import pyarrow.parquet as pq  # type: ignore
 
             vcf = pysam.VariantFile(str(bcf_path))
             regions = list(vcf.header.contigs.keys())
             args_list = [(str(bcf_path), region) for region in regions]
 
-            self.logger.info(f"Converting BCF to Parquet: {bcf_path}")
-            self.logger.debug(f"Processing {len(regions)} regions using {threads} threads")
+            if self.logger:
+                self.logger.info(f"Converting BCF to Parquet: {bcf_path}")
+                self.logger.debug(
+                    f"Processing {len(regions)} regions using {threads} threads"
+                )
 
             with Pool(threads) as pool:
                 dataframes = pool.map(self._process_region, args_list)
@@ -626,13 +841,15 @@ class VCFAnnotator(VCFDatabase):
             # Filter and combine dataframes
             dataframes = [df for df in dataframes if not df.empty]
             if not dataframes:
-                self.logger.error("No valid variants found in annotated file")
+                if self.logger:
+                    self.logger.error("No valid variants found in annotated file")
                 raise ValueError("No valid variants found in annotated file")
 
             combined_df = pd.concat(dataframes, ignore_index=True)
             output_file = self.output_dir / f"{self.input_vcf.stem}.parquet"
-            self.logger.info(f"Writing Parquet file: {output_file}")
-            self.logger.debug(f"Total variants: {len(combined_df)}")
+            if self.logger:
+                self.logger.info(f"Writing Parquet file: {output_file}")
+                self.logger.debug(f"Total variants: {len(combined_df)}")
 
             # Write optimized parquet
             table = pa.Table.from_pandas(combined_df)
@@ -643,19 +860,22 @@ class VCFAnnotator(VCFDatabase):
                 use_dictionary=True,
                 row_group_size=100000,
                 data_page_size=65536,
-                write_statistics=True
+                write_statistics=True,
             )
-            self.logger.info("Parquet conversion completed")
+            if self.logger:
+                self.logger.info("Parquet conversion completed")
             return output_file
 
         except ImportError:
             raise ImportError(
                 "Converting to Parquet requires additional dependencies. "
                 "Please install them with: pip install pandas pyarrow"
-            )
+            ) from None
 
     @staticmethod
-    def wavg(f1: float | None, f2: float | None, n1: int, n2: int) -> float | None:
+    def wavg(
+        f1: float | None, f2: float | None, n1: Union[int, float], n2: Union[int, float]
+    ) -> float | None:
         """Weighted average for Allele Frequencies."""
         total_weight = n1 + n2
         if total_weight == 0:
@@ -666,5 +886,5 @@ class VCFAnnotator(VCFDatabase):
             return None
         elif f1 is None:
             return f2
-        elif f2 is None:
+        else:  # f2 is None
             return f1

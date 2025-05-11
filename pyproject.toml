@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vcfstash"
-version = "0.1.0"
+version = "0.2.0"
 description = "Cache-based VCF annotation accelerator"
 requires-python = ">=3.11"
 readme = "README.md"
@@ -15,7 +15,7 @@ authors = [
 dependencies = [
     "click>=8.0",
     "pyyaml>=6.0",
-    "pysam>=0.21.0"
+    "pysam>=0.21.0",
 ]
 
 [project.optional-dependencies]
@@ -24,7 +24,10 @@ parquet = [
     "pyarrow>=18.0.0"
 ]
 dev = [
-    "pytest>=8.3.0"
+    "pytest>=8.3.0", # python -m pytest -xvs
+    "ruff>=0.11.9", # ruff check --fix vcfstash
+    "black>=25.1.0", # black vcfstash
+    "mypy>=1.15.0" # mypy vcfstash
 ]
 
 [project.scripts]
@@ -45,3 +48,37 @@ include = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["vcfstash"]
+
+[tool.ruff]
+# Same as Black.
+line-length = 88
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".git",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".venv",
+    "__pypackages__",
+    "dist",
+    "build",
+]
+
+[tool.ruff.lint]
+# Enable flake8-bugbear (`B`) rules.
+select = ["E", "F", "B", "I", "D"]
+# Exclude E501 (line too long)
+ignore = ["E501", "D205", "D100", "D200", "D102", "D107", "D415", "D417"]
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]  # Ignore docstring rules in tests
+
+[tool.ruff.lint.mccabe]
+# Unlike Flake8, default to a complexity level of 10.
+max-complexity = 10
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
