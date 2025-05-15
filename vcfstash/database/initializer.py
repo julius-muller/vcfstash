@@ -57,6 +57,7 @@ class DatabaseInitializer(VCFDatabase):
             Path(output_dir) if isinstance(output_dir, str) else output_dir,
             verbosity,
             debug,
+            bcftools_path
         )
         self._setup_stash(force=force)
         self.logger = self.connect_loggers()

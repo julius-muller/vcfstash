@@ -79,7 +79,7 @@ class DatabaseAnnotator(VCFDatabase):
             verbosity: Logging verbosity level (0=WARNING, 1=INFO, 2=DEBUG)
         """
         super().__init__(
-            Path(db_path) if isinstance(db_path, str) else db_path, verbosity, debug
+            Path(db_path) if isinstance(db_path, str) else db_path, verbosity, debug, bcftools_path
         )
 
         self.stashed_annotations = AnnotatedStashOutput(

@@ -42,7 +42,7 @@ class DatabaseUpdater(VCFDatabase):
         verbosity: int = 0,
         debug: bool = False,
     ):
-        super().__init__(Path(db_path), verbosity, debug)
+        super().__init__(Path(db_path), verbosity, debug, bcftools_path)
         self.stashed_output.validate_structure()
         self.logger = self.connect_loggers()
         self.input_file = Path(input_file).expanduser().resolve()
