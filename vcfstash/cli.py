@@ -1,4 +1,3 @@
-
 """VCF Annotation Cache.
 
 This script manages a database of genetic variants in BCF/VCF format,
@@ -40,6 +39,7 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
+        "-v",
         "--version",
         action="version",
         version=pkg_version("vcfstash"),
@@ -62,18 +62,19 @@ def main() -> None:
         help="Debug mode, keeping intermediate files such as the nextflow work directory",
     )
     parent_parser.add_argument(
-        "-y",
-        "--yaml",
-        dest="params",
-        required=False,
-        help="Path to a nextflow yaml containing environment variables related to paths and resources",
-    )
-    parent_parser.add_argument(
         "-c",
         "--config",
         dest="config",
         required=False,
         help="Path to an optional nextflow config containing only a process definition",
+    )
+    # Define params in parent parser but don't set required
+    parent_parser.add_argument(
+        "-y",
+        "--yaml",
+        dest="params",
+        required=False,
+        help="Path to a nextflow yaml containing environment variables related to paths and resources",
     )
 
     subparsers = parser.add_subparsers(
@@ -102,9 +103,6 @@ def main() -> None:
         help="Force overwrite of existing database directory",
         default=False,
     )
-    # Override the -y/--yaml from parent_parser to make it required for stash-init
-    init_parser._option_string_actions['-y'].required = True
-    init_parser._option_string_actions['--yaml'].required = True
 
     # add command
     add_parser = subparsers.add_parser(
@@ -114,7 +112,7 @@ def main() -> None:
         "-d", "--db", required=True, help="Path to the existing database directory"
     )
     add_parser.add_argument(
-        "-i", "--vcf", dest="i", help="Path to the VCF file to be added"
+        "-i", "--vcf", dest="i", help="Path to the VCF file to be added", required=True
     )
 
     # annotate command
@@ -186,8 +184,12 @@ def main() -> None:
         default=False,
     )
 
-
     args = parser.parse_args(args=None if sys.argv[1:] else ["--help"])
+
+    # Check if required args exists based on command
+    if args.command == "stash-init" and not args.params:
+        parser.error("stash-init command requires -y/--yaml parameter")
+
     # Setup logging with verbosity
     logger = setup_logging(args.verbose)
     log_command(logger)
