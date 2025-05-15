@@ -196,6 +196,7 @@ def main() -> None:
 
     # Check bcftools if params file is provided (required for stash-init)
     # For other commands, we'll use params from the database or fall back to init.yaml
+    bcftools_path = None
     logger.info(f"Expected bcftools version: {EXPECTED_BCFTOOLS_VERSION}")
     if args.params:
         logger.info(f"Checking bcftools installation using params file: {args.params}")

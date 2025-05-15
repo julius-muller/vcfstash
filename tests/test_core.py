@@ -86,7 +86,8 @@ def test_database_initializer_reference_validation(test_output_dir, params_file)
             output_dir=test_output_dir,
             verbosity=2,
             force=True,
-            debug=True
+            debug=True,
+            bcftools_path=TEST_ROOT / "tools" / "bcftools"
         )
 
         # Assert that validate_vcf_reference was called
