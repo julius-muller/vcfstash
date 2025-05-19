@@ -106,17 +106,17 @@ For more detailed Docker instructions, see the [Using Docker](#using-docker) sec
 
 1. **Create a blueprint** from a representative VCF
    ```bash
-   vcfstash stash-init -i gnomad_4_wgs.vcf -o /my/destination/dir
+   vcfstash stash-init -i gnomad_4_wgs.vcf -o /my/destination/dir -y params.yaml
    ```
 
 2. **Run your annotation tool once** on the blueprint and freeze it
    ```bash
-   vcfstash stash-annotate -d /my/destination/dir -n vep_gnomad -a example_annotation.config -y params.yaml
+   vcfstash stash-annotate -d /my/destination/dir -n vep_gnomad -a example_annotation.config
    ```
 
 3. **Annotate your samples** using the cache
    ```bash
-   vcfstash annotate -a /my/destination/dir/stash/vep_gnomad --vcf sample.vcf --output results -y params.yaml
+   vcfstash annotate -a /my/destination/dir/stash/vep_gnomad --vcf sample.vcf --output results
    ```
 
 **Optional:** Add more variants to your cache (e.g., merge gnomAD WES into WGS blueprint)
