@@ -15,7 +15,7 @@ RUN micromamba install -y -n base -c conda-forge -c bioconda \
     micromamba clean --all --yes
 # ---- 2. perl stack with VEP  ----------------------------------------
 RUN micromamba install -y -n base -c bioconda \
-        ensembl-vep=115.1 && \
+        ensembl-vep=115 && \
     micromamba clean --all --yes
 
 
