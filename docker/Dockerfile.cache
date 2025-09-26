@@ -66,7 +66,7 @@ LABEL org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}"
 
 # Minimal OS deps; JRE optional if you run Nextflow inside the container later
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends openjdk-17-jre-headless ca-certificates && \
+    apt-get install -y --no-install-recommends openjdk-21-jre-headless ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy venv with vcfstash installed, plus resources/tools
