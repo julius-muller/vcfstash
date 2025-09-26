@@ -1,52 +1,98 @@
-# -------- stage 0: build the cache inside a full tool image -------------
-FROM ghcr.io/julius-muller/vcfstash:latest as builder
-# ^ this is the regular image you already publish for the CLI
+# =====================  stage 0: build cache + CLI  ======================
+# Use current micromamba (2.3.2+) to get recent bio tools in one shot
+FROM mambaorg/micromamba:2.3.2 AS builder
+# refs: micromamba 2.3.2 releases (Sep 2025) https://github.com/mamba-org/micromamba-releases/releases
 
-ARG CACHE_NAME=vep_gnomad
-ARG AF=0.01
-ARG TOOL_VERSION=113
-ARG GENOME=GRCh38
-ARG THREADS=8
-
-# directory where the finished cache will live
-ENV CACHE_DIR=/opt/vcfstash-cache
-
-RUN mkdir -p ${CACHE_DIR}
-
-# ===== create blueprint =====
-#   The script below is intentionally simple; if you already have an
-#   internal Nextflow pipeline for this, just replace this block with
-#   "COPY --from=<pipeline-image> /cache ${CACHE_DIR}"
-COPY docker/build-cache.sh /tmp/build-cache.sh
-RUN bash /tmp/build-cache.sh \
-      --gnomad-af ${AF} \
-      --cache-dir ${CACHE_DIR} \
-      --threads ${THREADS} \
-      --tool-version ${TOOL_VERSION} \
-      --cache-name ${CACHE_NAME} \
-      --genome ${GENOME}
-
-# -------- stage 1: shrink to a <500 MB runtime image --------------------
-FROM mambaorg/micromamba:1.5.7 as runtime
-LABEL maintainer="VCFstash Team <julius.mueller@dkfz-heidelberg.de>"
-LABEL org.opencontainers.image.source="https://github.com/julius-muller/vcfstash"
-
-ARG VCFSTASH_VERSION=latest
-
-# Install only the runtime deps (python + bcftools + tabix)
-RUN micromamba install -y -n base -c conda-forge \
-        python=3.11 bcftools=1.20 htslib tabix && \
+# Install toolchain to build the cache:
+# - python 3.13 for vcfstash
+# - bcftools/htslib 1.22 (latest as of mid-2025)
+# - ensembl-vep 115.1 (annotation tool for the recipe)
+# - curl/tabix for downloads/indexing
+RUN micromamba install -y -n base -c conda-forge -c bioconda \
+      python=3.13 \
+      bcftools=1.22 htslib=1.22 \
+      ensembl-vep=115.1 \
+      curl tabix && \
     micromamba clean --all --yes
 
-# Copy CLI and cache
-COPY --from=builder /usr/local/bin/vcfstash /usr/local/bin/
+# Prepare workspace
+WORKDIR /build
+
+# Copy repo (only what’s needed)
+COPY pyproject.toml README.md ./
+COPY vcfstash ./vcfstash/
+COPY resources ./resources
+COPY tools ./tools
+
+# Install vcfstash into a venv
+RUN python -m venv /build/venv && \
+    /build/venv/bin/pip install --upgrade pip && \
+    /build/venv/bin/pip install --no-cache-dir .
+
+# Make CLI available in PATH for the build step
+ENV PATH="/build/venv/bin:${PATH}"
+ENV VCFSTASH_ROOT="/build"
+
+# Copy recipe and build script
+COPY recipes/hg38_vep115.1 /tmp/recipe
+COPY docker/build-cache.sh /tmp/build-cache.sh
+RUN chmod +x /tmp/build-cache.sh
+
+# Build arguments (from workflow_dispatch)
+ARG AF=0.10
+ARG TOOL_VERSION=115.1
+ARG GENOME=GRCh38
+ARG CACHE_NAME=vep_gnomad
+
+# Build the cache inside the image; result in /opt/vcfstash-cache
+ENV CACHE_DIR=/opt/vcfstash-cache
+RUN mkdir -p "${CACHE_DIR}" && \
+    /tmp/build-cache.sh \
+      --gnomad-af "${AF}" \
+      --cache-dir "${CACHE_DIR}" \
+      --threads 8 \
+      --tool-version "${TOOL_VERSION}" \
+      --cache-name "${CACHE_NAME}" \
+      --genome "${GENOME}" \
+      --params /tmp/recipe/params.yaml \
+      --config /tmp/recipe/annotation.config
+
+# =====================  stage 1: slim runtime  ===========================
+# Keep runtime lean; the cache is already annotated, so no VEP at runtime.
+FROM python:3.13-slim AS runtime
+LABEL org.opencontainers.image.title="VCFstash cache image"
+LABEL org.opencontainers.image.description="Contains prebuilt cache and vcfstash CLI"
+LABEL org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}"
+
+# Minimal OS deps; JRE optional if you run Nextflow inside the container later
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends openjdk-17-jre-headless ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy venv with vcfstash installed, plus resources/tools
+WORKDIR /app
+COPY --from=builder /build/venv /app/venv
+COPY --from=builder /build/resources /app/resources
+COPY --from=builder /build/tools /app/tools
+
+# Ensure bcftools shim is executable (your repo’s static bcftools)
+RUN chmod +x /app/tools/bcftools
+
+# Copy the cache
 COPY --from=builder /opt/vcfstash-cache /cache
 
-# Non-root user (uid 1000)
-RUN useradd -m vcfstash && \
-    chown -R vcfstash /cache
+# vcfstash wrapper
+RUN printf '%s\n' '#!/bin/sh' \
+                  'exec /app/venv/bin/python -m vcfstash.cli "$@"' \
+    > /usr/local/bin/vcfstash && chmod +x /usr/local/bin/vcfstash
+
+ENV PATH="/app/venv/bin:${PATH}"
+ENV VCFSTASH_ROOT="/app"
+
+# Non-root for HPC compatibility
+RUN useradd -m vcfstash && chown -R vcfstash /cache /app
 USER vcfstash
 WORKDIR /work
 
-ENV PATH=/usr/local/bin:$PATH
 ENTRYPOINT ["vcfstash"]
+CMD ["--help"]
