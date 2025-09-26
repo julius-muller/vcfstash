@@ -1,4 +1,4 @@
-name: Build & Publish cache image
+name: Build and Publish cache image
 
 on:
   workflow_dispatch:
