@@ -9,11 +9,12 @@ FROM mambaorg/micromamba:2.3.2 AS builder
 # - ensembl-vep 115.1 (annotation tool for the recipe)
 # - curl/tabix for downloads/indexing
 RUN micromamba install -y -n base -c conda-forge -c bioconda \
-      python=3.13 \
-      bcftools=1.22 htslib=1.22 \
-      ensembl-vep=115.1 \
-      curl tabix && \
+       python \
+       bcftools=1.22 htslib=1.22 \
+       ensembl-vep=115.1 \
+       curl tabix && \
     micromamba clean --all --yes
+
 
 # Prepare workspace
 WORKDIR /build
