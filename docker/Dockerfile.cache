@@ -53,15 +53,14 @@ ARG CACHE_NAME=vep_gnomad
 # Build the cache inside the image; store it in a user-writable path
 ENV CACHE_DIR=/home/micromamba/cache
 RUN mkdir -p "${CACHE_DIR}" && \
-    bash /tmp/build-cache.sh \
+    GNOMAD_URL="${GNOMAD_URL}" bash /tmp/build-cache.sh \
         --gnomad-af "${AF}" \
         --cache-dir "${CACHE_DIR}" \
         --threads 8 \
         --tool-version "${TOOL_VERSION}" \
         --cache-name "${CACHE_NAME}" \
         --genome "${GENOME}" \
-        --params /tmp/recipe/params.yaml \
-        --config /tmp/recipe/annotation.config
+        --params /tmp/recipe/params.yaml
 
 # =====================  stage 1: slim runtime  ===========================
 # Keep runtime lean; the cache is already annotated, so no VEP at runtime.
@@ -99,6 +98,9 @@ ENV VCFSTASH_ROOT="/app"
 RUN useradd -m vcfstash && chown -R vcfstash /cache /app
 USER vcfstash
 WORKDIR /work
+
+ARG GNOMAD_URL="https://raw.githubusercontent.com/vcftools/vcftools/master/examples/sequence.vcf.gz"
+ENV GNOMAD_URL=${GNOMAD_URL}
 
 ENTRYPOINT ["vcfstash"]
 CMD ["--help"]
