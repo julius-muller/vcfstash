@@ -43,7 +43,6 @@ ENV VCFSTASH_ROOT="/build"
 # Copy recipe and build script
 COPY recipes/hg38_vep115.1 /tmp/recipe
 COPY docker/build-cache.sh /tmp/build-cache.sh
-RUN chmod +x /tmp/build-cache.sh
 
 # Build arguments (from workflow_dispatch)
 ARG AF=0.10
@@ -54,7 +53,7 @@ ARG CACHE_NAME=vep_gnomad
 # Build the cache inside the image; result in /opt/vcfstash-cache
 ENV CACHE_DIR=/opt/vcfstash-cache
 RUN mkdir -p "${CACHE_DIR}" && \
-    /tmp/build-cache.sh \
+    bash /tmp/build-cache.sh \
       --gnomad-af "${AF}" \
       --cache-dir "${CACHE_DIR}" \
       --threads 8 \
