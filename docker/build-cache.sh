@@ -26,6 +26,18 @@ while [[ $# -gt 0 ]]; do
 done
 
 # --------------------------------------------------------------------------
+# 1. create minimal reference genome if needed
+REF_PATH="/references/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+if [[ ! -f "${REF_PATH}" ]]; then
+    echo "Creating minimal reference genome for testing..."
+    mkdir -p "$(dirname "${REF_PATH}")"
+    # Create a minimal chromosome 1 with enough bases for our test variants
+    echo ">1 dna:chromosome chromosome:GRCh38:1:1:248956422:1 REF" > "${REF_PATH}"
+    # Generate 20000 bases of 'A' to cover our test variant positions (10001-15000)
+    python3 -c "print('A' * 20000)" >> "${REF_PATH}"
+fi
+
+# --------------------------------------------------------------------------
 # 2. obtain BGZF-indexed VCF  (download or synthesize)
 
 WORK_TMP="${CACHE_DIR}/_tmp"
