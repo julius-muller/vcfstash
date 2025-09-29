@@ -25,35 +25,42 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# --- choose source ---------------------------------------------------------
-DEFAULT_URL="https://raw.githubusercontent.com/samtools/htslib/master/test/aux/CEU-example.vcf.bgz"
-[[ -z "${GNOMAD_URL}" ]] && GNOMAD_URL="${DEFAULT_URL}"
+# --------------------------------------------------------------------------
+# 2. obtain BGZF-indexed VCF  (download or synthesize)
 
-# --- download or synthesize ------------------------------------------------
-G_SRC="/tmp/gnomad.${GENOME}.vcf.bgz"
-echo "Attempting download: ${GNOMAD_URL}"
-if ! curl -fL "${GNOMAD_URL}" -o "${G_SRC}"; then
-    echo "Download failed – creating inline 2-variant BGZF VCF"
-    cat > /tmp/toy.vcf <<'EOF'
+WORK_TMP="${CACHE_DIR}/_tmp"
+mkdir -p "${WORK_TMP}"
+G_SRC="${WORK_TMP}/source.vcf.bgz"
+
+echo "Attempting download: ${GNOMAD_URL:-<none>}"
+if [[ -n "${GNOMAD_URL}" ]] && curl -fL "${GNOMAD_URL}" -o "${G_SRC}"; then
+    echo "✓ downloaded test VCF"
+else
+    echo "× download failed – generating inline 2-variant BGZF VCF"
+    cat > "${WORK_TMP}/toy.vcf" <<'EOF'
 ##fileformat=VCFv4.2
 ##contig=<ID=1,length=248956422>
 ##INFO=<ID=AF,Number=A,Type=Float,Description="Allele Frequency">
 #CHROM  POS ID  REF ALT QUAL FILTER INFO
-1       10000 .  G   A   .    PASS  AF=0.15
-1       10500 .  C   T   .    PASS  AF=0.20
+1       10000 .   G   A   .    PASS  AF=0.15
+1       10500 .   C   T   .    PASS  AF=0.20
 EOF
-    bgzip -c /tmp/toy.vcf > "${G_SRC}"
+    bgzip -c "${WORK_TMP}/toy.vcf" > "${G_SRC}"
 fi
-tabix -p vcf "${G_SRC}"
+
+tabix -f -p vcf "${G_SRC}"
 
 # --- build blueprint & annotate -------------------------------------------
-rm -rf "${CACHE_DIR:?}/"*    # ensure empty dir
+DB_DIR="${CACHE_DIR}/db"
+rm -rf "${DB_DIR}"
+mkdir -p "${DB_DIR}"
+
 vcfstash stash-init   --force \
         --vcf "${G_SRC}" \
-        --output "${CACHE_DIR}" \
+        --output "${DB_DIR}" \
         -y "${PARAMS_FILE}"
 
 vcfstash stash-annotate \
-        --db   "${CACHE_DIR}" \
+        --db   "${DB_DIR}" \
         --name "${CNAME}" \
         -a     "${CONFIG_FILE}"
