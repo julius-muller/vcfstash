@@ -174,7 +174,7 @@ You can verify that the annotation tool version matches the expected version:
 
 ```bash
 # In example_annotation.config
-required_tool_version = '113.0'
+required_tool_version = '115.2'
 ```
 ```yaml
 # In params.yaml
@@ -190,7 +190,7 @@ You can add any custom checks needed for your specific workflow:
 ```yaml
 optional_checks:
   reference_md5sum: "28a3d9f0162be1d5db2011aa30458129"
-  vep_cache_version: "113"
+  vep_cache_version: "115"
   genome_build: "GRCh37"
 ```
 
@@ -226,7 +226,7 @@ VCFstash works with **any annotation tool** by wrapping your existing command. J
    --buffer_size 500000 \
    --fork 4 \
    --cache \
-   --dir_cache /path/to/vep_cache/113/cachedir \
+   --dir_cache /path/to/vep_cache/115/cachedir \
    --fasta /path/to/reference.fasta \
    -i sample.vcf \
    -o annotated.vcf \
@@ -249,7 +249,7 @@ Conventions here are:
    --buffer_size 500000 \
    --fork 4 \
    --cache \
-   --dir_cache /path/to/vep_cache/113/cachedir \
+   --dir_cache /path/to/vep_cache/115/cachedir \
    --fasta /path/to/reference.fasta \
    -i ${INPUT_BCF} \
    -o ${OUTPUT_BCF} \
@@ -265,7 +265,7 @@ If there are any parts of the command that need to be kept configurable during v
    --buffer_size ${params.vep_buffer} \
    --fork ${params.vep_forks} \
    --cache \
-   --dir_cache ${params.vep_cache}/113/cachedir \
+   --dir_cache ${params.vep_cache}/115/cachedir \
    --fasta ${params.reference} \
    -i ${INPUT_BCF} \
    -o ${OUTPUT_BCF} \
@@ -283,7 +283,7 @@ annotation_cmd = """
    --buffer_size ${params.vep_buffer} \
    --fork ${params.vep_forks} \
    --cache \
-   --dir_cache ${params.vep_cachedir}/113/cachedir \
+   --dir_cache ${params.vep_cachedir}/115/cachedir \
    --fasta ${params.reference} \
    -i stdin \
    -o stdout \
@@ -417,8 +417,8 @@ VCFstash works well with containerized annotation tools. Example using Docker wi
 
 ```yaml
 # In params.yaml
-annotation_tool_cmd: "docker run --user $(id -u):$(id -g) -i -v /mnt/data:/mnt/data --rm ensemblorg/ensembl-vep:release_113.0 vep"
-tool_version_command: "docker run --user $(id -u):$(id -g) -i -v /mnt/data:/mnt/data --rm ensemblorg/ensembl-vep:release_113.0 vep | grep -oP \"ensembl-vep\\s+:\\s+\\K\\d+\\.\\d+\""
+annotation_tool_cmd: "docker run --user $(id -u):$(id -g) -i -v /mnt/data:/mnt/data --rm ensemblorg/ensembl-vep:release_115.2 vep"
+tool_version_command: "docker run --user $(id -u):$(id -g) -i -v /mnt/data:/mnt/data --rm ensemblorg/ensembl-vep:release_115.2 vep | grep -oP \"ensembl-vep\\s+:\\s+\\K\\d+\\.\\d+\""
 ```
 
 ## Cache Structure
@@ -881,7 +881,7 @@ params {
     """
 
     must_contain_info_tag = 'CSQ'
-    required_tool_version = '113.0'
+    required_tool_version = '115.2'
 }
 
 optional_checks {

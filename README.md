@@ -36,17 +36,32 @@ vcfstash <command> -h
 
 ### Installation Options
 
-#### 🐳 Option 1: Using Docker (Recommended)
+#### 🐳 Option 1: Pre-built Cache Images (Fastest)
 
-The simplest way to get started with VCFstash is using Docker:
+Get started immediately with our pre-built cache images:
+
+```bash
+# Pull a ready-to-use cache with VEP annotations
+docker pull ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.01-vep115.2
+
+# Annotate your VCF immediately (70-90% faster!)
+docker run --rm \
+  -v $(pwd):/data \
+  ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.01-vep115.2 \
+  annotate -a /cache/stash/vep_gnomad --vcf your_sample.vcf.gz --output results
+```
+
+✨ **Available cache variants:** 10% AF (small), 5% AF (medium), 1% AF (comprehensive)
+
+#### 🐳 Option 2: Using Docker
+
+Build your own cache with Docker:
 
 ```bash
 docker run --rm -v $(pwd):/data vcfstash --help
 ```
 
-No additional requirements needed - everything is included in the container!
-
-#### Option 2: Local Installation
+#### Option 3: Local Installation
 
 If you prefer a local installation, you'll need:
 

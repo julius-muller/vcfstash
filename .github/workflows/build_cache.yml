@@ -7,10 +7,15 @@ on:
         description: "Allele-frequency threshold (e.g. 0.10)"
         required: true
         default: "0.10"
+        type: choice
+        options:
+          - "0.10"
+          - "0.05" 
+          - "0.01"
       tool_version:
         description: "VEP version"
         required: true
-        default: "115.1"
+        default: "115.2"
       genome:
         description: "Genome build"
         required: true
@@ -19,6 +24,10 @@ on:
         description: "Cache name (sub-dir in /cache/stash)"
         required: true
         default: "vep_gnomad"
+  
+  # Build common variants cache weekly
+  schedule:
+    - cron: '0 2 * * 0'  # Sunday 2 AM UTC
 
 jobs:
   build:
