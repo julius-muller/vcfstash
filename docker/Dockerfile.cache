@@ -25,11 +25,12 @@ ENV PATH="/opt/conda/bin:${PATH}"
 # Prepare workspace
 WORKDIR /build
 
-# Copy repo (only what’s needed)
+# Copy repo (only what's needed)
 COPY pyproject.toml README.md ./
 COPY vcfstash ./vcfstash/
 COPY resources ./resources
 COPY tools ./tools
+COPY tests ./tests
 
 # Install vcfstash into a venv
 RUN python -m venv /build/venv && \
@@ -71,7 +72,7 @@ LABEL org.opencontainers.image.description="Contains prebuilt cache and vcfstash
 
 # Minimal OS deps; JRE optional if you run Nextflow inside the container later
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends openjdk-17-jre-headless ca-certificates && \
+    apt-get install -y --no-install-recommends openjdk-21-jre-headless ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy venv with vcfstash installed, plus resources/tools
