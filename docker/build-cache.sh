@@ -30,6 +30,12 @@ done
 
 echo "Using existing test data and configuration..."
 
+# --------------------------------------------------------------------------
+# 2. Use existing test VCF data
+
+echo "Using gnomad_test.bcf from test data..."
+G_SRC="/build/tests/data/nodata/gnomad_test.bcf"
+
 # For now, use the test configuration that we know works
 # TODO: In production, we can extend this to use VEP when properly configured
 echo "Using test configuration for reliable cache build..."
@@ -40,12 +46,6 @@ echo "Configuration details:"
 echo "  - Params: ${PARAMS_FILE}"
 echo "  - Config: ${CONFIG_FILE}"
 echo "  - Test VCF: ${G_SRC}"
-
-# --------------------------------------------------------------------------
-# 2. Use existing test VCF data
-
-echo "Using gnomad_test.bcf from test data..."
-G_SRC="/build/tests/data/nodata/gnomad_test.bcf"
 
 # Verify the test file exists
 if [[ ! -f "${G_SRC}" ]]; then
