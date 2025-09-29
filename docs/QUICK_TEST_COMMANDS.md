@@ -6,7 +6,7 @@
 ### Test with minimal sample data:
 ```bash
 # 1. Pull the image (one-time, ~500MB)
-docker pull ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.1
+docker pull ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.2
 
 # 2. Create test VCF
 mkdir -p test-data
@@ -26,7 +26,7 @@ tabix -p vcf test-data/sample.vcf.gz
 docker run --rm \
   -v $(pwd)/test-data:/data \
   -v $(pwd)/results:/results \
-  ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.1 \
+  ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.2 \
   annotate \
   -a /cache/stash/vep_gnomad \
   --vcf /data/sample.vcf.gz \

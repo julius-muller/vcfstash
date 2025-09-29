@@ -24,7 +24,7 @@ The fastest way to test VCFstash - uses existing cache images:
 
 ```bash
 # 1. Pull the image (only needed once)
-docker pull ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.1
+docker pull ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.2
 
 # 2. Create test data
 mkdir -p test-data
@@ -44,7 +44,7 @@ tabix -p vcf test-data/sample.vcf.gz
 docker run --rm \
   -v $(pwd)/test-data:/data \
   -v $(pwd)/results:/results \
-  ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.1 \
+  ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.2 \
   annotate \
   -a /cache/stash/vep_gnomad \
   --vcf /data/sample.vcf.gz \

@@ -42,12 +42,12 @@ Get started immediately with our pre-built cache images:
 
 ```bash
 # Pull a ready-to-use cache with VEP annotations
-docker pull ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.01-vep115.1
+docker pull ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.2
 
 # Annotate your VCF immediately (70-90% faster!)
 docker run --rm \
   -v $(pwd):/data \
-  ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.01-vep115.1 \
+  ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.2 \
   annotate -a /cache/stash/vep_gnomad --vcf your_sample.vcf.gz --output results
 ```
 

@@ -9,9 +9,9 @@ temp_dir: "/tmp"
 ## * OPTIONAL RESOURCES *
 vep_buffer: 500000
 vep_forks: 8
-vep_cache: "/vep_data/115.1"
+vep_cache: "/vep_data/115.2"
 
 ## * OPTIONAL CHECKS *
 optional_checks:
   reference_md5sum: "28a3d9f0162be1d5db2011aa30458129"
-  vep_cache_version: "115.1"
+  vep_cache_version: "115.2"

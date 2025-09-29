@@ -6,11 +6,11 @@ Get started with VCFstash in minutes using our pre-built cache images.
 
 ### Pull the Cache Image
 ```bash
-# Pull the latest GRCh38 cache with VEP 115.1 (1% AF threshold)
-docker pull ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.01-vep115.1
+# Pull the latest GRCh38 cache with VEP 115.2 (1% AF threshold)
+docker pull ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.01-vep115.2
 
 # Or pull a smaller cache with higher AF threshold (10% AF)
-docker pull ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.1
+docker pull ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.2
 ```
 
 ### Annotate Your Samples Immediately

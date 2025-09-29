@@ -5,7 +5,7 @@ set -euo pipefail
 AF="0.10"
 CACHE_DIR="/home/micromamba/cache"
 THREADS="8"
-TOOL_VER="115.1"
+TOOL_VER="115.2"
 CNAME="vep_gnomad"
 GENOME="GRCh38"
 GNOMAD_URL="${GNOMAD_URL:-}"   # will come from Docker ARG/ENV, may be overridden here
