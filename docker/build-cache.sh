@@ -26,42 +26,36 @@ while [[ $# -gt 0 ]]; do
 done
 
 # --------------------------------------------------------------------------
-# 1. pick a default URL if none was passed (tiny file good for CI)
+# 1. choose source VCF  (we're inside the argument-parser block)
+
+# BGZF-compressed file that actually exists (≈27 kB)
+DEFAULT_URL="https://raw.githubusercontent.com/samtools/htslib/master/test/CEU-exon-realigned.vcf.bgz"
+
 if [[ -z "${GNOMAD_URL}" ]]; then
-  GNOMAD_URL="https://raw.githubusercontent.com/samtools/htslib/develop/test/test.vcf.bgz"
+  GNOMAD_URL="${DEFAULT_URL}"
 fi
-
-mkdir -p "${CACHE_DIR}"
-
 # --------------------------------------------------------------------------
-# 2. Obtain a BGZF-indexed VCF (download or synthesize)
+# 2. fetch or synthesise
 G_SRC="/tmp/gnomad.${GENOME}.vcf.bgz"
 
-have_file=false
-if [[ -n "${GNOMAD_URL}" ]]; then
-    echo "Attempting download: ${GNOMAD_URL}"
-    if curl -fL "${GNOMAD_URL}" -o "${G_SRC}"; then
-        have_file=true
-    else
-        echo "Download failed → falling back to inline toy VCF"
-    fi
-fi
-
-if ! $have_file; then
-    cat > /tmp/toy.vcf <<'EOF'
+echo "Attempting download: ${GNOMAD_URL}"
+if curl -fL "${GNOMAD_URL}" -o "${G_SRC}"; then
+  echo "✓ downloaded test VCF"
+else
+  echo "× download failed – creating tiny inline VCF"
+  cat > /tmp/toy.vcf <<'EOF'
 ##fileformat=VCFv4.2
 ##contig=<ID=1,length=248956422>
 ##INFO=<ID=AF,Number=A,Type=Float,Description="Allele Frequency">
-#CHROM  POS     ID      REF     ALT     QUAL    FILTER  INFO
-1       10000   .       G       A       .       PASS    AF=0.15
-1       10500   .       C       T       .       PASS    AF=0.20
+#CHROM  POS     ID  REF ALT QUAL FILTER INFO
+1       10000   .   G   A   .    PASS  AF=0.15
+1       10500   .   C   T   .    PASS  AF=0.20
 EOF
-    bgzip -c /tmp/toy.vcf > "${G_SRC}"
+  bgzip -c /tmp/toy.vcf > "${G_SRC}"
 fi
 
-# create tabix index (always succeeds – file is now BGZF)
+# ensure index
 tabix -p vcf "${G_SRC}"
-
 
 # --------------------------------------------------------------------------
 # 3. Build blueprint & annotate
