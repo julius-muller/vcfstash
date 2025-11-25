@@ -26,14 +26,16 @@ tests/config/old/
 /.idea/
 /.vscode/
 /.junie/
+/.claude/
 
 # Nextflow
 /.nextflow/
 /work/
 .nextflow.log*
 
+
 # extra
 *.log
-
+CLAUDE.md
 
 

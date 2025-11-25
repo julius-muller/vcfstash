@@ -9,7 +9,7 @@ temp_dir: "/tmp"
 annotation_tool_cmd: "docker run --user $(id -u):$(id -g) -i -v /mnt/data:/mnt/data --rm ensemblorg/ensembl-vep:release_115.2 vep"
 # Leave empty if version check is not required
 tool_version_command: "docker run --user $(id -u):$(id -g) -i -v /mnt/data:/mnt/data --rm ensemblorg/ensembl-vep:release_115.2 vep | grep -oP \"ensembl-vep\\s+:\\s+\\K\\d+\\.\\d+\""
-# bcftools * best to leaave the default as this is the tested and shipped version v1.20
+# bcftools * best to leave the default as this is the tested and shipped version v1.20
 bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
 # Reference data required for the normalization step
 reference: "/mnt/data/resources/reference/ucsc/hg19_canonical.fa.gz"
