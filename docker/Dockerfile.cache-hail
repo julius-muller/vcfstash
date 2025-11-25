@@ -1,0 +1,110 @@
+# =====================  stage 0: build cache + CLI  ======================
+# Use Ubuntu 25.04 as base since that's the development environment
+FROM ubuntu:25.04 AS builder
+
+# Install system dependencies including ps command
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3 \
+        python3-pip \
+        python3-venv \
+        curl \
+        wget \
+        tabix \
+        procps \
+        ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install bcftools and htslib from apt (Ubuntu 25.04 should have recent versions)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        bcftools \
+        samtools \
+        openjdk-21-jre-headless && \
+    rm -rf /var/lib/apt/lists/*
+
+# Prepare workspace
+WORKDIR /build
+
+# Copy repo (only what's needed)
+COPY pyproject.toml README.md ./
+COPY vcfstash ./vcfstash/
+COPY resources ./resources
+COPY tools ./tools
+COPY tests ./tests
+
+# Install vcfstash into a venv
+RUN python3 -m venv /build/venv && \
+    /build/venv/bin/pip install --upgrade pip && \
+    /build/venv/bin/pip install --no-cache-dir .
+
+# Make CLI available in PATH for the build step
+ENV PATH="/build/venv/bin:${PATH}"
+ENV VCFSTASH_ROOT="/build"
+
+# Copy recipe and build script
+COPY recipes/hg38_vep115_complete /tmp/recipe
+COPY docker/build-cache-with-bcf.sh /tmp/build-cache.sh
+
+# Build arguments (from workflow_dispatch)
+ARG AF=0.10
+ARG TOOL_VERSION=115.2
+ARG GENOME=GRCh38
+ARG CACHE_NAME=vep_gnomad
+ARG BCF_FILE=""
+
+# Copy the pre-generated BCF file if provided
+COPY ${BCF_FILE} /tmp/gnomad.bcf
+COPY ${BCF_FILE}.csi /tmp/gnomad.bcf.csi
+
+# Build the cache inside the image; store it in a user-writable path
+ENV CACHE_DIR=/opt/vcfstash-cache
+RUN mkdir -p "${CACHE_DIR}" && \
+    bash /tmp/build-cache.sh \
+        --bcf-file /tmp/gnomad.bcf \
+        --gnomad-af "${AF}" \
+        --cache-dir "${CACHE_DIR}" \
+        --threads 8 \
+        --tool-version "${TOOL_VERSION}" \
+        --cache-name "${CACHE_NAME}" \
+        --genome "${GENOME}" \
+        --params /tmp/recipe/params.yaml
+
+# =====================  stage 1: slim runtime  ===========================
+# Keep runtime lean; the cache is already annotated, so no VEP at runtime.
+FROM python:3.13-slim AS runtime
+LABEL org.opencontainers.image.title="VCFstash cache image"
+LABEL org.opencontainers.image.description="Contains prebuilt cache and vcfstash CLI"
+
+# Minimal OS deps; JRE optional if you run Nextflow inside the container later
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends default-jre-headless ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy venv with vcfstash installed, plus resources/tools
+WORKDIR /app
+COPY --from=builder /build/venv /app/venv
+COPY --from=builder /build/resources /app/resources
+COPY --from=builder /build/tools /app/tools
+
+# Ensure bcftools shim is executable (your repo's static bcftools)
+RUN chmod +x /app/tools/bcftools
+
+# Copy the cache
+COPY --from=builder /opt/vcfstash-cache /cache
+
+# vcfstash wrapper
+RUN printf '%s\n' '#!/bin/sh' \
+                  'exec /app/venv/bin/python -m vcfstash.cli "$@"' \
+    > /usr/local/bin/vcfstash && chmod +x /usr/local/bin/vcfstash
+
+ENV PATH="/app/venv/bin:${PATH}"
+ENV VCFSTASH_ROOT="/app"
+
+# Non-root for HPC compatibility
+RUN useradd -m vcfstash && chown -R vcfstash /cache /app
+USER vcfstash
+WORKDIR /work
+
+ENTRYPOINT ["vcfstash"]
+CMD ["--help"]

@@ -1,0 +1,223 @@
+name: Build and Publish cache image (Hail)
+
+on:
+  workflow_dispatch:
+    inputs:
+      af:
+        description: "Allele-frequency threshold (e.g. 0.10)"
+        required: true
+        default: "0.10"
+        type: choice
+        options:
+          - "0.10"
+          - "0.05"
+          - "0.01"
+      chromosomes:
+        description: "Chromosomes to include (space-separated, e.g. 'chr1 chr2' or 'all')"
+        required: true
+        default: "chr1"
+      tool_version:
+        description: "VEP version"
+        required: true
+        default: "115.2"
+      genome:
+        description: "Genome build"
+        required: true
+        default: "GRCh38"
+      cache_name:
+        description: "Cache name (sub-dir in /cache/stash)"
+        required: true
+        default: "vep_gnomad"
+      gnomad_version:
+        description: "gnomAD version"
+        required: true
+        default: "4.1"
+
+  # Build common variants cache weekly
+  schedule:
+    - cron: '0 2 * * 0'  # Sunday 2 AM UTC
+
+jobs:
+  export-gnomad:
+    name: Get or Export gnomAD BCF
+    runs-on: ubuntu-latest
+    outputs:
+      bcf-name: ${{ steps.check-release.outputs.bcf-name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set default values for scheduled runs
+        id: defaults
+        run: |
+          AF="${{ github.event.inputs.af }}"
+          CHR="${{ github.event.inputs.chromosomes }}"
+          TOOL_VERSION="${{ github.event.inputs.tool_version }}"
+          GENOME="${{ github.event.inputs.genome }}"
+          CACHE_NAME="${{ github.event.inputs.cache_name }}"
+          GNOMAD_VERSION="${{ github.event.inputs.gnomad_version }}"
+
+          echo "af=${AF:-0.10}" >> $GITHUB_OUTPUT
+          echo "chromosomes=${CHR:-chr1}" >> $GITHUB_OUTPUT
+          echo "tool_version=${TOOL_VERSION:-115.2}" >> $GITHUB_OUTPUT
+          echo "genome=${GENOME:-GRCh38}" >> $GITHUB_OUTPUT
+          echo "cache_name=${CACHE_NAME:-vep_gnomad}" >> $GITHUB_OUTPUT
+          echo "gnomad_version=${GNOMAD_VERSION:-4.1}" >> $GITHUB_OUTPUT
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bcftools tabix
+
+      - name: Install Hail
+        run: |
+          pip install hail
+
+      - name: Check for pre-computed BCF in releases
+        id: check-release
+        run: |
+          AF="${{ steps.defaults.outputs.af }}"
+          CHR="${{ steps.defaults.outputs.chromosomes }}"
+          GENOME="${{ steps.defaults.outputs.genome }}"
+          GNOMAD_VERSION="${{ steps.defaults.outputs.gnomad_version }}"
+
+          # Construct expected filenames
+          CHR_SUFFIX=$(echo "$CHR" | tr ' ' '_')
+          CHR_TAG=$(echo "$CHR" | tr ' ' '-')
+
+          if [ "$CHR" = "all" ]; then
+            BCF_NAME="gnomad_v${GNOMAD_VERSION}_${GENOME}_af${AF}.bcf"
+            RELEASE_TAG="gnomad-bcf-v${GNOMAD_VERSION}-af${AF}-genome"
+          else
+            BCF_NAME="gnomad_v${GNOMAD_VERSION}_${GENOME}_${CHR_SUFFIX}_af${AF}.bcf"
+            RELEASE_TAG="gnomad-bcf-v${GNOMAD_VERSION}-af${AF}-${CHR_TAG}"
+          fi
+
+          echo "bcf-name=${BCF_NAME}" >> $GITHUB_OUTPUT
+          echo "release-tag=${RELEASE_TAG}" >> $GITHUB_OUTPUT
+
+          # Try to download from releases
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/${BCF_NAME}"
+
+          echo "Checking for pre-computed BCF at: ${RELEASE_URL}"
+
+          if wget --spider "${RELEASE_URL}" 2>/dev/null; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "✓ Found pre-computed BCF in releases"
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "✗ Pre-computed BCF not found, will compute with Hail"
+          fi
+
+      - name: Download pre-computed BCF
+        if: steps.check-release.outputs.found == 'true'
+        run: |
+          BCF_NAME="${{ steps.check-release.outputs.bcf-name }}"
+          RELEASE_TAG="${{ steps.check-release.outputs.release-tag }}"
+
+          echo "Downloading pre-computed BCF..."
+          wget "https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/${BCF_NAME}"
+          wget "https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/${BCF_NAME}.csi"
+
+          echo "✓ Downloaded pre-computed BCF"
+
+      - name: Export gnomAD data with Hail
+        if: steps.check-release.outputs.found == 'false'
+        run: |
+          AF="${{ steps.defaults.outputs.af }}"
+          CHR="${{ steps.defaults.outputs.chromosomes }}"
+          GENOME="${{ steps.defaults.outputs.genome }}"
+          GNOMAD_VERSION="${{ steps.defaults.outputs.gnomad_version }}"
+          BCF_NAME="${{ steps.check-release.outputs.bcf-name }}"
+
+          # Build chromosome arguments
+          if [ "$CHR" != "all" ]; then
+            CHR_ARGS="--chr ${CHR}"
+          else
+            CHR_ARGS=""
+          fi
+
+          echo "Computing BCF with Hail (this may take 10-30 minutes)..."
+
+          # Run the export script (uses public bucket by default - no auth needed!)
+          python scripts/export_gnomad_hail.py \
+            --output "${BCF_NAME}" \
+            --af "${AF}" \
+            --genome "${GENOME}" \
+            --gnomad-version "${GNOMAD_VERSION}" \
+            ${CHR_ARGS}
+
+      - name: Upload BCF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gnomad-bcf
+          path: |
+            ${{ steps.check-release.outputs.bcf-name }}
+            ${{ steps.check-release.outputs.bcf-name }}.csi
+          retention-days: 1
+
+  build-cache:
+    name: Build Docker cache image
+    needs: export-gnomad
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Set default values for scheduled runs
+        id: defaults
+        run: |
+          AF="${{ github.event.inputs.af }}"
+          TOOL_VERSION="${{ github.event.inputs.tool_version }}"
+          GENOME="${{ github.event.inputs.genome }}"
+          CACHE_NAME="${{ github.event.inputs.cache_name }}"
+
+          echo "af=${AF:-0.10}" >> $GITHUB_OUTPUT
+          echo "tool_version=${TOOL_VERSION:-115.2}" >> $GITHUB_OUTPUT
+          echo "genome=${GENOME:-GRCh38}" >> $GITHUB_OUTPUT
+          echo "cache_name=${CACHE_NAME:-vep_gnomad}" >> $GITHUB_OUTPUT
+
+      - name: Download BCF artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gnomad-bcf
+          path: ./gnomad-data
+
+      - name: Prepare BCF for Docker build
+        run: |
+          mkdir -p docker/gnomad-data
+          mv gnomad-data/${{ needs.export-gnomad.outputs.bcf-name }} docker/gnomad-data/
+          mv gnomad-data/${{ needs.export-gnomad.outputs.bcf-name }}.csi docker/gnomad-data/
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.cache-hail
+          push: true
+          build-args: |
+            AF=${{ steps.defaults.outputs.af }}
+            TOOL_VERSION=${{ steps.defaults.outputs.tool_version }}
+            GENOME=${{ steps.defaults.outputs.genome }}
+            CACHE_NAME=${{ steps.defaults.outputs.cache_name }}
+            BCF_FILE=docker/gnomad-data/${{ needs.export-gnomad.outputs.bcf-name }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/vcfstash-cache:${{ steps.defaults.outputs.genome }}-af${{ steps.defaults.outputs.af }}-vep${{ steps.defaults.outputs.tool_version }}-hail
+            ghcr.io/${{ github.repository_owner }}/vcfstash-cache:latest-hail
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
