@@ -136,17 +136,17 @@ def export_gnomad_bcf(
         if not gcs_project:
             print("WARNING: No GCS project provided for requester-pays bucket")
 
-    # Construct path to gnomAD Hail table
-    ht_path = f"gs://{bucket}/release/{gnomad_version}/ht/genomes/gnomad.genomes.v{gnomad_version}.sites.ht"
+    # Construct path to gnomAD Hail table (joint WES+WGS dataset)
+    ht_path = f"gs://{bucket}/release/{gnomad_version}/ht/joint/gnomad.joint.v{gnomad_version}.sites.ht"
 
     print(f"Reading gnomAD v{gnomad_version} Hail table from: {ht_path}")
     ht = hl.read_table(ht_path)
 
     print(f"Filtering variants with AF >= {af_threshold}")
     # Filter for variants where ANY population has AF >= threshold
-    # gnomAD v4 stores frequencies in an array 'freq' where each element has an AF field
+    # Joint dataset stores frequencies in 'joint.freq' array
     ht_filtered = ht.filter(
-        hl.any(lambda freq: freq.AF >= af_threshold, ht.freq)
+        hl.any(lambda freq: freq.AF >= af_threshold, ht.joint.freq)
     )
 
     # Filter by chromosomes if specified
@@ -168,30 +168,25 @@ def export_gnomad_bcf(
     # VCF can't handle complex nested structures, so we keep it simple
     print("Selecting essential fields for VCF export...")
 
-    # Calculate max AF across all populations for INFO field
-    max_af = hl.or_else(
-        hl.max(ht_filtered.freq.map(lambda f: f.AF)),
+    # Get weighted average AF across all samples from the joint dataset
+    # joint.freq[0] contains the combined frequency across all samples (WES+WGS)
+    af = hl.or_else(
+        ht_filtered.joint.freq[0].AF,
         0.0
     )
 
-    # Get allele count and allele number from the first freq element (usually "all" population)
+    # Get allele count from the first freq element (combined WES+WGS)
     # AC = allele count (number of times this allele was observed)
-    # AN = allele number (total number of alleles genotyped)
     allele_count = hl.or_else(
-        ht_filtered.freq[0].AC,
+        ht_filtered.joint.freq[0].AC,
         0
     )
 
-    allele_number = hl.or_else(
-        ht_filtered.freq[0].AN,
-        0
-    )
-
-    # Keep only locus, alleles, AF, AC, and AN in INFO
+    # Keep only locus, alleles, AF, and AC in INFO
     # For VCF export, INFO fields must be in an 'info' struct
     ht_simple = ht_filtered.select(
         info=hl.struct(
-            AF=max_af,
+            AF=af,
             AC=allele_count
         ),
         filters=hl.empty_set(hl.tstr)  # PASS for all variants

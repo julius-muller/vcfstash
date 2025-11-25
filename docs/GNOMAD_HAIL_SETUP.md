@@ -7,9 +7,10 @@ This document explains the smart caching system for gnomAD BCF files used by VCF
 VCFstash uses gnomAD data to pre-populate variant caches. Instead of downloading huge VCF files every time, we:
 
 1. **Query gnomAD directly** using Hail from the public bucket (no auth required!)
-2. **Pre-compute BCF files** for common configurations
-3. **Cache them as GitHub Releases** for fast reuse
-4. **Docker builds** download pre-computed files when available
+2. **Use the joint WES+WGS dataset** for comprehensive coverage
+3. **Pre-compute BCF files** for common configurations
+4. **Cache them as GitHub Releases** for fast reuse
+5. **Docker builds** download pre-computed files when available
 
 ## Architecture
 
@@ -126,6 +127,15 @@ vcfstash stash-init \
 - **All**: `all` - Genome-wide (recommended for production)
 
 ## Technical Details
+
+### Dataset Selection
+
+The scripts use the **joint WES+WGS dataset** which combines whole exome and whole genome sequencing data for comprehensive coverage:
+
+- **Path**: `gs://gcp-public-data--gnomad/release/4.1/ht/joint/gnomad.joint.v4.1.sites.ht`
+- **AF field**: Weighted average allele frequency across all samples (WES+WGS combined)
+- **AC field**: Allele count from combined dataset
+- **Coverage**: More comprehensive than genomes-only or exomes-only datasets
 
 ### How Anonymous Access Works
 
