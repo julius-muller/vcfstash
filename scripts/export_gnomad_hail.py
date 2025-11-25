@@ -174,14 +174,28 @@ def export_gnomad_bcf(
         0.0
     )
 
-    # Keep only locus, alleles, and a simple AF field
-    # Drop filters to avoid header definition issues
-    ht_simple = ht_filtered.select(
-        AF=max_af
+    # Get allele count and allele number from the first freq element (usually "all" population)
+    # AC = allele count (number of times this allele was observed)
+    # AN = allele number (total number of alleles genotyped)
+    allele_count = hl.or_else(
+        ht_filtered.freq[0].AC,
+        0
     )
 
-    # Add PASS to filters column for valid VCF format
-    ht_simple = ht_simple.annotate(filters=hl.empty_set(hl.tstr))
+    allele_number = hl.or_else(
+        ht_filtered.freq[0].AN,
+        0
+    )
+
+    # Keep only locus, alleles, AF, AC, and AN in INFO
+    # For VCF export, INFO fields must be in an 'info' struct
+    ht_simple = ht_filtered.select(
+        info=hl.struct(
+            AF=max_af,
+            AC=allele_count
+        ),
+        filters=hl.empty_set(hl.tstr)  # PASS for all variants
+    )
 
     # Export directly to VCF from Table (sites-only VCF)
     vcf_path = output_path.replace(".bcf", ".vcf.bgz")
