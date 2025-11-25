@@ -175,14 +175,13 @@ def export_gnomad_bcf(
     )
 
     # Keep only locus, alleles, and a simple AF field
+    # Drop filters to avoid header definition issues
     ht_simple = ht_filtered.select(
-        AF=max_af,
-        # Add filters if available
-        filters=hl.or_missing(
-            hl.is_defined(ht_filtered.filters),
-            ht_filtered.filters
-        )
+        AF=max_af
     )
+
+    # Add PASS to filters column for valid VCF format
+    ht_simple = ht_simple.annotate(filters=hl.empty_set(hl.tstr))
 
     # Export directly to VCF from Table (sites-only VCF)
     vcf_path = output_path.replace(".bcf", ".vcf.bgz")
