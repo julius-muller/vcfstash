@@ -43,8 +43,11 @@ ENV PATH="/build/venv/bin:${PATH}"
 ENV VCFSTASH_ROOT="/build"
 
 # Copy recipe and build script
-COPY recipes/hg38_vep115_complete /tmp/recipe
+COPY recipes/docker-cache /tmp/recipe
 COPY docker/build-cache-with-bcf.sh /tmp/build-cache.sh
+
+# Create dummy reference file for validation (not actually used during cache init)
+RUN touch /tmp/dummy.fa
 
 # Build arguments (from workflow_dispatch)
 ARG AF=0.10

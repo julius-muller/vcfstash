@@ -1,0 +1,19 @@
+## Docker Cache Build Configuration
+## Minimal params for building cache from pre-generated gnomAD BCF
+
+## * REQUIRED RESOURCES *
+annotation_tool_cmd: "vep"  # Not used during cache init
+tool_version_command: "vep --version | head -1 | awk '{print $2}'"
+bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
+reference: "/tmp/dummy.fa"  # Placeholder - not used during cache init from BCF
+chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
+temp_dir: "/tmp"
+
+## * OPTIONAL RESOURCES *
+vep_buffer: 500000
+vep_forks: 8
+vep_cache: "/opt/vep_cache"  # Placeholder
+
+## * OPTIONAL CHECKS *
+optional_checks:
+  genome_build: "GRCh38"
