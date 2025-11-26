@@ -46,8 +46,9 @@ ENV VCFSTASH_ROOT="/build"
 COPY recipes/docker-cache /tmp/recipe
 COPY docker/build-cache-with-bcf.sh /tmp/build-cache.sh
 
-# Create dummy reference file for validation (not actually used during cache init)
-RUN touch /tmp/dummy.fa
+# Create dummy reference file with index for validation (not actually used during cache init)
+RUN echo -e ">chr1\nACGT" > /tmp/dummy.fa && \
+    samtools faidx /tmp/dummy.fa
 
 # Build arguments (from workflow_dispatch)
 ARG AF=0.10
