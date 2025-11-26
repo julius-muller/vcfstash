@@ -13,21 +13,31 @@ on:
           - "0.05"
           - "0.01"
       chromosomes:
-        description: "Chromosomes to include (space-separated, e.g. 'chr1 chr2' or 'all')"
+        description: "Chromosomes ('chrY' for test, 'all' for production)"
         required: true
-        default: "chr1"
-      tool_version:
-        description: "VEP version"
+        default: "chrY"
+        type: choice
+        options:
+          - "chrY"
+          - "chr22"
+          - "all"
+      type:
+        description: "gnomAD dataset type"
         required: true
-        default: "115.2"
+        default: "joint"
+        type: choice
+        options:
+          - "joint"
+          - "genomes"
+          - "exomes"
       genome:
         description: "Genome build"
         required: true
         default: "GRCh38"
-      cache_name:
-        description: "Cache name (sub-dir in /cache/stash)"
-        required: true
-        default: "vep_gnomad"
+        type: choice
+        options:
+          - "GRCh38"
+          - "GRCh37"
       gnomad_version:
         description: "gnomAD version"
         required: true
@@ -42,22 +52,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set default values for scheduled runs
+      - name: Set parameters and auto-generate names
         id: defaults
         run: |
           AF="${{ github.event.inputs.af }}"
           CHR="${{ github.event.inputs.chromosomes }}"
-          TOOL_VERSION="${{ github.event.inputs.tool_version }}"
+          TYPE="${{ github.event.inputs.type }}"
           GENOME="${{ github.event.inputs.genome }}"
-          CACHE_NAME="${{ github.event.inputs.cache_name }}"
           GNOMAD_VERSION="${{ github.event.inputs.gnomad_version }}"
 
-          echo "af=${AF:-0.10}" >> $GITHUB_OUTPUT
-          echo "chromosomes=${CHR:-chr1}" >> $GITHUB_OUTPUT
-          echo "tool_version=${TOOL_VERSION:-115.2}" >> $GITHUB_OUTPUT
-          echo "genome=${GENOME:-GRCh38}" >> $GITHUB_OUTPUT
-          echo "cache_name=${CACHE_NAME:-vep_gnomad}" >> $GITHUB_OUTPUT
-          echo "gnomad_version=${GNOMAD_VERSION:-4.1}" >> $GITHUB_OUTPUT
+          # Set defaults
+          AF="${AF:-0.10}"
+          CHR="${CHR:-chrY}"
+          TYPE="${TYPE:-joint}"
+          GENOME="${GENOME:-GRCh38}"
+          GNOMAD_VERSION="${GNOMAD_VERSION:-4.1}"
+
+          # Auto-generate cache name: gnomad_{genome}_{type}_{chromosome}_{af}
+          GENOME_LOWER=$(echo "$GENOME" | tr '[:upper:]' '[:lower:]')
+          AF_CLEAN=$(echo "$AF" | tr -d '.')
+
+          if [ "$CHR" = "all" ]; then
+            CACHE_NAME="gnomad_${GENOME_LOWER}_${TYPE}_af${AF_CLEAN}"
+          else
+            CHR_CLEAN=$(echo "$CHR" | tr ' ' '_')
+            CACHE_NAME="gnomad_${GENOME_LOWER}_${TYPE}_${CHR_CLEAN}_af${AF_CLEAN}"
+          fi
+
+          echo "af=${AF}" >> $GITHUB_OUTPUT
+          echo "chromosomes=${CHR}" >> $GITHUB_OUTPUT
+          echo "type=${TYPE}" >> $GITHUB_OUTPUT
+          echo "genome=${GENOME}" >> $GITHUB_OUTPUT
+          echo "gnomad_version=${GNOMAD_VERSION}" >> $GITHUB_OUTPUT
+          echo "cache_name=${CACHE_NAME}" >> $GITHUB_OUTPUT
+
+          echo "Generated cache name: ${CACHE_NAME}"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -193,6 +222,27 @@ jobs:
           mv gnomad-data/${{ needs.export-gnomad.outputs.bcf-name }} docker/gnomad-data/
           mv gnomad-data/${{ needs.export-gnomad.outputs.bcf-name }}.csi docker/gnomad-data/
 
+      - name: Generate Docker image tag
+        id: image-tag
+        run: |
+          GENOME_LOWER=$(echo "${{ steps.defaults.outputs.genome }}" | tr '[:upper:]' '[:lower:]')
+          TYPE="${{ steps.defaults.outputs.type }}"
+          CHR="${{ steps.defaults.outputs.chromosomes }}"
+          AF="${{ steps.defaults.outputs.af }}"
+          AF_CLEAN=$(echo "$AF" | tr -d '.')
+
+          # Tag format: gnomad-<genome>-<type>-<chr>-af<threshold>
+          # If all chromosomes, omit chr part
+          if [ "$CHR" = "all" ]; then
+            TAG="gnomad-${GENOME_LOWER}-${TYPE}-af${AF_CLEAN}"
+          else
+            CHR_CLEAN=$(echo "$CHR" | tr ' ' '_')
+            TAG="gnomad-${GENOME_LOWER}-${TYPE}-${CHR_CLEAN}-af${AF_CLEAN}"
+          fi
+
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Generated Docker tag: ${TAG}"
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -200,7 +250,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build & push image
+      - name: Build & push blueprint image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -208,12 +258,11 @@ jobs:
           push: true
           build-args: |
             AF=${{ steps.defaults.outputs.af }}
-            TOOL_VERSION=${{ steps.defaults.outputs.tool_version }}
             GENOME=${{ steps.defaults.outputs.genome }}
             CACHE_NAME=${{ steps.defaults.outputs.cache_name }}
             BCF_FILE=docker/gnomad-data/${{ needs.export-gnomad.outputs.bcf-name }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/vcfstash-cache:${{ steps.defaults.outputs.genome }}-af${{ steps.defaults.outputs.af }}-vep${{ steps.defaults.outputs.tool_version }}-hail
-            ghcr.io/${{ github.repository_owner }}/vcfstash-cache:latest-hail
+            ghcr.io/${{ github.repository_owner }}/vcfstash-blueprint:${{ steps.image-tag.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/vcfstash-blueprint:latest
           cache-from: type=gha
           cache-to:   type=gha,mode=max

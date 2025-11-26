@@ -52,9 +52,8 @@ RUN printf ">chr1\nACGT\n" > /tmp/dummy.fa && \
 
 # Build arguments (from workflow_dispatch)
 ARG AF=0.10
-ARG TOOL_VERSION=115.2
 ARG GENOME=GRCh38
-ARG CACHE_NAME=vep_gnomad
+ARG CACHE_NAME
 ARG BCF_FILE=""
 
 # Copy the pre-generated BCF file if provided
@@ -69,7 +68,6 @@ RUN mkdir -p "${CACHE_DIR}" && \
         --gnomad-af "${AF}" \
         --cache-dir "${CACHE_DIR}" \
         --threads 8 \
-        --tool-version "${TOOL_VERSION}" \
         --cache-name "${CACHE_NAME}" \
         --genome "${GENOME}" \
         --params /tmp/recipe/params.yaml
@@ -110,5 +108,5 @@ RUN useradd -m vcfstash && chown -R vcfstash /cache /app
 USER vcfstash
 WORKDIR /work
 
-ENTRYPOINT ["vcfstash"]
+ENTRYPOINT ["/usr/local/bin/vcfstash"]
 CMD ["--help"]
