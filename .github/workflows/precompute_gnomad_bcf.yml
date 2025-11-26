@@ -182,31 +182,36 @@ jobs:
           TAG="${{ steps.check-existing.outputs.release-tag }}"
           BCF_NAME="${{ steps.check-existing.outputs.bcf-name }}"
 
+          # Create release notes
+          cat > release_notes.md <<'EOF'
+          Pre-computed gnomAD v${{ steps.defaults.outputs.gnomad_version }} BCF file
+
+          **Configuration:**
+          - Allele Frequency: >= ${{ steps.defaults.outputs.af }}
+          - Chromosomes: ${{ steps.defaults.outputs.chromosomes }}
+          - Genome Build: GRCh38
+          - gnomAD Version: ${{ steps.defaults.outputs.gnomad_version }}
+          - Dataset: Joint WES+WGS
+
+          **INFO Fields:**
+          - AF: Weighted average allele frequency across all samples
+          - AC: Allele count
+
+          **Usage:**
+          ```bash
+          # Download
+          wget https://github.com/${{ github.repository }}/releases/download/${TAG}/${BCF_NAME}
+          wget https://github.com/${{ github.repository }}/releases/download/${TAG}/${BCF_NAME}.csi
+
+          # Use with VCFstash
+          vcfstash stash-init --vcf ${BCF_NAME} --output cache -y params.yaml
+          ```
+          EOF
+
           # Create release with assets in a single command (prevents immutability issue)
           gh release create "${TAG}" \
             --title "gnomAD BCF: AF=${{ steps.defaults.outputs.af }}, Chr=${{ steps.defaults.outputs.chromosomes }}" \
-            --notes "Pre-computed gnomAD v${{ steps.defaults.outputs.gnomad_version }} BCF file
-
-**Configuration:**
-- Allele Frequency: >= ${{ steps.defaults.outputs.af }}
-- Chromosomes: ${{ steps.defaults.outputs.chromosomes }}
-- Genome Build: GRCh38
-- gnomAD Version: ${{ steps.defaults.outputs.gnomad_version }}
-- Dataset: Joint WES+WGS
-
-**INFO Fields:**
-- AF: Weighted average allele frequency across all samples
-- AC: Allele count
-
-**Usage:**
-\`\`\`bash
-# Download
-wget https://github.com/${{ github.repository }}/releases/download/${TAG}/${BCF_NAME}
-wget https://github.com/${{ github.repository }}/releases/download/${TAG}/${BCF_NAME}.csi
-
-# Use with VCFstash
-vcfstash stash-init --vcf ${BCF_NAME} --output cache -y params.yaml
-\`\`\`" \
+            --notes-file release_notes.md \
             "${BCF_NAME}" \
             "${BCF_NAME}.csi"
         env:
