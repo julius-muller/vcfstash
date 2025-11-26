@@ -1,0 +1,134 @@
+# ==================== stage 0: VEP base with vcfstash ====================
+# Use VEP official image as base
+FROM ensemblorg/ensembl-vep:release_115.2 AS builder
+
+USER root
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3 \
+        python3-pip \
+        python3-venv \
+        curl \
+        wget \
+        tabix \
+        bcftools \
+        samtools \
+        procps \
+        ca-certificates \
+        openjdk-21-jre-headless && \
+    rm -rf /var/lib/apt/lists/*
+
+# Prepare workspace
+WORKDIR /build
+
+# Copy repo
+COPY pyproject.toml README.md ./
+COPY vcfstash ./vcfstash/
+COPY resources ./resources
+COPY tools ./tools
+COPY recipes ./recipes
+
+# Install vcfstash with dev dependencies into a venv
+RUN python3 -m venv /build/venv && \
+    /build/venv/bin/pip install --upgrade pip && \
+    /build/venv/bin/pip install --no-cache-dir ".[dev]"
+
+# Make CLI available in PATH for the build step
+ENV PATH="/build/venv/bin:${PATH}"
+ENV VCFSTASH_ROOT="/build"
+
+# Copy build script
+COPY docker/build-annotated-cache.sh /tmp/build-annotated-cache.sh
+
+# Create dummy reference file with index (not actually used during cache init from BCF)
+RUN printf ">chr1\nACGT\n" > /tmp/dummy.fa && \
+    samtools faidx /tmp/dummy.fa
+
+# Build arguments (from workflow_dispatch)
+ARG AF=0.10
+ARG GENOME=GRCh38
+ARG CACHE_NAME
+ARG BCF_FILE=""
+ARG VEP_CACHE_DIR="/opt/vep/.vep"
+ARG ANNOTATION_NAME="vep_gnomad"
+
+# Copy the pre-generated BCF file if provided
+COPY ${BCF_FILE} /tmp/gnomad.bcf
+COPY ${BCF_FILE}.csi /tmp/gnomad.bcf.csi
+
+# VEP cache should already exist in the base image at /opt/vep/.vep
+# Verify it exists
+RUN if [ ! -d "${VEP_CACHE_DIR}" ]; then \
+        echo "ERROR: VEP cache not found at ${VEP_CACHE_DIR}"; \
+        exit 1; \
+    fi && \
+    echo "VEP cache found at ${VEP_CACHE_DIR}"
+
+# Build the annotated cache inside the image
+ENV CACHE_DIR=/opt/vcfstash-cache
+RUN mkdir -p "${CACHE_DIR}" && \
+    bash /tmp/build-annotated-cache.sh \
+        --bcf-file /tmp/gnomad.bcf \
+        --gnomad-af "${AF}" \
+        --cache-dir "${CACHE_DIR}" \
+        --threads 8 \
+        --cache-name "${CACHE_NAME}" \
+        --genome "${GENOME}" \
+        --params /build/recipes/docker-annotated/params.yaml \
+        --annotation-config /build/recipes/docker-annotated/annotation.config \
+        --annotation-name "${ANNOTATION_NAME}" \
+        --vep-cache "${VEP_CACHE_DIR}"
+
+# ==================== stage 1: runtime with VEP + annotated cache ====================
+FROM ensemblorg/ensembl-vep:release_115.2 AS runtime
+
+USER root
+
+LABEL org.opencontainers.image.title="VCFstash annotated cache image"
+LABEL org.opencontainers.image.description="Contains VEP pipeline and pre-annotated cache"
+
+# Install minimal dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3 \
+        default-jre-headless \
+        ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy venv with vcfstash installed, plus resources/tools
+WORKDIR /app
+COPY --from=builder /build/venv /app/venv
+COPY --from=builder /build/resources /app/resources
+COPY --from=builder /build/tools /app/tools
+
+# Ensure bcftools shim is executable
+RUN chmod +x /app/tools/bcftools
+
+# Copy the annotated cache
+COPY --from=builder /opt/vcfstash-cache /cache
+
+# VEP cache is already in the base image, verify it's there
+RUN if [ ! -d "/opt/vep/.vep" ]; then \
+        echo "ERROR: VEP cache not found in runtime"; \
+        exit 1; \
+    fi && \
+    echo "VEP cache available at /opt/vep/.vep"
+
+# vcfstash wrapper - use system python with venv in PYTHONPATH
+RUN printf '%s\n' '#!/bin/sh' \
+                  'export PYTHONPATH=/app/venv/lib/python3.13/site-packages:$PYTHONPATH' \
+                  'exec python3 -m vcfstash.cli "$@"' \
+    > /usr/local/bin/vcfstash && chmod +x /usr/local/bin/vcfstash
+
+ENV PATH="/app/venv/bin:/opt/vep/ensembl-vep:${PATH}"
+ENV VCFSTASH_ROOT="/app"
+
+# Non-root for HPC compatibility
+RUN useradd -m vcfstash && chown -R vcfstash /cache /app
+USER vcfstash
+WORKDIR /work
+
+ENTRYPOINT ["/usr/local/bin/vcfstash"]
+CMD ["--help"]
