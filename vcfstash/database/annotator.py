@@ -4,7 +4,6 @@ This module provides classes for annotating the variant database and for annotat
 user VCF files using the annotated database.
 """
 
-import os
 import shutil
 import subprocess
 import sys
@@ -16,7 +15,6 @@ from pathlib import Path
 from typing import Optional, Union
 
 import pysam
-import yaml
 
 from vcfstash.database.base import NextflowWorkflow, VCFDatabase
 from vcfstash.database.outputs import AnnotatedStashOutput, AnnotatedUserOutput
@@ -178,76 +176,6 @@ class DatabaseAnnotator(VCFDatabase):
         """Validate input files, directories, and YAML parameters."""
         if self.logger:
             self.logger.debug("Validating inputs")
-
-        # Validate VCF reference
-        try:
-            # Load YAML file to get reference path
-            params_yaml = yaml.safe_load(
-                Path(self.params_file).expanduser().resolve().read_text()
-            )
-
-            # Get reference path from YAML
-            reference_path_str = params_yaml.get("reference")
-            if not reference_path_str:
-                if self.logger:
-                    self.logger.error("Reference path not found in YAML file")
-                raise ValueError("Reference path not found in YAML file")
-
-            # Expand environment variables in reference path
-            if "${VCFSTASH_ROOT}" in reference_path_str:
-                vcfstash_root = os.environ.get("VCFSTASH_ROOT")
-                if not vcfstash_root:
-                    if self.logger:
-                        self.logger.error("VCFSTASH_ROOT environment variable not set")
-                    raise ValueError("VCFSTASH_ROOT environment variable not set")
-                reference_path_str = reference_path_str.replace(
-                    "${VCFSTASH_ROOT}", vcfstash_root
-                )
-
-            reference_path = Path(reference_path_str).expanduser().resolve()
-
-            # Get chromosome mapping file path
-            chr_add_path = None
-            chr_add_path_str = params_yaml.get("chr_add")
-            if chr_add_path_str:
-                # Expand environment variables in chr_add path
-                if "${VCFSTASH_ROOT}" in chr_add_path_str:
-                    vcfstash_root = os.environ.get("VCFSTASH_ROOT")
-                    if vcfstash_root:
-                        chr_add_path_str = chr_add_path_str.replace(
-                            "${VCFSTASH_ROOT}", vcfstash_root
-                        )
-                chr_add_path = Path(chr_add_path_str).expanduser().resolve()
-                if not chr_add_path.exists():
-                    if self.logger:
-                        self.logger.warning(
-                            f"Chromosome mapping file not found: {chr_add_path}"
-                        )
-                    chr_add_path = None
-
-            # Validate VCF reference with chromosome mapping
-            if self.logger:
-                self.logger.info(f"Validating VCF reference: {reference_path}")
-            valid, error_msg = self.validate_vcf_reference(
-                self.blueprint_bcf, reference_path, chr_add_path
-            )
-
-            if not valid:
-                # Only log once and raise directly - don't log first and then raise
-                raise ValueError(f"VCF reference validation failed: {error_msg}")
-
-            if self.logger:
-                self.logger.info("VCF reference validation successful")
-        except ValueError:
-            # Don't log here, just re-raise the ValueError
-            raise
-        except Exception as e:
-            # For unexpected errors, log once and convert to RuntimeError
-            if self.logger:
-                self.logger.error(
-                    f"Unexpected error during VCF reference validation: {e}"
-                )
-            raise RuntimeError(f"Error during VCF reference validation: {e}") from e
 
         if self.logger:
             self.logger.debug("Input validation successful")
@@ -500,57 +428,6 @@ class VCFAnnotator(VCFDatabase):
                     self.logger.error(msg)
                 raise FileNotFoundError(msg)
             self.ensure_indexed(self.input_vcf)
-
-        # Validate VCF reference
-        try:
-            # Load YAML file to get reference path
-            params_yaml = yaml.safe_load(
-                Path(self.params_file).expanduser().resolve().read_text()
-            )
-
-            # Get reference path from YAML
-            reference_path_str = params_yaml.get("reference")
-            if not reference_path_str:
-                if self.logger:
-                    self.logger.error("Reference path not found in YAML file")
-                raise ValueError("Reference path not found in YAML file")
-
-            # Expand environment variables in reference path
-            if "${VCFSTASH_ROOT}" in reference_path_str:
-                vcfstash_root = os.environ.get("VCFSTASH_ROOT")
-                if not vcfstash_root:
-                    if self.logger:
-                        self.logger.error("VCFSTASH_ROOT environment variable not set")
-                    raise ValueError("VCFSTASH_ROOT environment variable not set")
-                reference_path_str = reference_path_str.replace(
-                    "${VCFSTASH_ROOT}", vcfstash_root
-                )
-
-            reference_path = Path(reference_path_str).expanduser().resolve()
-
-            # Validate VCF reference
-            if self.logger:
-                self.logger.info(f"Validating VCF reference: {reference_path}")
-            valid, error_msg = self.validate_vcf_reference(
-                self.input_vcf, reference_path
-            )
-
-            if not valid:
-                # Only log once and raise directly - don't log first and then raise
-                raise ValueError(f"VCF reference validation failed: {error_msg}")
-
-            if self.logger:
-                self.logger.info("VCF reference validation successful")
-        except ValueError:
-            # Don't log here, just re-raise the ValueError
-            raise
-        except Exception as e:
-            # For unexpected errors, log once and convert to RuntimeError
-            if self.logger:
-                self.logger.error(
-                    f"Unexpected error during VCF reference validation: {e}"
-                )
-            raise RuntimeError(f"Error during VCF reference validation: {e}") from e
 
         if self.logger:
             self.logger.debug("Input validation successful")

@@ -21,10 +21,6 @@ on:
         required: true
         default: "4.1"
 
-  # Pre-compute weekly to keep BCF files fresh
-  schedule:
-    - cron: '0 3 * * 0'  # Sunday 3 AM UTC
-
 jobs:
   precompute:
     name: Precompute gnomAD BCF with Hail

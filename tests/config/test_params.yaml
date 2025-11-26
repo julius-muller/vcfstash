@@ -11,8 +11,6 @@ annotation_tool_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
 tool_version_command: "${VCFSTASH_ROOT}/tools/bcftools --version-only"
 # bcftools * best to leaave the default as this is the tested and shipped version v1.20
 bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-# Reference data required for the normalization step
-reference: "${VCFSTASH_ROOT}/tests/data/references/reference.fasta"
 
 ## * OPTIONAL RESOURCES *
 # Alls keys here can be utilized in the example_annotation.config file as ${params.MYKEY}
@@ -20,8 +18,4 @@ reference: "${VCFSTASH_ROOT}/tests/data/references/reference.fasta"
 
 ## * OPTIONAL CHECKS *
 # Optional checks and verifications. These can be set to any key:value pair, but all keys must match the values in the example_annotation.config.
-optional_checks:
-  reference_md5sum: "ec59e3976d29e276414191a6283499f7"
-  # Add other optional verifications here
-  # example_version: "1.2.3"
-  # example_option: "value"
+optional_checks: {}

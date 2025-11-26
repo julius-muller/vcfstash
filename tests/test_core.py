@@ -68,32 +68,3 @@ def test_vcf_reference_validation():
     result, error = db.validate_vcf_reference(vcf_file, Path("nonexistent.fasta"))
     assert not result, "Validation should fail with non-existent reference file"
     assert "not found" in error
-
-def test_database_initializer_reference_validation(test_output_dir, params_file):
-    """Test that DatabaseInitializer.__init__ calls validate_vcf_reference."""
-    from vcfstash.database.initializer import DatabaseInitializer
-    from unittest.mock import patch, MagicMock
-
-    # Set up test files
-    vcf_file = TEST_DATA_DIR / "crayz_db.bcf"
-
-    # Mock the validate_vcf_reference method
-    with patch.object(DatabaseInitializer, 'validate_vcf_reference', return_value=(True, None)) as mock_validate:
-        # Create a DatabaseInitializer instance
-        db_init = DatabaseInitializer(
-            input_file=vcf_file,
-            params_file=params_file,
-            output_dir=test_output_dir,
-            verbosity=2,
-            force=True,
-            debug=True,
-            bcftools_path=TEST_ROOT.parent / "tools" / "bcftools"
-        )
-
-        # Assert that validate_vcf_reference was called
-        mock_validate.assert_called_once()
-
-        # Assert that validate_vcf_reference was called with the correct parameters
-        args, _ = mock_validate.call_args
-        assert args[0] == vcf_file, "First argument should be the input VCF file"
-        assert "reference.fasta" in str(args[1]), "Second argument should be the reference FASTA file"

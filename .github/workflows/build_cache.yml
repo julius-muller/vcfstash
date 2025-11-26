@@ -24,10 +24,6 @@ on:
         description: "Cache name (sub-dir in /cache/stash)"
         required: true
         default: "vep_gnomad"
-  
-  # Build common variants cache weekly
-  schedule:
-    - cron: '0 2 * * 0'  # Sunday 2 AM UTC
 
 jobs:
   build:

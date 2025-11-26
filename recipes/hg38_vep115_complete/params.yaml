@@ -2,7 +2,6 @@
 annotation_tool_cmd: "docker run --rm -v /data:/data ensemblorg/ensembl-vep:release_115.2 vep"
 tool_version_command: "docker run --rm ensemblorg/ensembl-vep:release_115.2 vep --version | head -1 | awk '{print $2}'"
 bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-reference: "/data/references/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
 chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
 temp_dir: "/tmp"
 
@@ -13,6 +12,5 @@ vep_cache: "/data/vep_cache/115"
 
 ## * OPTIONAL CHECKS *
 optional_checks:
-  reference_md5sum: "2f9cd9e853a9284c53884e6a551b1538"
   vep_cache_version: "115"
   genome_build: "GRCh38"

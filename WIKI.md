@@ -66,12 +66,8 @@ Full production pipeline with VEP:
 mkdir -p data/{references,vep_cache,vcfs} results
 docker pull ensemblorg/ensembl-vep:release_115.2
 
-# 2. Download reference genome (5-10 minutes)
-cd data/references
-wget http://ftp.ensembl.org/pub/release-115/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
-gunzip Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz  
-samtools faidx Homo_sapiens.GRCh38.dna.primary_assembly.fa
-cd ../..
+# 2. Reference genome
+# Normalization now only splits multiallelic variants, so no FASTA download is required.
 
 # 3. Install VEP cache (10-30 minutes)
 docker run --rm -v $(pwd)/data:/data ensemblorg/ensembl-vep:release_115.2 \
@@ -313,17 +309,16 @@ VCFstash provides a mechanism for optional checks to ensure consistency between 
 
 ### Available Optional Checks
 
-#### 1. Reference Genome MD5 Checksum
+#### 1. Annotation Asset Check (e.g., VEP cache)
 
-The most common check is verifying the reference genome's MD5 checksum:
+Verify that large assets such as the VEP cache match between cache creation and annotation:
 
 ```yaml
 optional_checks:
-  reference_md5sum: "28a3d9f0162be1d5db2011aa30458129"
-
+  vep_cache_version: "115"
 ```
 
-This ensures that the same reference genome is used for both cache creation and annotation, preventing mismatches in variant coordinates or reference alleles.
+This blocks accidental cache rebuilds with a mismatched resource bundle.
 
 #### 2. Tool Version Checks
 
@@ -346,7 +341,6 @@ You can add any custom checks needed for your specific workflow:
 
 ```yaml
 optional_checks:
-  reference_md5sum: "28a3d9f0162be1d5db2011aa30458129"
   vep_cache_version: "115"
   genome_build: "GRCh37"
 ```
@@ -361,7 +355,7 @@ These values must match exactly between the params.yaml file and the annotation.
 
 ### Best Practices for Optional Checks
 
-1. **Always include reference_md5sum**: This is the most critical check to ensure consistent variant coordinates
+1. **Pin major assets**: Capture things like VEP cache versions or container tags so annotations stay reproducible
 2. **Include tool version checks**: Especially important for tools like VEP where different versions can produce different annotations
 3. **Document your checks**: Add comments explaining what each check verifies and why it's important
 4. **Be specific**: Use precise version numbers and checksums rather than ranges or patterns
@@ -384,7 +378,6 @@ VCFstash works with **any annotation tool** by wrapping your existing command. J
    --fork 4 \
    --cache \
    --dir_cache /path/to/vep_cache/115/cachedir \
-   --fasta /path/to/reference.fasta \
    -i sample.vcf \
    -o annotated.vcf \
    --format vcf \
@@ -407,7 +400,6 @@ Conventions here are:
    --fork 4 \
    --cache \
    --dir_cache /path/to/vep_cache/115/cachedir \
-   --fasta /path/to/reference.fasta \
    -i ${INPUT_BCF} \
    -o ${OUTPUT_BCF} \
    --format vcf \
@@ -420,11 +412,10 @@ If there are any parts of the command that need to be kept configurable during v
    ${params.annotation_tool_cmd} \
    --offline \
    --buffer_size ${params.vep_buffer} \
-   --fork ${params.vep_forks} \
-   --cache \
-   --dir_cache ${params.vep_cache}/115/cachedir \
-   --fasta ${params.reference} \
-   -i ${INPUT_BCF} \
+    --fork ${params.vep_forks} \
+    --cache \
+    --dir_cache ${params.vep_cache}/115/cachedir \
+    -i ${INPUT_BCF} \
    -o ${OUTPUT_BCF} \
    --format vcf \
    --canonical 
@@ -441,7 +432,6 @@ annotation_cmd = """
    --fork ${params.vep_forks} \
    --cache \
    --dir_cache ${params.vep_cachedir}/115/cachedir \
-   --fasta ${params.reference} \
    -i stdin \
    -o stdout \
    --format vcf \
@@ -492,9 +482,6 @@ tool_version_command: "vep | grep -oP \"ensembl-vep\\s+:\\s+\\K\\d+\\.\\d+\""
 # bcftools - best to leave as default since this is the tested and shipped version v1.20
 bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
 
-# Reference data required for the normalization step
-reference: "/path/to/reference.fasta"
-
 # Mapping of chromosome names between the reference genome and the VCF file
 chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
 
@@ -523,7 +510,7 @@ These parameters provide verification mechanisms to ensure consistency between c
 # Optional checks and verifications. These can be set to any key:value pair, 
 # but all keys must match the values in the example_annotation.config.
 optional_checks:
-  reference_md5sum: "28a3d9f0162be1d5db2011aa30458129"
+  vep_cache_version: "115"
   # Add other optional verifications here
   # example_version: "1.2.3"
   # example_option: "value"
@@ -673,7 +660,6 @@ docker run --rm vcfstash --help
 
 # Mount volumes for data access
 docker run --rm \
-  -v /path/to/reference:/reference:ro \
   -v /path/to/data:/data \
   -v /path/to/cache:/cache \
   vcfstash <command> <options>
@@ -690,7 +676,6 @@ VCFstash includes a Docker Compose configuration for easier management of volume
 cd vcfstash
 
 # Set environment variables (optional)
-export REFERENCE_DIR=/path/to/reference
 export DATA_DIR=/path/to/data
 export CACHE_DIR=/path/to/cache
 
@@ -710,23 +695,21 @@ chmod +x docker/run-vcfstash.sh
 ./docker/run-vcfstash.sh <command> <options>
 
 # With custom directories
-REFERENCE_DIR=/path/to/reference DATA_DIR=/path/to/data CACHE_DIR=/path/to/cache \
+DATA_DIR=/path/to/data CACHE_DIR=/path/to/cache \
   ./docker/run-vcfstash.sh <command> <options>
 ```
 
 ### Volume Mounting
 
-When using Docker with VCFstash, you need to mount volumes for:
+When using Docker with VCFstash, mount volumes for:
 
-1. **Reference data** (read-only): Contains reference genomes and other reference files
-2. **Input/output data**: Contains input VCF files and output directories
-3. **Cache directory**: Stores the VCFstash cache
+1. **Input/output data**: Contains input VCF files and output directories
+2. **Cache directory**: Stores the VCFstash cache
 
 #### Example with Explicit Volume Mounts
 
 ```bash
 docker run --rm \
-  -v /path/to/reference:/reference:ro \
   -v /path/to/data:/data \
   -v /path/to/cache:/cache \
   vcfstash stash-init \
@@ -741,7 +724,6 @@ When using Docker, update your `params.yaml` to use paths inside the container:
 
 ```yaml
 # params.yaml for Docker
-reference: "/reference/GRCh38.fa"
 temp_dir: "/data/temp"
 ```
 
@@ -751,10 +733,9 @@ temp_dir: "/data/temp"
 
 ```bash
 # Create directories
-mkdir -p reference data cache
+mkdir -p data cache
 
 # Copy files
-cp /path/to/reference.fasta reference/
 cp /path/to/gnomad.vcf.gz data/
 cp /path/to/params.yaml data/
 
@@ -778,7 +759,6 @@ params {
         --fork ${params.vep_forks} \
         --cache \
         --dir_cache ${params.vep_cache} \
-        --fasta ${params.reference} \
         -i ${INPUT_BCF} \
         -o ${OUTPUT_BCF} \
         --format vcf \
@@ -820,11 +800,8 @@ services:
   vcfstash:
     image: vcfstash
     volumes:
-      - /path/to/reference:/reference:ro
       - /path/to/data:/data
       - /path/to/cache:/cache
-    environment:
-      - REFERENCE_PATH=/reference
     command: --help
 ```
 
@@ -932,14 +909,14 @@ All tests should pass on any system where the package is installed, without requ
 
 ### Common Issues and Solutions
 
-#### 1. Missing or Incompatible Reference Genome
+#### 1. Chromosome Mapping or Normalization Issues
 
-**Symptoms**: Errors about reference allele mismatches or failed normalization
+**Symptoms**: Errors about chromosome names or normalization failures
 
 **Solution**: 
-- Verify the reference genome path in params.yaml
-- Check that the reference_md5sum matches
-- Ensure the reference genome is properly indexed
+- Verify the `chr_add` path in params.yaml points to the expected rename file
+- Ensure the input VCF/BCF is indexed (`.csi` or `.tbi`)
+- Re-run with `--debug` to inspect intermediate logs for the bcftools normalization step
 
 #### 2. Annotation Tool Errors
 
@@ -1004,7 +981,6 @@ VCFstash works with any annotation tool that can process VCF files. This section
 annotation_tool_cmd: "vep"
 tool_version_command: "vep | grep -oP \"ensembl-vep\\s+:\\s+\\K\\d+\\.\\d+\""
 bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-reference: "/path/to/reference.fasta"
 chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
 temp_dir: "/tmp"
 
@@ -1015,7 +991,7 @@ vep_cache: "/path/to/vep_cache"
 
 ## * OPTIONAL CHECKS *
 optional_checks:
-  reference_md5sum: "28a3d9f0162be1d5db2011aa30458129"
+  vep_cache_version: "115"
 ```
 
 #### annotation.config
@@ -1029,7 +1005,6 @@ params {
         --fork ${params.vep_forks} \
         --cache \
         --dir_cache ${params.vep_cache} \
-        --fasta ${params.reference} \
         -i stdin \
         -o stdout \
         --format vcf \
@@ -1042,7 +1017,7 @@ params {
 }
 
 optional_checks {
-    reference_md5sum = '28a3d9f0162be1d5db2011aa30458129'
+    vep_cache_version = '115'
 }
 ```
 
@@ -1054,7 +1029,6 @@ optional_checks {
 annotation_tool_cmd: "/path/to/annovar/table_annovar.pl"
 tool_version_command: "/path/to/annovar/table_annovar.pl | grep -oP 'Version: \\K[\\d\\.]+''"
 bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-reference: "/path/to/reference.fasta"
 chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
 temp_dir: "/tmp"
 
@@ -1066,7 +1040,6 @@ annovar_operation: "g,f,f"
 
 ## * OPTIONAL CHECKS *
 optional_checks:
-  reference_md5sum: "28a3d9f0162be1d5db2011aa30458129"
   annovar_buildver: "hg38"
 ```
 
@@ -1099,7 +1072,6 @@ params {
 }
 
 optional_checks {
-    reference_md5sum = '28a3d9f0162be1d5db2011aa30458129'
     annovar_buildver = 'hg38'
 }
 ```
@@ -1112,7 +1084,6 @@ optional_checks {
 annotation_tool_cmd: "snpEff"
 tool_version_command: "snpEff -version | grep -oP 'SnpEff \\K[\\d\\.]+''"
 bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-reference: "/path/to/reference.fasta"
 chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
 temp_dir: "/tmp"
 
@@ -1123,7 +1094,6 @@ snpeff_config: "/path/to/snpeff/snpEff.config"
 
 ## * OPTIONAL CHECKS *
 optional_checks:
-  reference_md5sum: "28a3d9f0162be1d5db2011aa30458129"
   snpeff_genome: "GRCh38.105"
 ```
 
@@ -1146,7 +1116,6 @@ params {
 }
 
 optional_checks {
-    reference_md5sum = '28a3d9f0162be1d5db2011aa30458129'
     snpeff_genome = 'GRCh38.105'
 }
 ```
@@ -1161,7 +1130,6 @@ This example shows how to use a custom Python script for annotation:
 annotation_tool_cmd: "python3 /path/to/custom_annotator.py"
 tool_version_command: "python3 /path/to/custom_annotator.py --version"
 bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-reference: "/path/to/reference.fasta"
 chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
 temp_dir: "/tmp"
 
@@ -1171,7 +1139,6 @@ custom_threads: 4
 
 ## * OPTIONAL CHECKS *
 optional_checks:
-  reference_md5sum: "28a3d9f0162be1d5db2011aa30458129"
   custom_db_version: "1.2.3"
 ```
 
@@ -1192,7 +1159,6 @@ params {
 }
 
 optional_checks {
-    reference_md5sum = '28a3d9f0162be1d5db2011aa30458129'
     custom_db_version = '1.2.3'
 }
 ```
@@ -1207,7 +1173,6 @@ Here's a minimal example that adds a simple annotation using bcftools:
 annotation_tool_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
 tool_version_command: "${VCFSTASH_ROOT}/tools/bcftools --version-only"
 bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-reference: "/path/to/reference.fasta"
 chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
 temp_dir: "/tmp"
 
@@ -1216,7 +1181,7 @@ annotation_file: "/path/to/annotations.vcf.gz"
 
 ## * OPTIONAL CHECKS *
 optional_checks:
-  reference_md5sum: "28a3d9f0162be1d5db2011aa30458129"
+  annotation_file_version: "1.0"
 ```
 
 #### annotation.config
@@ -1235,6 +1200,6 @@ params {
 }
 
 optional_checks {
-    reference_md5sum = '28a3d9f0162be1d5db2011aa30458129'
+    annotation_file_version = '1.0'
 }
 ```

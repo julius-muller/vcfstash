@@ -11,8 +11,6 @@ annotation_tool_cmd: "docker run --user $(id -u):$(id -g) -i -v /mnt/data:/mnt/d
 tool_version_command: "docker run --user $(id -u):$(id -g) -i -v /mnt/data:/mnt/data --rm ensemblorg/ensembl-vep:release_115.2 vep | grep -oP \"ensembl-vep\\s+:\\s+\\K\\d+\\.\\d+\""
 # bcftools * best to leave the default as this is the tested and shipped version v1.20
 bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-# Reference data required for the normalization step
-reference: "/mnt/data/resources/reference/ucsc/hg19_canonical.fa.gz"
 
 ## * OPTIONAL RESOURCES *
 # Alls keys here can be utilized in the example_annotation.config file as ${params.MYKEY}
@@ -22,8 +20,4 @@ vep_forks: 8
 
 ## * OPTIONAL CHECKS *
 # Optional checks and verifications. These can be set to any key:value pair, but all keys must match the values in the example_annotation.config.
-optional_checks:
-  reference_md5sum: "28a3d9f0162be1d5db2011aa30458129"
-  # Add other optional verifications here
-  # example_version: "1.2.3"
-  # example_option: "value"
+optional_checks: {}
