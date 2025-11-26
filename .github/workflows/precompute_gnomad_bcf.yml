@@ -29,6 +29,8 @@ jobs:
   precompute:
     name: Precompute gnomAD BCF with Hail
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to create releases
     steps:
       - uses: actions/checkout@v4
 
@@ -60,22 +62,49 @@ jobs:
       - name: Make export script executable
         run: chmod +x scripts/export_gnomad_hail.py
 
-      - name: Export gnomAD data with Hail
-        id: export
+      - name: Check if BCF already exists in releases
+        id: check-existing
         run: |
           AF="${{ steps.defaults.outputs.af }}"
           CHR="${{ steps.defaults.outputs.chromosomes }}"
           GNOMAD_VERSION="${{ steps.defaults.outputs.gnomad_version }}"
 
-          # Construct output filename
+          # Construct expected filenames and tag
           CHR_SUFFIX=$(echo "$CHR" | tr ' ' '_')
+          CHR_TAG=$(echo "$CHR" | tr ' ' '-')
+
           if [ "$CHR" = "all" ]; then
             BCF_NAME="gnomad_v${GNOMAD_VERSION}_GRCh38_af${AF}.bcf"
+            RELEASE_TAG="gnomad-bcf-v${GNOMAD_VERSION}-af${AF}-genome"
           else
             BCF_NAME="gnomad_v${GNOMAD_VERSION}_GRCh38_${CHR_SUFFIX}_af${AF}.bcf"
+            RELEASE_TAG="gnomad-bcf-v${GNOMAD_VERSION}-af${AF}-${CHR_TAG}"
           fi
 
           echo "bcf-name=${BCF_NAME}" >> $GITHUB_OUTPUT
+          echo "release-tag=${RELEASE_TAG}" >> $GITHUB_OUTPUT
+
+          # Check if release already exists
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/${BCF_NAME}"
+
+          echo "Checking for existing BCF at: ${RELEASE_URL}"
+
+          if wget --spider "${RELEASE_URL}" 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "✓ BCF already exists in releases - skipping regeneration"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "✗ BCF not found - will generate new file"
+          fi
+
+      - name: Export gnomAD data with Hail
+        if: steps.check-existing.outputs.exists == 'false'
+        id: export
+        run: |
+          AF="${{ steps.defaults.outputs.af }}"
+          CHR="${{ steps.defaults.outputs.chromosomes }}"
+          GNOMAD_VERSION="${{ steps.defaults.outputs.gnomad_version }}"
+          BCF_NAME="${{ steps.check-existing.outputs.bcf-name }}"
 
           # Build chromosome arguments
           if [ "$CHR" != "all" ]; then
@@ -83,6 +112,8 @@ jobs:
           else
             CHR_ARGS=""
           fi
+
+          echo "Computing BCF with Hail (this may take 10-30 minutes)..."
 
           # Run the export script
           python scripts/export_gnomad_hail.py \
@@ -92,9 +123,12 @@ jobs:
             --gnomad-version "${GNOMAD_VERSION}" \
             ${CHR_ARGS}
 
-      - name: Compress and verify BCF
+      - name: Verify BCF file
+        if: steps.check-existing.outputs.exists == 'false'
         run: |
-          BCF_NAME="${{ steps.export.outputs.bcf-name }}"
+          BCF_NAME="${{ steps.check-existing.outputs.bcf-name }}"
+
+          echo "Verifying newly generated BCF file..."
 
           # Verify the BCF file
           bcftools view -h "${BCF_NAME}" | head -20
@@ -106,26 +140,22 @@ jobs:
           VARIANT_COUNT=$(bcftools view -H "${BCF_NAME}" | wc -l)
           echo "Total variants: ${VARIANT_COUNT}"
 
-      - name: Create release tag
-        id: tag
-        run: |
-          AF="${{ steps.defaults.outputs.af }}"
-          CHR="${{ steps.defaults.outputs.chromosomes }}"
-          GNOMAD_VERSION="${{ steps.defaults.outputs.gnomad_version }}"
-
-          CHR_TAG=$(echo "$CHR" | tr ' ' '-')
-          if [ "$CHR" = "all" ]; then
-            TAG="gnomad-bcf-v${GNOMAD_VERSION}-af${AF}-genome"
-          else
-            TAG="gnomad-bcf-v${GNOMAD_VERSION}-af${AF}-${CHR_TAG}"
-          fi
-
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+      - name: Upload BCF as artifact (safety backup)
+        if: steps.check-existing.outputs.exists == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gnomad-bcf-${{ steps.check-existing.outputs.release-tag }}
+          path: |
+            ${{ steps.check-existing.outputs.bcf-name }}
+            ${{ steps.check-existing.outputs.bcf-name }}.csi
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Create GitHub Release
+        if: steps.check-existing.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.tag }}
+          tag_name: ${{ steps.check-existing.outputs.release-tag }}
           name: "gnomAD BCF: AF=${{ steps.defaults.outputs.af }}, Chr=${{ steps.defaults.outputs.chromosomes }}"
           body: |
             Pre-computed gnomAD v${{ steps.defaults.outputs.gnomad_version }} BCF file
@@ -135,18 +165,23 @@ jobs:
             - Chromosomes: ${{ steps.defaults.outputs.chromosomes }}
             - Genome Build: GRCh38
             - gnomAD Version: ${{ steps.defaults.outputs.gnomad_version }}
+            - Dataset: Joint WES+WGS
+
+            **INFO Fields:**
+            - AF: Weighted average allele frequency across all samples
+            - AC: Allele count
 
             **Usage:**
             ```bash
             # Download
-            wget https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/${{ steps.export.outputs.bcf-name }}
-            wget https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/${{ steps.export.outputs.bcf-name }}.csi
+            wget https://github.com/${{ github.repository }}/releases/download/${{ steps.check-existing.outputs.release-tag }}/${{ steps.check-existing.outputs.bcf-name }}
+            wget https://github.com/${{ github.repository }}/releases/download/${{ steps.check-existing.outputs.release-tag }}/${{ steps.check-existing.outputs.bcf-name }}.csi
 
             # Use with VCFstash
-            vcfstash stash-init --vcf ${{ steps.export.outputs.bcf-name }} --output cache -y params.yaml
+            vcfstash stash-init --vcf ${{ steps.check-existing.outputs.bcf-name }} --output cache -y params.yaml
             ```
           files: |
-            ${{ steps.export.outputs.bcf-name }}
-            ${{ steps.export.outputs.bcf-name }}.csi
+            ${{ steps.check-existing.outputs.bcf-name }}
+            ${{ steps.check-existing.outputs.bcf-name }}.csi
           draft: false
           prerelease: false
