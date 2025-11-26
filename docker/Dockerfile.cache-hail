@@ -33,10 +33,10 @@ COPY resources ./resources
 COPY tools ./tools
 COPY tests ./tests
 
-# Install vcfstash into a venv
+# Install vcfstash with dev dependencies (includes pytest)
 RUN python3 -m venv /build/venv && \
     /build/venv/bin/pip install --upgrade pip && \
-    /build/venv/bin/pip install --no-cache-dir .
+    /build/venv/bin/pip install --no-cache-dir ".[dev]"
 
 # Make CLI available in PATH for the build step
 ENV PATH="/build/venv/bin:${PATH}"
@@ -83,11 +83,12 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends default-jre-headless ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy venv with vcfstash installed, plus resources/tools
+# Copy venv with vcfstash installed, plus resources/tools/tests
 WORKDIR /app
 COPY --from=builder /build/venv /app/venv
 COPY --from=builder /build/resources /app/resources
 COPY --from=builder /build/tools /app/tools
+COPY --from=builder /build/tests /app/tests
 
 # Ensure bcftools shim is executable (your repo's static bcftools)
 RUN chmod +x /app/tools/bcftools
