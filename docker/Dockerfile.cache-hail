@@ -95,9 +95,10 @@ RUN chmod +x /app/tools/bcftools
 # Copy the cache
 COPY --from=builder /opt/vcfstash-cache /cache
 
-# vcfstash wrapper
+# vcfstash wrapper - use system python with venv in PYTHONPATH
 RUN printf '%s\n' '#!/bin/sh' \
-                  'exec /app/venv/bin/python -m vcfstash.cli "$@"' \
+                  'export PYTHONPATH=/app/venv/lib/python3.13/site-packages:$PYTHONPATH' \
+                  'exec python3 -m vcfstash.cli "$@"' \
     > /usr/local/bin/vcfstash && chmod +x /usr/local/bin/vcfstash
 
 ENV PATH="/app/venv/bin:${PATH}"

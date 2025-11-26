@@ -197,18 +197,39 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - name: Set default values for scheduled runs
+      - name: Set parameters and auto-generate names
         id: defaults
         run: |
           AF="${{ github.event.inputs.af }}"
-          TOOL_VERSION="${{ github.event.inputs.tool_version }}"
+          CHR="${{ github.event.inputs.chromosomes }}"
+          TYPE="${{ github.event.inputs.type }}"
           GENOME="${{ github.event.inputs.genome }}"
-          CACHE_NAME="${{ github.event.inputs.cache_name }}"
+          GNOMAD_VERSION="${{ github.event.inputs.gnomad_version }}"
 
-          echo "af=${AF:-0.10}" >> $GITHUB_OUTPUT
-          echo "tool_version=${TOOL_VERSION:-115.2}" >> $GITHUB_OUTPUT
-          echo "genome=${GENOME:-GRCh38}" >> $GITHUB_OUTPUT
-          echo "cache_name=${CACHE_NAME:-vep_gnomad}" >> $GITHUB_OUTPUT
+          # Set defaults
+          AF="${AF:-0.10}"
+          CHR="${CHR:-chrY}"
+          TYPE="${TYPE:-joint}"
+          GENOME="${GENOME:-GRCh38}"
+          GNOMAD_VERSION="${GNOMAD_VERSION:-4.1}"
+
+          # Auto-generate cache name: gnomad_{genome}_{type}_{chromosome}_{af}
+          GENOME_LOWER=$(echo "$GENOME" | tr '[:upper:]' '[:lower:]')
+          AF_CLEAN=$(echo "$AF" | tr -d '.')
+
+          if [ "$CHR" = "all" ]; then
+            CACHE_NAME="gnomad_${GENOME_LOWER}_${TYPE}_af${AF_CLEAN}"
+          else
+            CHR_CLEAN=$(echo "$CHR" | tr ' ' '_')
+            CACHE_NAME="gnomad_${GENOME_LOWER}_${TYPE}_${CHR_CLEAN}_af${AF_CLEAN}"
+          fi
+
+          echo "af=${AF}" >> $GITHUB_OUTPUT
+          echo "chromosomes=${CHR}" >> $GITHUB_OUTPUT
+          echo "type=${TYPE}" >> $GITHUB_OUTPUT
+          echo "genome=${GENOME}" >> $GITHUB_OUTPUT
+          echo "gnomad_version=${GNOMAD_VERSION}" >> $GITHUB_OUTPUT
+          echo "cache_name=${CACHE_NAME}" >> $GITHUB_OUTPUT
 
       - name: Download BCF artifact
         uses: actions/download-artifact@v4
