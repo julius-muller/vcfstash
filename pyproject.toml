@@ -42,6 +42,11 @@ pythonpath = [
 testpaths = [
   "tests"
 ]
+markers = [
+  "integration: marks tests as integration tests (require Nextflow, annotation tools)",
+  "unit: marks tests as unit tests (no external dependencies)",
+  "blueprint: marks tests that should pass in vcfstash-blueprint Docker image"
+]
 
 [tool.hatch.build]
 include = [

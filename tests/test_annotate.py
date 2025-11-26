@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 import shutil
+import pytest
 from vcfstash.utils.paths import get_vcfstash_root, get_resource_path
 
 # Constants
@@ -121,6 +122,8 @@ def run_annotate(annotation_db, input_vcf, output_dir, force=False):
     return result
 
 
+@pytest.mark.blueprint
+@pytest.mark.unit
 def test_sample_file_validity(test_output_dir):
     """Test that the sample BCF file is valid."""
     print("\n=== Testing sample file validity ===")
@@ -163,6 +166,7 @@ def test_sample_file_validity(test_output_dir):
 
 
 
+@pytest.mark.integration
 def test_full_annotation_workflow(test_output_dir):
     """Test the full annotation workflow from stash-init to annotate."""
     print("\n=== Testing full annotation workflow ===")
@@ -283,6 +287,7 @@ def test_full_annotation_workflow(test_output_dir):
     print("Successfully tested full annotation workflow")
 
 
+@pytest.mark.integration
 def test_cached_vs_uncached_annotation(test_output_dir, params_file):
     """Test that cached and uncached annotations produce identical results."""
     print("\n=== Testing cached vs uncached annotation ===")
@@ -364,6 +369,7 @@ def test_cached_vs_uncached_annotation(test_output_dir, params_file):
     print("Successfully verified that cached and uncached annotations produce identical results")
 
 
+@pytest.mark.integration
 def test_input_not_modified_during_annotation(test_output_dir, params_file):
     """Test that input VCF files are not modified during annotation."""
     print("\n=== Testing input file preservation during annotation ===")
@@ -457,6 +463,7 @@ def test_input_not_modified_during_annotation(test_output_dir, params_file):
     print("Successfully verified that input files are not modified during annotation")
 
 
+@pytest.mark.integration
 def test_normalization_flag(test_output_dir, params_file):
     """Test that the normalization flag works correctly."""
     print("\n=== Testing normalization flag functionality ===")

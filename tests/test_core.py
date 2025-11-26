@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import subprocess
+import pytest
 from vcfstash.utils.paths import get_vcfstash_root
 from vcfstash.utils.validation import compute_md5
 
@@ -13,6 +14,8 @@ TEST_VCF2 = TEST_DATA_DIR / "crayz_db2.bcf"
 VCFSTASH_CMD = "vcfstash"
 
 
+@pytest.mark.blueprint
+@pytest.mark.unit
 def test_error_handling(test_output_dir, params_file):
     """Test error conditions and edge cases."""
     # Test with non-existent input file
@@ -33,6 +36,8 @@ def test_error_handling(test_output_dir, params_file):
     result = subprocess.run(add_cmd, capture_output=True, text=True)
     assert result.returncode != 0, "Should fail without initialization"
 
+@pytest.mark.blueprint
+@pytest.mark.unit
 def test_file_validation(test_output_dir: str):
     """Test file validation and integrity checks."""
     # Create test file
@@ -42,6 +47,8 @@ def test_file_validation(test_output_dir: str):
     md5_hash = compute_md5(ref_file)
     assert md5_hash == "ec59e3976d29e276414191a6283499f7"
 
+@pytest.mark.blueprint
+@pytest.mark.unit
 def test_vcf_reference_validation():
     """Test VCF reference validation."""
     from vcfstash.database.base import VCFDatabase
