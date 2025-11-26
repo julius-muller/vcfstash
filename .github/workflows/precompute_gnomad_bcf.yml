@@ -151,17 +151,27 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-      - name: Delete existing release if present (cleanup from failed runs)
+      - name: Delete existing release and tag if present (cleanup from failed runs)
         if: steps.check-existing.outputs.exists == 'false'
         continue-on-error: true
         run: |
           TAG="${{ steps.check-existing.outputs.release-tag }}"
           echo "Checking if release ${TAG} exists..."
+
+          # Delete release if it exists
           if gh release view "${TAG}" >/dev/null 2>&1; then
             echo "Deleting existing release ${TAG}..."
-            gh release delete "${TAG}" --yes
+            gh release delete "${TAG}" --yes --cleanup-tag
           else
-            echo "No existing release found, proceeding..."
+            echo "No existing release found"
+          fi
+
+          # Also delete the tag if it exists (in case release was already deleted)
+          if git ls-remote --tags origin | grep -q "refs/tags/${TAG}"; then
+            echo "Deleting orphaned tag ${TAG}..."
+            git push --delete origin "${TAG}" || true
+          else
+            echo "No orphaned tag found"
           fi
         env:
           GH_TOKEN: ${{ github.token }}
