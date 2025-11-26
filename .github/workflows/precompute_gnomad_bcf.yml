@@ -75,10 +75,10 @@ jobs:
 
           if [ "$CHR" = "all" ]; then
             BCF_NAME="gnomad_v${GNOMAD_VERSION}_GRCh38_af${AF}.bcf"
-            RELEASE_TAG="gnomad-bcf-v${GNOMAD_VERSION}-af${AF}-genome"
+            RELEASE_TAG="bcf-gnomad-v${GNOMAD_VERSION}-af${AF}-genome"
           else
             BCF_NAME="gnomad_v${GNOMAD_VERSION}_GRCh38_${CHR_SUFFIX}_af${AF}.bcf"
-            RELEASE_TAG="gnomad-bcf-v${GNOMAD_VERSION}-af${AF}-${CHR_TAG}"
+            RELEASE_TAG="bcf-gnomad-v${GNOMAD_VERSION}-af${AF}-${CHR_TAG}"
           fi
 
           echo "bcf-name=${BCF_NAME}" >> $GITHUB_OUTPUT
