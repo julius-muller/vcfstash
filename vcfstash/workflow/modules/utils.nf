@@ -26,8 +26,6 @@ process ValidateInputs {
 	input:
 	path vcf
 	path vcf_index  // Explicitly passing the index file
-	path reference
-	path reference_index
 	path chr_add
 
 	output:
@@ -38,8 +36,6 @@ process ValidateInputs {
 	# Check file existence
 	test -e "${vcf}" || { echo "VCF file not found: ${vcf}"; exit 1; }
 	test -e "${vcf_index}" || { echo "VCF index file not found: ${vcf_index}"; exit 1; }
-	test -e "${reference}" || { echo "Reference file not found: ${reference}"; exit 1; }
-	test -e "${reference_index}" || { echo "Reference index file not found: ${reference_index}"; exit 1; }
 	test -e "${chr_add}" || { echo "Chr add file not found: ${chr_add}"; exit 1; }
 
       """
@@ -52,20 +48,14 @@ workflow UTILS {
     output_dir
     vcf
     chr_add
-    reference
 
     main:
-    // Make sure reference file index exists
-    reference_index = file("${reference}.fai")
-
     // Explicitly look for VCF index file - try both csi and tbi formats
     vcf_index = file("${vcf}.{csi,tbi}", checkIfExists: true)[0]
 
     validateInputResult = ValidateInputs(
         vcf,
         vcf_index,
-        reference,
-        reference_index,
         chr_add,
     )
 

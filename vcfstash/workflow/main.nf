@@ -87,24 +87,19 @@ workflow {
 
     def outputDir = file(params.output)
 
-    // Only require chr_add and reference when normalization is enabled
+    // Only require chr_add when normalization is enabled
     def chr_add = null
-    def reference = null
 
     // Check if normalization is enabled (default to false if not specified)
     def normalize = params.containsKey('normalize') ? params.normalize.toString().toBoolean() : false
 
     if (normalize && (params.db_mode == 'stash-init' || params.db_mode == 'stash-add')) {
-        // Validate that chr_add and reference are provided when normalization is enabled
+        // Validate that chr_add is provided when normalization is enabled
         if (!params.containsKey('chr_add') || !params.chr_add) {
             error "chr_add parameter is required when normalization is enabled"
         }
-        if (!params.containsKey('reference') || !params.reference) {
-            error "reference parameter is required when normalization is enabled"
-        }
 
         chr_add = file(params.chr_add)
-        reference = file(params.reference)
     }
 
     if (params.db_mode == 'stash-annotate') {
@@ -144,8 +139,7 @@ workflow {
                 sampleName,
                 outputDir,
                 vcf,
-                chr_add,
-                reference
+                chr_add
             )
         }
 
@@ -166,7 +160,6 @@ workflow {
                     chr_add,
                     vcf,
                     vcf_index,  // Pass the index file explicitly
-                    reference,
                     sampleName,
                     remove_gt,
                     remove_info

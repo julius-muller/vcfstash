@@ -52,7 +52,6 @@ class NextflowWorkflow:
             "bcftools_cmd": Path,
             "annotation_tool_cmd": str,
             "tool_version_command": str,
-            "reference": Path,
             "chr_add": Path,
             "temp_dir": Path,
             "optional_checks": dict,
@@ -286,7 +285,7 @@ class NextflowWorkflow:
             raise ValueError(err_msg)
 
         # 2. Check paths for existence
-        file_paths = ["reference", "chr_add"]
+        file_paths = ["chr_add"]
 
         for path_param in file_paths:
             if path_param in config_params:

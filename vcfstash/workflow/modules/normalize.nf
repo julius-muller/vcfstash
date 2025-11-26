@@ -53,7 +53,6 @@ process RenameAndNormalizeVCF {
     path chr_add_file
     path vcf_file
     path vcf_index  // Explicitly require the index file as input
-    path reference_genome
     val sample_name
     val remove_gt
     val remove_info
@@ -80,7 +79,7 @@ process RenameAndNormalizeVCF {
     ${params.bcftools_cmd} view ${gt_option} -Ou ${vcf_file} --threads ${(task.cpus).intdiv(3)} |
     ${params.bcftools_cmd} annotate ${info_option} --rename-chrs ${chr_add_file} --threads ${(task.cpus).intdiv(3)} -Ou |
     ${params.bcftools_cmd} filter -i 'CHROM ~ "^chr[1-9,X,Y,M]" && CHROM ~ "[0-9,X,Y,M]\$"' --threads ${(task.cpus).intdiv(3)} -Ou |
-    ${params.bcftools_cmd} norm -m- -c x -f ${reference_genome} -o ${sample_name}_norm.bcf -Ob --threads ${(task.cpus).intdiv(3)} --write-index 2>&1 | tee -a ${sample_name}_norm.log
+    ${params.bcftools_cmd} norm -m- -o ${sample_name}_norm.bcf -Ob --threads ${(task.cpus).intdiv(3)} --write-index 2>&1 | tee -a ${sample_name}_norm.log
 
     # Check if normalization was successful
     if [ ! -f "${sample_name}_norm.bcf" ] || [ ! -f "${sample_name}_norm.bcf.csi" ]; then
@@ -117,13 +116,12 @@ workflow NORMALIZE {
     chr_add
     vcf
     vcf_index  // Add the index as a parameter to the workflow
-    reference
     sample_name
     remove_gt
     remove_info
 
     main:
-    RenameAndNormalizeVCF(chr_add, vcf, vcf_index, reference, sample_name, remove_gt, remove_info)
+    RenameAndNormalizeVCF(chr_add, vcf, vcf_index, sample_name, remove_gt, remove_info)
 
     emit:
     norm_bcf = RenameAndNormalizeVCF.out.norm_bcf

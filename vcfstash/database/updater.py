@@ -1,12 +1,9 @@
 import json
-import os
 import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-
-import yaml
 
 from vcfstash.database.base import NextflowWorkflow, VCFDatabase
 from vcfstash.utils.validation import check_duplicate_md5, compute_md5, get_bcf_stats
@@ -102,54 +99,6 @@ class DatabaseUpdater(VCFDatabase):
                     self.logger.error(msg)
                 raise FileNotFoundError(msg)
             self.ensure_indexed(self.input_file)
-
-        # Validate VCF reference
-        try:
-            # Load YAML file to get reference path
-            if not self.params_file:
-                raise ValueError("Parameters file is required for validation")
-            params_yaml = yaml.safe_load(
-                self.params_file.expanduser().resolve().read_text()
-            )
-
-            # Get reference path from YAML
-            reference_path_str = params_yaml.get("reference")
-            if not reference_path_str:
-                if self.logger:
-                    self.logger.error("Reference path not found in YAML file")
-                raise ValueError("Reference path not found in YAML file")
-
-            # Expand environment variables in reference path
-            if "${VCFSTASH_ROOT}" in reference_path_str:
-                vcfstash_root = os.environ.get("VCFSTASH_ROOT")
-                if not vcfstash_root:
-                    if self.logger:
-                        self.logger.error("VCFSTASH_ROOT environment variable not set")
-                    raise ValueError("VCFSTASH_ROOT environment variable not set")
-                reference_path_str = reference_path_str.replace(
-                    "${VCFSTASH_ROOT}", vcfstash_root
-                )
-
-            reference_path = Path(reference_path_str).expanduser().resolve()
-
-            # Validate VCF reference
-            if self.logger:
-                self.logger.info(f"Validating VCF reference: {reference_path}")
-            valid, error_msg = self.validate_vcf_reference(
-                self.input_file, reference_path
-            )
-
-            if not valid:
-                if self.logger:
-                    self.logger.error(f"VCF reference validation failed: {error_msg}")
-                raise ValueError(f"VCF reference validation failed: {error_msg}")
-
-            if self.logger:
-                self.logger.info("VCF reference validation successful")
-        except Exception as e:
-            if self.logger:
-                self.logger.error(f"Error during VCF reference validation: {e}")
-            raise RuntimeError(f"Error during VCF reference validation: {e}") from e
 
         if self.logger:
             self.logger.debug("Input validation successful")

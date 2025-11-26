@@ -2,7 +2,6 @@
 annotation_tool_cmd: "vep"
 tool_version_command: "vep --version | head -1 | awk '{print $2}'"
 bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-reference: "/references/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
 chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
 temp_dir: "/tmp"
 
@@ -13,5 +12,4 @@ vep_cache: "/vep_data/115.2"
 
 ## * OPTIONAL CHECKS *
 optional_checks:
-  reference_md5sum: "28a3d9f0162be1d5db2011aa30458129"
   vep_cache_version: "115.2"

@@ -33,10 +33,6 @@ on:
         required: true
         default: "4.1"
 
-  # Build common variants cache weekly
-  schedule:
-    - cron: '0 2 * * 0'  # Sunday 2 AM UTC
-
 jobs:
   export-gnomad:
     name: Get or Export gnomAD BCF
