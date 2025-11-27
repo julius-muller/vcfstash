@@ -150,7 +150,6 @@ docker build \
   -t "${IMAGE_NAME}" \
   -t "${REGISTRY}/vcfstash-annotated:latest" \
   ${NO_CACHE} \
-  --progress=plain \
   .
 
 END_TIME=$(date +%s)
