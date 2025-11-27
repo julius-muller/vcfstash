@@ -125,16 +125,24 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
   exit 1
 fi
 
-# Prepare build context - copy BCF to docker/gnomad-data
-DOCKER_DATA_DIR="./docker/gnomad-data"
-rm -rf "${DOCKER_DATA_DIR}"
-mkdir -p "${DOCKER_DATA_DIR}"
+# Prepare build context on large disk (/mnt/data)
+BUILD_CONTEXT_DIR="/mnt/data/vcfstash_build/build-context"
+rm -rf "${BUILD_CONTEXT_DIR}"
+mkdir -p "${BUILD_CONTEXT_DIR}"
 
 BCF_BASENAME=$(basename "${BCF_FILE}")
 
-echo "📦 Copying BCF to docker/gnomad-data (temporary)..."
-cp "${BCF_FILE}" "${DOCKER_DATA_DIR}/"
-cp "${BCF_FILE}.csi" "${DOCKER_DATA_DIR}/"
+echo "📦 Preparing build context on /mnt/data..."
+echo "  - Copying project files..."
+# Copy project files (code, configs, etc - small)
+rsync -a --exclude='.git' --exclude='data' --exclude='*.pyc' --exclude='__pycache__' \
+  ./ "${BUILD_CONTEXT_DIR}/"
+
+echo "  - Copying BCF files..."
+# Copy BCF to build context (on same large disk, so it's fast)
+mkdir -p "${BUILD_CONTEXT_DIR}/docker/gnomad-data"
+cp "${BCF_FILE}" "${BUILD_CONTEXT_DIR}/docker/gnomad-data/"
+cp "${BCF_FILE}.csi" "${BUILD_CONTEXT_DIR}/docker/gnomad-data/"
 
 echo "🐳 Building Docker image with BuildKit (this will take a while)..."
 START_TIME=$(date +%s)
@@ -142,8 +150,9 @@ START_TIME=$(date +%s)
 # Enable BuildKit (modern Docker builder)
 export DOCKER_BUILDKIT=1
 
+# Build from the temporary context on /mnt/data
 docker build \
-  -f docker/Dockerfile.annotated \
+  -f "${BUILD_CONTEXT_DIR}/docker/Dockerfile.annotated" \
   --build-arg AF="${AF}" \
   --build-arg GENOME="${GENOME}" \
   --build-arg CACHE_NAME="${CACHE_NAME}" \
@@ -152,7 +161,7 @@ docker build \
   -t "${IMAGE_NAME}" \
   -t "${REGISTRY}/vcfstash-annotated:latest" \
   ${NO_CACHE} \
-  .
+  "${BUILD_CONTEXT_DIR}"
 
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
@@ -197,8 +206,8 @@ if [ "${PUSH}" = true ]; then
 fi
 
 # Cleanup
-echo "🧹 Cleaning up temporary BCF copies..."
-rm -rf "${DOCKER_DATA_DIR}"
+echo "🧹 Cleaning up temporary build context..."
+rm -rf "${BUILD_CONTEXT_DIR}"
 
 echo "==============================================================================="
 echo "Done!"
