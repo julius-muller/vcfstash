@@ -125,8 +125,8 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
   exit 1
 fi
 
-# Prepare build context on large disk (/mnt/data)
-BUILD_CONTEXT_DIR="/mnt/data/vcfstash_build/build-context"
+# Prepare build context on large disk (/mnt/data/vcfstash_data)
+BUILD_CONTEXT_DIR="/mnt/data/vcfstash_data/build-context"
 rm -rf "${BUILD_CONTEXT_DIR}"
 mkdir -p "${BUILD_CONTEXT_DIR}"
 

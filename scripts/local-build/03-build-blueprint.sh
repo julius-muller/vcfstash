@@ -111,8 +111,8 @@ echo "Push to GHCR:    ${PUSH}"
 echo "==============================================================================="
 echo ""
 
-# Prepare build context on large disk (/mnt/data)
-BUILD_CONTEXT_DIR="/mnt/data/vcfstash_build/build-context"
+# Prepare build context on large disk (/mnt/data/vcfstash_data)
+BUILD_CONTEXT_DIR="/mnt/data/vcfstash_data/build-context"
 rm -rf "${BUILD_CONTEXT_DIR}"
 mkdir -p "${BUILD_CONTEXT_DIR}"
 
