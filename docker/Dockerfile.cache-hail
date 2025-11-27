@@ -35,8 +35,8 @@ COPY tests ./tests
 
 # Install vcfstash with dev dependencies (includes pytest)
 RUN python3 -m venv /build/venv && \
-    /build/venv/bin/pip install --upgrade pip && \
-    /build/venv/bin/pip install --no-cache-dir ".[dev]"
+    /build/venv/bin/pip install --timeout 120 --upgrade pip && \
+    /build/venv/bin/pip install --timeout 120 --no-cache-dir ".[dev]"
 
 # Make CLI available in PATH for the build step
 ENV PATH="/build/venv/bin:${PATH}"
