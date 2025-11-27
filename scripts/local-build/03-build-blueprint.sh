@@ -111,20 +111,22 @@ echo "Push to GHCR:    ${PUSH}"
 echo "==============================================================================="
 echo ""
 
-# Prepare build context - create symlink in docker/gnomad-data
+# Prepare build context - copy BCF to docker/gnomad-data
 DOCKER_DATA_DIR="./docker/gnomad-data"
 rm -rf "${DOCKER_DATA_DIR}"
 mkdir -p "${DOCKER_DATA_DIR}"
 
 BCF_BASENAME=$(basename "${BCF_FILE}")
-BCF_DIR=$(dirname "$(realpath "${BCF_FILE}")")
 
-echo "📦 Creating symlinks in docker/gnomad-data..."
-ln -sf "${BCF_DIR}/${BCF_BASENAME}" "${DOCKER_DATA_DIR}/"
-ln -sf "${BCF_DIR}/${BCF_BASENAME}.csi" "${DOCKER_DATA_DIR}/"
+echo "📦 Copying BCF to docker/gnomad-data (temporary)..."
+cp "${BCF_FILE}" "${DOCKER_DATA_DIR}/"
+cp "${BCF_FILE}.csi" "${DOCKER_DATA_DIR}/"
 
-echo "🐳 Building Docker image..."
+echo "🐳 Building Docker image with BuildKit..."
 START_TIME=$(date +%s)
+
+# Enable BuildKit (modern Docker builder)
+export DOCKER_BUILDKIT=1
 
 docker build \
   -f docker/Dockerfile.cache-hail \
@@ -173,7 +175,7 @@ if [ "${PUSH}" = true ]; then
 fi
 
 # Cleanup
-echo "🧹 Cleaning up symlinks..."
+echo "🧹 Cleaning up temporary BCF copies..."
 rm -rf "${DOCKER_DATA_DIR}"
 
 echo "==============================================================================="
