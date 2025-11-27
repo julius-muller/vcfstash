@@ -38,16 +38,18 @@ TAG=""
 REGISTRY="ghcr.io/julius-muller"
 PUSH=false
 NO_CACHE=""
+NETWORK=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --genome)    GENOME="$2"; shift 2;;
-    --type)      TYPE="$2"; shift 2;;
-    --tag)       TAG="$2"; shift 2;;
-    --registry)  REGISTRY="$2"; shift 2;;
-    --push)      PUSH=true; shift;;
-    --no-cache)  NO_CACHE="--no-cache"; shift;;
+    --genome)        GENOME="$2"; shift 2;;
+    --type)          TYPE="$2"; shift 2;;
+    --tag)           TAG="$2"; shift 2;;
+    --registry)      REGISTRY="$2"; shift 2;;
+    --push)          PUSH=true; shift;;
+    --no-cache)      NO_CACHE="--no-cache"; shift;;
+    --host-network)  NETWORK="--network=host"; shift;;
     --help)
       grep "^#" "$0" | grep -v "#!/" | sed 's/^# \?//'
       exit 0
@@ -133,6 +135,7 @@ docker build \
   -t "${IMAGE_NAME}" \
   -t "${REGISTRY}/vcfstash-blueprint:latest" \
   ${NO_CACHE} \
+  ${NETWORK} \
   .
 
 END_TIME=$(date +%s)
