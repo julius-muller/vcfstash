@@ -58,8 +58,6 @@ docker run --rm \
 
 **Performance expectations**: Speedup depends on how many of your sample's variants overlap with the gnomAD variants in the cache. Population studies and clinical samples typically see 30-80% cache hit rates.
 
-⚠️ **Current limitation**: Pre-built caches contain only **chromosome 1** variants. For genome-wide coverage, build your own cache using Option 2 below.
-
 #### 🐳 Option 2: Using Docker
 
 Build your own cache with Docker:
