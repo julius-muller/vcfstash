@@ -138,11 +138,11 @@ echo "  - Copying project files..."
 rsync -a --exclude='.git' --exclude='data' --exclude='*.pyc' --exclude='__pycache__' \
   ./ "${BUILD_CONTEXT_DIR}/"
 
-echo "  - Copying BCF files..."
-# Copy BCF to build context (on same large disk, so it's fast)
+echo "  - Linking BCF files (hard links, no extra space)..."
+# Create hard links to BCF (same filesystem, zero copy)
 mkdir -p "${BUILD_CONTEXT_DIR}/docker/gnomad-data"
-cp "${BCF_FILE}" "${BUILD_CONTEXT_DIR}/docker/gnomad-data/"
-cp "${BCF_FILE}.csi" "${BUILD_CONTEXT_DIR}/docker/gnomad-data/"
+ln -f "${BCF_FILE}" "${BUILD_CONTEXT_DIR}/docker/gnomad-data/${BCF_BASENAME}"
+ln -f "${BCF_FILE}.csi" "${BUILD_CONTEXT_DIR}/docker/gnomad-data/${BCF_BASENAME}.csi"
 
 echo "🐳 Building Docker image with BuildKit (this will take a while)..."
 START_TIME=$(date +%s)
