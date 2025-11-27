@@ -130,11 +130,17 @@ mkdir -p "${BUILD_CONTEXT_DIR}/docker/gnomad-data"
 ln -f "${BCF_FILE}" "${BUILD_CONTEXT_DIR}/docker/gnomad-data/${BCF_BASENAME}"
 ln -f "${BCF_FILE}.csi" "${BUILD_CONTEXT_DIR}/docker/gnomad-data/${BCF_BASENAME}.csi"
 
-echo "🐳 Building Docker image with BuildKit..."
+echo "🐳 Building Docker image..."
 START_TIME=$(date +%s)
 
-# Enable BuildKit (modern Docker builder)
-export DOCKER_BUILDKIT=1
+# Enable BuildKit if available (optional, legacy builder works fine)
+if docker buildx version &>/dev/null; then
+  echo "  Using BuildKit (modern builder)"
+  export DOCKER_BUILDKIT=1
+else
+  echo "  Using legacy builder (buildx not installed, this is fine)"
+  unset DOCKER_BUILDKIT
+fi
 
 # Build from the temporary context on /mnt/data
 docker build \
