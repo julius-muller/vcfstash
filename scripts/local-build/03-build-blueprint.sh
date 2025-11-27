@@ -109,15 +109,17 @@ echo "Push to GHCR:    ${PUSH}"
 echo "==============================================================================="
 echo ""
 
-# Prepare build context
-BUILD_DIR="./docker/build-context"
-mkdir -p "${BUILD_DIR}/gnomad-data"
-
-echo "📦 Copying BCF to build context..."
-cp "${BCF_FILE}" "${BUILD_DIR}/gnomad-data/"
-cp "${BCF_FILE}.csi" "${BUILD_DIR}/gnomad-data/"
+# Prepare build context - create symlink in docker/gnomad-data
+DOCKER_DATA_DIR="./docker/gnomad-data"
+rm -rf "${DOCKER_DATA_DIR}"
+mkdir -p "${DOCKER_DATA_DIR}"
 
 BCF_BASENAME=$(basename "${BCF_FILE}")
+BCF_DIR=$(dirname "$(realpath "${BCF_FILE}")")
+
+echo "📦 Creating symlinks in docker/gnomad-data..."
+ln -sf "${BCF_DIR}/${BCF_BASENAME}" "${DOCKER_DATA_DIR}/"
+ln -sf "${BCF_DIR}/${BCF_BASENAME}.csi" "${DOCKER_DATA_DIR}/"
 
 echo "🐳 Building Docker image..."
 START_TIME=$(date +%s)
@@ -127,12 +129,11 @@ docker build \
   --build-arg AF="${AF}" \
   --build-arg GENOME="${GENOME}" \
   --build-arg CACHE_NAME="${CACHE_NAME}" \
-  --build-arg BCF_FILE="gnomad-data/${BCF_BASENAME}" \
+  --build-arg BCF_FILE="docker/gnomad-data/${BCF_BASENAME}" \
   -t "${IMAGE_NAME}" \
   -t "${REGISTRY}/vcfstash-blueprint:latest" \
   ${NO_CACHE} \
   --progress=plain \
-  -f docker/Dockerfile.cache-hail \
   .
 
 END_TIME=$(date +%s)
@@ -170,8 +171,8 @@ if [ "${PUSH}" = true ]; then
 fi
 
 # Cleanup
-echo "🧹 Cleaning up build context..."
-rm -rf "${BUILD_DIR}"
+echo "🧹 Cleaning up symlinks..."
+rm -rf "${DOCKER_DATA_DIR}"
 
 echo "==============================================================================="
 echo "Done!"

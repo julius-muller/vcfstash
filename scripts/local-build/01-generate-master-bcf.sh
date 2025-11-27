@@ -25,7 +25,7 @@ GENOME="GRCh38"
 GNOMAD_VERSION="4.1"
 TYPE="joint"
 CHROMOSOMES="all"
-OUTPUT_DIR="./data"
+OUTPUT_DIR="/mnt/data/vcfstash_data/gnomad"
 MASTER_AF="0.001"
 
 # Parse arguments
