@@ -11,13 +11,12 @@ from pathlib import Path
 
 def get_project_root():
     """Get the project root directory regardless of how the package is installed."""
-    try:
-        # When installed as a package
-        path = resources.files("vcfstash") / "__init__.py"
-        return path.parent.parent
-    except (ImportError, ModuleNotFoundError):
-        # When running from source
-        return Path(__file__).parent.parent.parent
+    # Always use VCFSTASH_ROOT if set (for Docker and custom setups)
+    if "VCFSTASH_ROOT" in os.environ:
+        return Path(os.environ["VCFSTASH_ROOT"])
+
+    # Otherwise, use development directory structure (project root)
+    return Path(__file__).parent.parent.parent
 
 
 # Set VCFSTASH_ROOT if not already set
