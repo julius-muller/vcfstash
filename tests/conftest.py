@@ -16,6 +16,31 @@ TEST_ANNO_CONFIG = TEST_ROOT / "config" / "test_annotation.config"
 
 
 # ============================================================================
+# Environment Setup
+# ============================================================================
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_environment():
+    """Set up test environment with correct PATH for bundled tools.
+
+    This fixture runs automatically before any tests and ensures that
+    the bundled bcftools is available in PATH.
+    """
+    vcfstash_root = get_vcfstash_root()
+    tools_dir = vcfstash_root / "tools"
+
+    # Add tools directory to PATH if it exists and contains bcftools
+    if tools_dir.exists() and (tools_dir / "bcftools").exists():
+        current_path = os.environ.get("PATH", "")
+        os.environ["PATH"] = f"{tools_dir}:{current_path}"
+        print(f"\n[Test Setup] Added {tools_dir} to PATH for bundled bcftools")
+
+    yield
+
+    # Cleanup not needed - PATH changes only affect this process
+
+
+# ============================================================================
 # Scenario Detection Fixtures
 # ============================================================================
 
@@ -97,7 +122,7 @@ def mini_cache_dir(test_output_dir, test_scenario, prebuilt_cache):
     mini_cache_path.mkdir(parents=True, exist_ok=True)
 
     # Extract top 10 variants from blueprint cache
-    blueprint_bcf = prebuilt_cache / "blueprint" / "vcfstash.bcf"
+    blueprint_bcf = prebuilt_cache / "db" / "blueprint" / "vcfstash.bcf"
     mini_bcf = mini_cache_path / "mini_test.bcf"
 
     # Use bcftools to extract first 10 variants (header + 10 variant lines)
