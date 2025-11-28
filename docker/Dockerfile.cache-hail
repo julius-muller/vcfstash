@@ -83,7 +83,11 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends default-jre-headless ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy venv with vcfstash installed, plus resources/tools/tests
+# Copy venv with vcfstash installed, plus resources/tools/tests (includes test data)
+# NOTE: All test code AND test data are copied. This allows running the full
+# test suite with mock annotation (using bcftools, no VEP required).
+# All scenarios (vanilla, blueprint, annotated) run the same tests but adapt
+# based on available resources (cache, VEP).
 WORKDIR /app
 COPY --from=builder /build/venv /app/venv
 COPY --from=builder /build/resources /app/resources

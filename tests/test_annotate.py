@@ -122,11 +122,9 @@ def run_annotate(annotation_db, input_vcf, output_dir, force=False):
     return result
 
 
-@pytest.mark.blueprint
-@pytest.mark.unit
-def test_sample_file_validity(test_output_dir):
+def test_sample_file_validity(test_output_dir, test_scenario):
     """Test that the sample BCF file is valid."""
-    print("\n=== Testing sample file validity ===")
+    print(f"\n=== Testing sample file validity (scenario: {test_scenario}) ===")
 
     # Get bcftools path for verification
     bcftools_path = get_resource_path(Path('tools/bcftools'))
@@ -166,20 +164,42 @@ def test_sample_file_validity(test_output_dir):
 
 
 
-@pytest.mark.integration
-def test_full_annotation_workflow(test_output_dir):
-    """Test the full annotation workflow from stash-init to annotate."""
-    print("\n=== Testing full annotation workflow ===")
+def test_full_annotation_workflow(test_output_dir, test_scenario, prebuilt_cache):
+    """Test the full annotation workflow from stash-init to annotate.
 
-    # Step 1: Run stash-init
-    print("Running stash-init...")
-    init_result = run_stash_init(TEST_VCF, test_output_dir, force=True)
-    assert init_result.returncode == 0, f"stash-init failed: {init_result.stderr}"
+    Adapts based on scenario:
+    - vanilla: Create cache from scratch
+    - blueprint: Use prebuilt cache + create test stash
+    - annotated: Use prebuilt cache + create test stash
+    """
+    print(f"\n=== Testing full annotation workflow (scenario: {test_scenario}) ===")
 
-    # Step 2: Run stash-add
-    print("Running stash-add...")
-    add_result = run_stash_add(test_output_dir, TEST_VCF2)
-    assert add_result.returncode == 0, f"stash-add failed: {add_result.stderr}"
+    # Determine which cache to use
+    if test_scenario == "vanilla":
+        # Step 1: Run stash-init to create cache from scratch
+        print("Running stash-init (creating cache from test data)...")
+        init_result = run_stash_init(TEST_VCF, test_output_dir, force=True)
+        assert init_result.returncode == 0, f"stash-init failed: {init_result.stderr}"
+
+        # Step 2: Run stash-add
+        print("Running stash-add...")
+        add_result = run_stash_add(test_output_dir, TEST_VCF2)
+        assert add_result.returncode == 0, f"stash-add failed: {add_result.stderr}"
+
+        db_dir = test_output_dir
+    else:
+        # Blueprint/Annotated: Use prebuilt cache, create a test stash
+        print(f"Using prebuilt cache at {prebuilt_cache}")
+        print("Creating test cache from test data for annotation testing...")
+
+        # Create a test cache in test_output_dir for annotation testing
+        init_result = run_stash_init(TEST_VCF, test_output_dir, force=True)
+        assert init_result.returncode == 0, f"stash-init failed: {init_result.stderr}"
+
+        add_result = run_stash_add(test_output_dir, TEST_VCF2)
+        assert add_result.returncode == 0, f"stash-add failed: {add_result.stderr}"
+
+        db_dir = test_output_dir
 
     # Print information about the workflow directory and files
     workflow_dir = Path(test_output_dir) / "workflow"
@@ -287,10 +307,9 @@ def test_full_annotation_workflow(test_output_dir):
     print("Successfully tested full annotation workflow")
 
 
-@pytest.mark.integration
-def test_cached_vs_uncached_annotation(test_output_dir, params_file):
+def test_cached_vs_uncached_annotation(test_output_dir, params_file, test_scenario):
     """Test that cached and uncached annotations produce identical results."""
-    print("\n=== Testing cached vs uncached annotation ===")
+    print(f"\n=== Testing cached vs uncached annotation (scenario: {test_scenario}) ===")
 
     # Step 1: Create a database
     print("Creating database...")
@@ -369,10 +388,9 @@ def test_cached_vs_uncached_annotation(test_output_dir, params_file):
     print("Successfully verified that cached and uncached annotations produce identical results")
 
 
-@pytest.mark.integration
-def test_input_not_modified_during_annotation(test_output_dir, params_file):
+def test_input_not_modified_during_annotation(test_output_dir, params_file, test_scenario):
     """Test that input VCF files are not modified during annotation."""
-    print("\n=== Testing input file preservation during annotation ===")
+    print(f"\n=== Testing input file preservation during annotation (scenario: {test_scenario}) ===")
 
     # Step 1: Create a database
     print("Creating database...")
@@ -463,10 +481,9 @@ def test_input_not_modified_during_annotation(test_output_dir, params_file):
     print("Successfully verified that input files are not modified during annotation")
 
 
-@pytest.mark.integration
-def test_normalization_flag(test_output_dir, params_file):
+def test_normalization_flag(test_output_dir, params_file, test_scenario):
     """Test that the normalization flag works correctly."""
-    print("\n=== Testing normalization flag functionality ===")
+    print(f"\n=== Testing normalization flag functionality (scenario: {test_scenario}) ===")
 
     # Step 1: Run stash-init with normalization
     print("Running stash-init with normalization...")

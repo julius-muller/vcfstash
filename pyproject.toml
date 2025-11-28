@@ -43,9 +43,12 @@ testpaths = [
   "tests"
 ]
 markers = [
-  "integration: marks tests as integration tests (require Nextflow, annotation tools)",
-  "unit: marks tests as unit tests (no external dependencies)",
-  "blueprint: marks tests that should pass in vcfstash-blueprint Docker image"
+  "vanilla: marks tests for vanilla package (no cache, no external tools)",
+  "requires_cache: marks tests that need blueprint cache but no annotation",
+  "requires_annotation: marks tests that need full annotation pipeline with VEP",
+  "integration: marks tests as integration tests (legacy marker)",
+  "unit: marks tests as unit tests (legacy marker)",
+  "blueprint: marks tests for blueprint image (legacy marker)"
 ]
 
 [tool.hatch.build]

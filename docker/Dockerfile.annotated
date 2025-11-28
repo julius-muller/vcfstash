@@ -29,6 +29,7 @@ COPY vcfstash ./vcfstash/
 COPY resources ./resources
 COPY tools ./tools
 COPY recipes ./recipes
+COPY tests ./tests
 
 # Install vcfstash with dev dependencies into a venv
 RUN python3 -m venv /build/venv && \
@@ -97,11 +98,15 @@ RUN apt-get update && \
         ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy venv with vcfstash installed, plus resources/tools
+# Copy venv with vcfstash installed, plus resources/tools/tests (includes test data)
+# NOTE: All test code AND test data are copied. This allows running the full
+# test suite with VEP annotation. All scenarios (vanilla, blueprint, annotated)
+# run the same tests but adapt based on available resources (cache, VEP).
 WORKDIR /app
 COPY --from=builder /build/venv /app/venv
 COPY --from=builder /build/resources /app/resources
 COPY --from=builder /build/tools /app/tools
+COPY --from=builder /build/tests /app/tests
 
 # Ensure bcftools shim is executable
 RUN chmod +x /app/tools/bcftools

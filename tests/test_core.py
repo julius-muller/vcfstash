@@ -14,10 +14,10 @@ TEST_VCF2 = TEST_DATA_DIR / "crayz_db2.bcf"
 VCFSTASH_CMD = "vcfstash"
 
 
-@pytest.mark.blueprint
-@pytest.mark.unit
-def test_error_handling(test_output_dir, params_file):
+def test_error_handling(test_output_dir, params_file, test_scenario):
     """Test error conditions and edge cases."""
+    print(f"\n=== Testing error handling (scenario: {test_scenario}) ===")
+
     # Test with non-existent input file
     init_cmd = [VCFSTASH_CMD, "stash-init", "-i", "nonexistent.bcf",
                 "-o", test_output_dir, "-y", params_file]
@@ -36,10 +36,10 @@ def test_error_handling(test_output_dir, params_file):
     result = subprocess.run(add_cmd, capture_output=True, text=True)
     assert result.returncode != 0, "Should fail without initialization"
 
-@pytest.mark.blueprint
-@pytest.mark.unit
-def test_file_validation(test_output_dir: str):
+def test_file_validation(test_output_dir: str, test_scenario):
     """Test file validation and integrity checks."""
+    print(f"\n=== Testing file validation (scenario: {test_scenario}) ===")
+
     # Create test file
     ref_file = TEST_ROOT / "data/references/reference.fasta"
 
@@ -47,10 +47,10 @@ def test_file_validation(test_output_dir: str):
     md5_hash = compute_md5(ref_file)
     assert md5_hash == "ec59e3976d29e276414191a6283499f7"
 
-@pytest.mark.blueprint
-@pytest.mark.unit
-def test_vcf_reference_validation():
+def test_vcf_reference_validation(test_scenario):
     """Test VCF reference validation."""
+    print(f"\n=== Testing VCF reference validation (scenario: {test_scenario}) ===")
+
     from vcfstash.database.base import VCFDatabase
     import logging
 
