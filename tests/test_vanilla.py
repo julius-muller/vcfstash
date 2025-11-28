@@ -57,9 +57,11 @@ def test_cli_version(test_scenario):
         text=True
     )
     assert result.returncode == 0
-    # Version should be in stdout or stderr
+    # Version should be in stdout or stderr (check for semantic version format)
     version_output = result.stdout + result.stderr
-    assert "0.2.0" in version_output or "version" in version_output.lower()
+    # Check for version format like "0.1.0" or "0.2.0"
+    import re
+    assert re.search(r'\d+\.\d+\.\d+', version_output), f"No version found in: {version_output}"
 
 
 def test_stash_init_help(test_scenario):

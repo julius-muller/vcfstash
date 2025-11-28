@@ -151,9 +151,10 @@ def test_vcfstash_cli_available(test_scenario):
     )
     assert result.returncode == 0, "vcfstash CLI not available"
 
-    # Verify version output
+    # Verify version output (check for semantic version format)
     version_output = result.stdout + result.stderr
-    assert "0.2.0" in version_output or "version" in version_output.lower()
+    import re
+    assert re.search(r'\d+\.\d+\.\d+', version_output), f"No version found in: {version_output}"
 
 
 
