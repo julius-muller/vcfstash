@@ -36,15 +36,15 @@ def test_cache_structure(test_scenario):
 
     cache_dir = Path("/cache")
 
-    # Check for blueprint directory
-    blueprint_dir = cache_dir / "blueprint"
-    assert blueprint_dir.exists(), "Blueprint directory does not exist"
-    assert blueprint_dir.is_dir(), "Blueprint path is not a directory"
-
-    # Check for db directory (contains stashes)
+    # Check for db directory
     db_dir = cache_dir / "db"
     assert db_dir.exists(), "DB directory does not exist"
     assert db_dir.is_dir(), "DB path is not a directory"
+
+    # Check for blueprint directory (inside db)
+    blueprint_dir = db_dir / "blueprint"
+    assert blueprint_dir.exists(), "Blueprint directory does not exist"
+    assert blueprint_dir.is_dir(), "Blueprint path is not a directory"
 
 
 
@@ -52,11 +52,11 @@ def test_blueprint_cache_file(test_scenario):
     """Test that the blueprint cache BCF file exists and is valid."""
     _skip_if_vanilla(test_scenario)
 
-    cache_bcf = Path("/cache/blueprint/vcfstash.bcf")
+    cache_bcf = Path("/cache/db/blueprint/vcfstash.bcf")
     assert cache_bcf.exists(), f"Blueprint cache file not found: {cache_bcf}"
 
     # Check index exists
-    cache_csi = Path("/cache/blueprint/vcfstash.bcf.csi")
+    cache_csi = Path("/cache/db/blueprint/vcfstash.bcf.csi")
     assert cache_csi.exists(), f"Blueprint cache index not found: {cache_csi}"
 
     # Verify it's a valid BCF file using bcftools
@@ -74,7 +74,7 @@ def test_blueprint_has_variants(test_scenario):
     """Test that the blueprint cache contains variants."""
     _skip_if_vanilla(test_scenario)
 
-    cache_bcf = Path("/cache/blueprint/vcfstash.bcf")
+    cache_bcf = Path("/cache/db/blueprint/vcfstash.bcf")
 
     # Get variant count
     result = subprocess.run(
@@ -98,7 +98,7 @@ def test_cache_metadata(test_scenario):
     _skip_if_vanilla(test_scenario)
 
     # Check for sources.info
-    sources_info = Path("/cache/blueprint/sources.info")
+    sources_info = Path("/cache/db/blueprint/sources.info")
     assert sources_info.exists(), "sources.info file not found"
 
     # Verify it contains expected metadata
@@ -162,7 +162,7 @@ def test_cache_query_performance(test_scenario):
     """Test that we can query the cache efficiently."""
     _skip_if_vanilla(test_scenario)
 
-    cache_bcf = Path("/cache/blueprint/vcfstash.bcf")
+    cache_bcf = Path("/cache/db/blueprint/vcfstash.bcf")
 
     # Query a specific region (should be fast)
     result = subprocess.run(
@@ -181,7 +181,7 @@ def test_cache_contig_format(test_scenario):
     """Test that cache uses correct chromosome naming (chr prefix)."""
     _skip_if_vanilla(test_scenario)
 
-    cache_bcf = Path("/cache/blueprint/vcfstash.bcf")
+    cache_bcf = Path("/cache/db/blueprint/vcfstash.bcf")
 
     # Get header
     result = subprocess.run(

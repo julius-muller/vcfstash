@@ -135,7 +135,8 @@ BCF_BASENAME=$(basename "${BCF_FILE}")
 echo "📦 Preparing build context on /mnt/data..."
 echo "  - Copying project files..."
 # Copy project files (code, configs, etc - small)
-rsync -a --exclude='.git' --exclude='data' --exclude='*.pyc' --exclude='__pycache__' \
+# Exclude main data directory but keep tests/data
+rsync -a --exclude='.git' --exclude='/data' --exclude='*.pyc' --exclude='__pycache__' \
   ./ "${BUILD_CONTEXT_DIR}/"
 
 echo "  - Linking BCF files (hard links, no extra space)..."
