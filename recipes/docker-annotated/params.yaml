@@ -12,7 +12,7 @@ temp_dir: "/tmp"
 
 ## * VEP CONFIGURATION *
 vep_buffer: 500000
-vep_forks: 8
+vep_forks: 12
 vep_cache: "/opt/vep/.vep"  # VEP cache location in container
 
 ## * OPTIONAL CHECKS *
