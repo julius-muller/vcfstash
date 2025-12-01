@@ -62,11 +62,22 @@ ARG GENOME=GRCh38
 ARG CACHE_NAME
 ARG BCF_FILE=""
 ARG VEP_CACHE_DIR="/opt/vep/.vep"
+ARG HOST_VEP_CACHE=""
 ARG ANNOTATION_NAME="vep_gnomad"
 
 # Copy the pre-generated BCF file if provided
 COPY ${BCF_FILE} /tmp/gnomad.bcf
 COPY ${BCF_FILE}.csi /tmp/gnomad.bcf.csi
+
+# Optionally import VEP cache from host (requires BuildKit bind mount)
+RUN --mount=type=bind,source=${HOST_VEP_CACHE:-/dev/null},target=/tmp/host_vep_cache,readonly,optional \
+    if [ -n "${HOST_VEP_CACHE}" ] && [ -d /tmp/host_vep_cache ]; then \
+        echo "Copying VEP cache from host: ${HOST_VEP_CACHE}"; \
+        rm -rf /opt/vep/.vep && mkdir -p /opt/vep/.vep && \
+        cp -a /tmp/host_vep_cache/. /opt/vep/.vep/; \
+    else \
+        echo "HOST_VEP_CACHE not provided; using base image cache"; \
+    fi
 
 # VEP cache should already exist in the base image at /opt/vep/.vep
 # Verify it exists
@@ -126,6 +137,8 @@ COPY --from=builder /build/venv /app/venv
 COPY --from=builder /build/resources /app/resources
 COPY --from=builder /build/tools /app/tools
 COPY --from=builder /build/tests /app/tests
+# Copy VEP cache from builder (ensures availability even if base image lacks it)
+COPY --from=builder /opt/vep/.vep /opt/vep/.vep
 
 # Ensure bcftools shim is executable
 RUN chmod +x /app/tools/bcftools

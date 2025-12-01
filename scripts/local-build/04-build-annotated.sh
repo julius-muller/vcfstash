@@ -44,6 +44,7 @@ REGISTRY="ghcr.io/julius-muller"
 PUSH=false
 NO_CACHE=""
 HOST_NETWORK=""
+VEP_CACHE_DIR=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -57,6 +58,7 @@ while [[ $# -gt 0 ]]; do
     --push)             PUSH=true; shift;;
     --no-cache)         NO_CACHE="--no-cache"; shift;;
     --host-network)     HOST_NETWORK="--network host"; shift;;
+    --vep-cache-dir)    VEP_CACHE_DIR="$2"; shift 2;;
     --help)
       grep "^#" "$0" | grep -v "#!/" | sed 's/^# \?//'
       exit 0
@@ -117,6 +119,9 @@ echo "Cache name:         ${CACHE_NAME}"
 echo "Image tag:          ${TAG}"
 echo "Full image:         ${IMAGE_NAME}"
 echo "Push to GHCR:       ${PUSH}"
+if [ -n "${VEP_CACHE_DIR}" ]; then
+  echo "Host VEP cache:     ${VEP_CACHE_DIR}"
+fi
 echo "==============================================================================="
 echo ""
 echo "⚠️  WARNING: This build includes VEP annotation and may take 30-60 minutes!"
@@ -168,6 +173,7 @@ docker build \
   --build-arg CACHE_NAME="${CACHE_NAME}" \
   --build-arg BCF_FILE="docker/gnomad-data/${BCF_BASENAME}" \
   --build-arg ANNOTATION_NAME="${ANNOTATION_NAME}" \
+  --build-arg HOST_VEP_CACHE="${VEP_CACHE_DIR}" \
   -t "${IMAGE_NAME}" \
   -t "${REGISTRY}/vcfstash-annotated:latest" \
   ${NO_CACHE} \
