@@ -172,7 +172,8 @@ else
   unset DOCKER_BUILDKIT
 fi
 
-# Build from the temporary context on /mnt/data
+# Build from the temporary context on /mnt/data (Stage 1: Base image without annotation)
+TEMP_IMAGE="${IMAGE_NAME}-temp"
 docker build \
   -f "${BUILD_CONTEXT_DIR}/docker/Dockerfile.annotated" \
   --build-arg AF="${AF}" \
@@ -180,12 +181,67 @@ docker build \
   --build-arg CACHE_NAME="${CACHE_NAME}" \
   --build-arg BCF_FILE="docker/gnomad-data/${BCF_BASENAME}" \
   --build-arg ANNOTATION_NAME="${ANNOTATION_NAME}" \
-  --build-arg HOST_VEP_CACHE="${VEP_CACHE_DIR}" \
-  -t "${IMAGE_NAME}" \
-  -t "${REGISTRY}/vcfstash-annotated:latest" \
+  -t "${TEMP_IMAGE}" \
   ${NO_CACHE} \
   ${HOST_NETWORK} \
   "${BUILD_CONTEXT_DIR}"
+
+echo ""
+echo "✅ Base image built successfully!"
+echo ""
+
+# Stage 2: Run annotation with VEP cache mounted
+if [ -z "${VEP_CACHE_DIR}" ]; then
+  echo "❌ ERROR: --vep-cache-dir is required for annotated build"
+  exit 1
+fi
+
+echo "🧬 Running VEP annotation with mounted cache..."
+echo "   VEP cache: ${VEP_CACHE_DIR}"
+echo "   (This may take 30-60 minutes depending on dataset size)"
+echo ""
+
+# Run container with VEP cache mounted and execute annotation script
+# Run as root so we can write to /cache directory
+docker run \
+  --name vcfstash-annotate-temp \
+  --user root \
+  -v "${VEP_CACHE_DIR}:/opt/vep/.vep:ro" \
+  --entrypoint /bin/bash \
+  "${TEMP_IMAGE}" \
+  -c "export VCFSTASH_ROOT=/app && \
+      export PATH=/app/venv/bin:/opt/vep/ensembl-vep:\$PATH && \
+      bash /tmp/build-annotated-cache.sh \
+        --bcf-file /tmp/gnomad.bcf \
+        --gnomad-af '${AF}' \
+        --cache-dir '/cache' \
+        --threads 8 \
+        --cache-name '${CACHE_NAME}' \
+        --genome '${GENOME}' \
+        --params /app/recipes/docker-annotated/params.yaml \
+        --annotation-config /app/recipes/docker-annotated/annotation.config \
+        --annotation-name '${ANNOTATION_NAME}' \
+        --vep-cache '/opt/vep/.vep'"
+
+# Check if annotation succeeded
+if [ $? -ne 0 ]; then
+  echo "❌ ERROR: Annotation failed!"
+  docker rm vcfstash-annotate-temp
+  exit 1
+fi
+
+echo ""
+echo "✅ Annotation completed successfully!"
+echo ""
+echo "📦 Committing container to final image..."
+
+# Commit the container with annotation results to final image
+docker commit vcfstash-annotate-temp "${IMAGE_NAME}"
+docker tag "${IMAGE_NAME}" "${REGISTRY}/vcfstash-annotated:latest"
+
+# Clean up temporary container and image
+docker rm vcfstash-annotate-temp
+docker rmi "${TEMP_IMAGE}"
 
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))

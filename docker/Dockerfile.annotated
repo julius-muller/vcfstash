@@ -63,32 +63,25 @@ ARG GENOME=GRCh38
 ARG CACHE_NAME
 ARG BCF_FILE=""
 ARG VEP_CACHE_DIR="/opt/vep/.vep"
-ARG HOST_VEP_CACHE
 ARG ANNOTATION_NAME="vep_gnomad"
 
 # Copy the pre-generated BCF file if provided
 COPY ${BCF_FILE} /tmp/gnomad.bcf
 COPY ${BCF_FILE}.csi /tmp/gnomad.bcf.csi
 
-# Build the annotated cache inside the image
+# Prepare environment for annotation (will be run at container runtime with mounted VEP cache)
 ENV CACHE_DIR=/opt/vcfstash-cache
-RUN --mount=type=bind,source=${HOST_VEP_CACHE},target=${VEP_CACHE_DIR},readonly \
-    if [ ! -d "${VEP_CACHE_DIR}" ]; then \
-        echo "ERROR: VEP cache not found at ${VEP_CACHE_DIR}"; \
-        exit 1; \
-    fi && \
-    mkdir -p "${CACHE_DIR}" && \
-    bash /tmp/build-annotated-cache.sh \
-        --bcf-file /tmp/gnomad.bcf \
-        --gnomad-af "${AF}" \
-        --cache-dir "${CACHE_DIR}" \
-        --threads 8 \
-        --cache-name "${CACHE_NAME}" \
-        --genome "${GENOME}" \
-        --params /build/recipes/docker-annotated/params.yaml \
-        --annotation-config /build/recipes/docker-annotated/annotation.config \
-        --annotation-name "${ANNOTATION_NAME}" \
-        --vep-cache "${VEP_CACHE_DIR}"
+ENV VEP_CACHE_DIR=${VEP_CACHE_DIR}
+ENV AF=${AF}
+ENV GENOME=${GENOME}
+ENV CACHE_NAME=${CACHE_NAME}
+ENV ANNOTATION_NAME=${ANNOTATION_NAME}
+
+# Create cache directory structure
+RUN mkdir -p "${CACHE_DIR}"
+
+# NOTE: Annotation will be performed at container runtime with VEP cache mounted
+# This avoids needing to copy 50GB+ cache into Docker build context
 
 # ==================== stage 1: runtime with VEP + annotated cache ====================
 FROM ensemblorg/ensembl-vep:release_115.2 AS runtime
@@ -125,12 +118,19 @@ COPY --from=builder /build/venv /app/venv
 COPY --from=builder /build/resources /app/resources
 COPY --from=builder /build/tools /app/tools
 COPY --from=builder /build/tests /app/tests
+COPY --from=builder /build/recipes /app/recipes
+
+# Copy BCF file and annotation script for post-build annotation step
+COPY --from=builder /tmp/gnomad.bcf /tmp/gnomad.bcf
+COPY --from=builder /tmp/gnomad.bcf.csi /tmp/gnomad.bcf.csi
+COPY --from=builder /tmp/build-annotated-cache.sh /tmp/build-annotated-cache.sh
+COPY --from=builder /tmp/dummy.fa* /tmp/
 
 # Ensure bcftools shim is executable
 RUN chmod +x /app/tools/bcftools
 
-# Copy the annotated cache
-COPY --from=builder /opt/vcfstash-cache /cache
+# Create cache directory structure (will be populated during post-build annotation)
+RUN mkdir -p /cache
 
 # Note: VEP cache not bundled to keep image size reasonable; mount at runtime if needed
 
