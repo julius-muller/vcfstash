@@ -70,7 +70,7 @@ COPY ${BCF_FILE} /tmp/gnomad.bcf
 COPY ${BCF_FILE}.csi /tmp/gnomad.bcf.csi
 
 # Optionally import VEP cache from host (requires BuildKit bind mount)
-RUN --mount=type=bind,source=${HOST_VEP_CACHE:-/dev/null},target=/tmp/host_vep_cache,readonly,optional \
+RUN --mount=type=bind,source=${HOST_VEP_CACHE:-/dev/null},target=/tmp/host_vep_cache,readonly,optional=true \
     if [ -n "${HOST_VEP_CACHE}" ] && [ -d /tmp/host_vep_cache ]; then \
         echo "Copying VEP cache from host: ${HOST_VEP_CACHE}"; \
         rm -rf /opt/vep/.vep && mkdir -p /opt/vep/.vep && \
