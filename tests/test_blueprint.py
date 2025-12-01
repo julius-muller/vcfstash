@@ -113,7 +113,7 @@ def test_workflow_directory(test_scenario):
     """Test that workflow directory exists with required files."""
     _skip_if_vanilla(test_scenario)
 
-    workflow_dir = Path("/cache/workflow")
+    workflow_dir = Path("/cache/db/workflow")
     assert workflow_dir.exists(), "Workflow directory does not exist"
 
     # Check for main.nf
