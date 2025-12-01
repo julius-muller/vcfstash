@@ -78,9 +78,9 @@ FROM python:3.13-slim AS runtime
 LABEL org.opencontainers.image.title="VCFstash cache image"
 LABEL org.opencontainers.image.description="Contains prebuilt cache and vcfstash CLI"
 
-# Minimal OS deps; JRE optional if you run Nextflow inside the container later
+# Minimal OS deps; JRE for Nextflow, procps for 'ps' command (required by Nextflow)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends default-jre-headless ca-certificates && \
+    apt-get install -y --no-install-recommends default-jre-headless ca-certificates procps && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy venv with vcfstash installed, plus resources/tools/tests (includes test data)

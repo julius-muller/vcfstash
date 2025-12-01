@@ -90,12 +90,13 @@ USER root
 LABEL org.opencontainers.image.title="VCFstash annotated cache image"
 LABEL org.opencontainers.image.description="Contains VEP pipeline and pre-annotated cache"
 
-# Install minimal dependencies
+# Install minimal dependencies (JRE for Nextflow, procps for 'ps' command)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         python3 \
         default-jre-headless \
-        ca-certificates && \
+        ca-certificates \
+        procps && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy venv with vcfstash installed, plus resources/tools/tests (includes test data)
