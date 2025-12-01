@@ -4,7 +4,7 @@ set -euo pipefail
 # --- argument parser -------------------------------------------------------
 AF="0.10"
 CACHE_DIR="/opt/vcfstash-cache"
-THREADS="8"
+THREADS="12"
 CNAME="vep_gnomad"
 GENOME="GRCh38"
 BCF_FILE=""
@@ -39,7 +39,7 @@ fi
 
 if [[ ! -f "${BCF_FILE}.csi" ]]; then
     echo "Indexing BCF file..."
-    bcftools index "${BCF_FILE}"
+    /app/tools/bcftools index "${BCF_FILE}"
 fi
 
 if [[ -z "${PARAMS_FILE}" ]] || [[ ! -f "${PARAMS_FILE}" ]]; then
@@ -124,5 +124,5 @@ echo "========================================="
 # Show some stats
 echo ""
 echo "Cache statistics:"
-bcftools stats "${ANNOTATED_BCF}" | grep "number of records:"
+/app/tools/bcftools stats "${ANNOTATED_BCF}" | grep "number of records:"
 echo ""
