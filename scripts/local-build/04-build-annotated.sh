@@ -45,6 +45,7 @@ PUSH=false
 NO_CACHE=""
 HOST_NETWORK=""
 VEP_CACHE_DIR=""
+YES=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -59,6 +60,7 @@ while [[ $# -gt 0 ]]; do
     --no-cache)         NO_CACHE="--no-cache"; shift;;
     --host-network)     HOST_NETWORK="--network host"; shift;;
     --vep-cache-dir)    VEP_CACHE_DIR="$2"; shift 2;;
+    --yes|-y)           YES=true; shift;;
     --help)
       grep "^#" "$0" | grep -v "#!/" | sed 's/^# \?//'
       exit 0
@@ -133,11 +135,15 @@ echo "==========================================================================
 echo ""
 echo "⚠️  WARNING: This build includes VEP annotation and may take 30-60 minutes!"
 echo ""
-read -p "Continue? (y/N): " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-  echo "Aborted."
-  exit 1
+if [ "${YES}" = false ]; then
+  read -p "Continue? (y/N): " -n 1 -r
+  echo
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Aborted."
+    exit 1
+  fi
+else
+  echo "Auto-confirming (--yes flag provided)"
 fi
 
 # Prepare build context on large disk (/mnt/data/vcfstash_data)
