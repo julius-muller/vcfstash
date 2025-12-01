@@ -151,6 +151,12 @@ echo "  - Copying project files..."
 rsync -a --exclude='.git' --exclude='/data' --exclude='*.pyc' --exclude='__pycache__' \
   ./ "${BUILD_CONTEXT_DIR}/"
 
+echo "  - Staging VEP cache..."
+mkdir -p "${BUILD_CONTEXT_DIR}/docker/vep-cache"
+if [ -n "${VEP_CACHE_DIR}" ]; then
+  rsync -a "${VEP_CACHE_DIR}/" "${BUILD_CONTEXT_DIR}/docker/vep-cache/"
+fi
+
 echo "  - Linking BCF files (hard links, no extra space)..."
 # Create hard links to BCF (same filesystem, zero copy)
 mkdir -p "${BUILD_CONTEXT_DIR}/docker/gnomad-data"
@@ -177,7 +183,6 @@ docker build \
   --build-arg CACHE_NAME="${CACHE_NAME}" \
   --build-arg BCF_FILE="docker/gnomad-data/${BCF_BASENAME}" \
   --build-arg ANNOTATION_NAME="${ANNOTATION_NAME}" \
-  --build-arg HOST_VEP_CACHE="${VEP_CACHE_DIR}" \
   -t "${IMAGE_NAME}" \
   -t "${REGISTRY}/vcfstash-annotated:latest" \
   ${NO_CACHE} \

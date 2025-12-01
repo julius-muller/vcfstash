@@ -62,18 +62,21 @@ ARG GENOME=GRCh38
 ARG CACHE_NAME
 ARG BCF_FILE=""
 ARG VEP_CACHE_DIR="/opt/vep/.vep"
-ARG HOST_VEP_CACHE=""
 ARG ANNOTATION_NAME="vep_gnomad"
 
 # Copy the pre-generated BCF file if provided
 COPY ${BCF_FILE} /tmp/gnomad.bcf
 COPY ${BCF_FILE}.csi /tmp/gnomad.bcf.csi
 
-# Import VEP cache from host (requires HOST_VEP_CACHE to be a valid directory on build host)
-RUN --mount=type=bind,source=${HOST_VEP_CACHE},target=/tmp/host_vep_cache,readonly \
-    echo "Copying VEP cache from host: ${HOST_VEP_CACHE}" && \
-    rm -rf /opt/vep/.vep && mkdir -p /opt/vep/.vep && \
-    cp -a /tmp/host_vep_cache/. /opt/vep/.vep/
+# Optionally use a staged VEP cache copied into the build context at docker/vep-cache
+COPY docker/vep-cache/ /tmp/vep-cache
+RUN if [ -d "/tmp/vep-cache/homo_sapiens" ] || [ -d "/tmp/vep-cache/homo_sapiens_refseq" ]; then \
+        echo "Using staged VEP cache from build context"; \
+        rm -rf /opt/vep/.vep && mkdir -p /opt/vep/.vep && \
+        cp -a /tmp/vep-cache/. /opt/vep/.vep/; \
+    else \
+        echo "No staged VEP cache found; using base image cache"; \
+    fi
 
 # VEP cache should already exist in the base image at /opt/vep/.vep
 # Verify it exists
