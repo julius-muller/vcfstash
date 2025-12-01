@@ -129,6 +129,9 @@ COPY --from=builder /tmp/dummy.fa* /tmp/
 # Ensure bcftools shim is executable
 RUN chmod +x /app/tools/bcftools
 
+# Fix shebangs in venv scripts (they reference /build/venv/bin/python3.13 from builder stage)
+RUN find /app/venv/bin -type f -exec sed -i '1s|^#!.*/python.*|#!/usr/bin/env python3.13|' {} + 2>/dev/null || true
+
 # Create cache directory structure (will be populated during post-build annotation)
 RUN mkdir -p /cache
 
