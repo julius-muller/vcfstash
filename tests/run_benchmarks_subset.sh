@@ -81,10 +81,8 @@ run_bench() {
   local start=$(date -u +%s)
   set +e
   docker run --rm \
-    -v "$bcf":/data/input.bcf:ro \
-    -v "${bcf}.csi":/data/input.bcf.csi:ro \
-    -v "$bcf":/opt/vep/.vep/input.bcf:ro \
-    -v "${bcf}.csi":/opt/vep/.vep/input.bcf.csi:ro \
+    -v "$bcf":/work/input.bcf:ro \
+    -v "${bcf}.csi":/work/input.bcf.csi:ro \
     -v "$VEP_CACHE_DIR":/opt/vep/.vep:ro \
     -v "$outdir":/data/out \
     -v /tmp:/tmp \
@@ -92,7 +90,7 @@ run_bench() {
     "$image" \
     -lc "vcfstash annotate ${mode} \
          -a /cache/db/stash/vep_gnomad \
-         --vcf /data/input.bcf \
+         --vcf /work/input.bcf \
          --output /data/out \
          -y /app/recipes/docker-annotated/params.yaml \
          -vv"
