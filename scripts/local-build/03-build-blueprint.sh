@@ -76,9 +76,11 @@ fi
 BASENAME=$(basename "${BCF_FILE}" .bcf)
 if [[ $BASENAME =~ _af([0-9]+) ]]; then
   AF_CLEAN="${BASH_REMATCH[1]}"
+  # Strip leading zeros to avoid octal interpretation (010 -> 10)
+  AF_NUM=$((10#${AF_CLEAN}))
   # Convert to decimal: af001 -> 0.01, af010 -> 0.10, af005 -> 0.05
   # Formula: AF = (number after af) / 100
-  AF=$(awk "BEGIN {printf \"%.2f\", ${AF_CLEAN}/100}")
+  AF=$(awk "BEGIN {printf \"%.2f\", ${AF_NUM}/100}")
 else
   echo "❌ ERROR: Cannot extract AF from filename: ${BASENAME}"
   echo "Expected format: *_af010.bcf (for AF 0.10) or *_af001.bcf (for AF 0.01)"
