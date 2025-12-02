@@ -428,6 +428,7 @@ def test_annotation_consistency_across_scenarios(test_scenario, test_output_dir)
     else:  # vanilla
         # Run direct annotation
         output_bcf = Path(test_output_dir) / "consistency_vanilla.bcf"
+        Path(test_output_dir).mkdir(parents=True, exist_ok=True)
 
         cmd = f"""
             echo '##INFO=<ID=MOCK_ANNO,Number=1,Type=String,Description=Mock>' > {test_output_dir}/h.txt
