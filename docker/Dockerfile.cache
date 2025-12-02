@@ -33,10 +33,10 @@ COPY resources ./resources
 COPY tools ./tools
 COPY tests ./tests
 
-# Install vcfstash into a venv
+# Install vcfstash with dev dependencies into a venv (for testing)
 RUN python3 -m venv /build/venv && \
     /build/venv/bin/pip install --upgrade pip && \
-    /build/venv/bin/pip install --no-cache-dir .
+    /build/venv/bin/pip install --no-cache-dir ".[dev]"
 
 # Make CLI available in PATH for the build step
 ENV PATH="/build/venv/bin:${PATH}"
