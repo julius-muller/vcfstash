@@ -363,7 +363,8 @@ def test_annotation_consistency_across_scenarios(test_scenario, test_output_dir)
             pytest.skip("VEP params not found")
 
         output_dir = Path(test_output_dir) / "consistency_test"
-        output_dir.mkdir(parents=True, exist_ok=True)
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
 
         cmd = [
             "vcfstash", "annotate",
