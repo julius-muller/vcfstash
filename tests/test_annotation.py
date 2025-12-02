@@ -293,6 +293,8 @@ def test_vanilla_annotation_workflow(test_scenario, test_output_dir):
 
     sample_vcf = TEST_DATA_DIR / "sample4.bcf"
     output_dir = Path(test_output_dir) / "vanilla_output"
+    Path(test_output_dir).mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # In vanilla scenario, we can't use vcfstash annotate directly without a cache
     # Instead, we test that the annotation config works by running it manually
