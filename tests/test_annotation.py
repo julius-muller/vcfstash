@@ -238,8 +238,8 @@ def test_blueprint_annotation_workflow(test_scenario, prebuilt_cache, test_outpu
     print(f"Stash-annotate STDOUT:\n{result.stdout}")
     assert result.returncode == 0, f"Blueprint annotation failed: {result.stderr}"
 
-    # Verify stash was created
-    stash_path = cache_dir / "stash" / "test_anno"
+    # Verify stash was created (stash lives under db/stash)
+    stash_path = cache_dir / "db" / "stash" / "test_anno"
     assert stash_path.exists(), "Annotation stash not created"
 
     annotated_cache = stash_path / "vcfstash_annotated.bcf"
@@ -264,9 +264,9 @@ def test_blueprint_annotation_workflow(test_scenario, prebuilt_cache, test_outpu
     print(f"Annotate STDOUT:\n{result.stdout}")
     assert result.returncode == 0, f"Sample annotation failed: {result.stderr}"
 
-    # Verify output
-    output_bcf = output_dir / "annotated.bcf"
-    assert output_bcf.exists(), "Annotated sample not found"
+    # Verify output (annotate mode emits <sample>_vst.bcf)
+    output_bcf = output_dir / f"{sample_vcf.stem}_vst.bcf"
+    assert output_bcf.exists(), f"Annotated sample not found at {output_bcf}"
 
     # Check for MOCK_ANNO tag
     header_result = subprocess.run(
@@ -404,7 +404,7 @@ def test_annotation_consistency_across_scenarios(test_scenario, test_output_dir)
 
         # Annotate sample
         output_dir = Path(test_output_dir) / "consistency_output"
-        stash_path = cache_dir / "stash" / "consistency_anno"
+        stash_path = cache_dir / "db" / "stash" / "consistency_anno"
 
         subprocess.run([
             "vcfstash", "annotate",
@@ -414,7 +414,8 @@ def test_annotation_consistency_across_scenarios(test_scenario, test_output_dir)
             "-y", str(TEST_PARAMS)
         ], check=True, timeout=120)
 
-        output_bcf = output_dir / "annotated.bcf"
+        sample_name = sample_vcf.name.replace(".bcf", "").replace(".vcf", "")
+        output_bcf = output_dir / f"{sample_name}_vst.bcf"
 
     else:  # vanilla
         # Run direct annotation
