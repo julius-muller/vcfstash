@@ -151,13 +151,19 @@ def test_annotate_with_cache(test_scenario, test_sample_with_hits_and_misses,
 
     assert result.returncode == 0, f"Annotation failed: {result.stderr}"
 
-    # Check output file exists
-    output_bcf = output_dir / "annotated.bcf"
+    # Check output file exists (workflow emits vcfstash_annotated.bcf)
+    output_bcf = output_dir / "vcfstash_annotated.bcf"
     assert output_bcf.exists(), "Annotated output BCF not found"
+
+    # Resolve bcftools path from the same params file used for the run
+    import yaml
+    with open(vep_params) as f:
+        params_cfg = yaml.safe_load(f)
+    bcftools_cmd = params_cfg.get("bcftools_cmd", "bcftools")
 
     # Verify annotations were added
     header_result = subprocess.run(
-        ["bcftools", "view", "-h", str(output_bcf)],
+        [bcftools_cmd, "view", "-h", str(output_bcf)],
         capture_output=True,
         text=True,
         check=True
@@ -167,7 +173,7 @@ def test_annotate_with_cache(test_scenario, test_sample_with_hits_and_misses,
 
     # Check that variants have annotations
     variants_result = subprocess.run(
-        ["bcftools", "query", "-f", "%CHROM\t%POS\t%CSQ\n", str(output_bcf)],
+        [bcftools_cmd, "query", "-f", "%CHROM\t%POS\t%CSQ\n", str(output_bcf)],
         capture_output=True,
         text=True,
         check=True
