@@ -158,9 +158,14 @@ docker run --rm ghcr.io/julius-muller/vcfstash-blueprint:gnomad-grch38-joint-af0
 
 ### Annotated Docker:
 ```bash
+docker run --rm --entrypoint='' ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af010-vep115 \
+  bash -c 'cd /app && export PYTHONPATH=/app/venv/lib/python3.13/site-packages && python3 -m pytest tests/ -xvs'
+```
+
+Or use the default bash entrypoint:
+```bash
 docker run --rm ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af010-vep115 \
-  /bin/sh -c 'cd /app && export PYTHONPATH=/app/venv/lib/python3.13/site-packages && \
-  python3 -m pytest tests/ -xvs'
+  -c 'cd /app && export PYTHONPATH=/app/venv/lib/python3.13/site-packages && python3 -m pytest tests/ -xvs'
 ```
 
 ## Expected Test Behavior by Scenario

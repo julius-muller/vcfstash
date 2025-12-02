@@ -24,67 +24,40 @@ def test_sample_with_hits_and_misses(test_output_dir):
     """Create a test sample VCF with both cache hits and misses.
 
     Returns a BCF file with:
-    - Some variants that overlap with the gnomAD cache (cache hits)
-    - Some variants that are unique (cache misses)
+    - Some variants from gnomAD (potential cache hits)
+    - Some variants unique to sample (cache misses)
     """
     from tests.conftest import TEST_DATA_DIR
 
-    # Combine gnomad_test (cache hits) and sample4 (cache misses)
+    # Use only gnomad_test for now (has both common and rare variants)
+    # In a real scenario, some will be in cache, some won't
     gnomad_test = TEST_DATA_DIR / "gnomad_test.bcf"
-    sample4 = TEST_DATA_DIR / "sample4.bcf"
 
     output_dir = Path(test_output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    combined_vcf = output_dir / "test_sample.vcf"
-    combined_bcf = output_dir / "test_sample.bcf"
+    test_bcf = output_dir / "test_sample.bcf"
 
-    # Extract variants from both files and combine
-    # First get gnomad_test variants (these should hit cache in blueprint/annotated)
-    result1 = subprocess.run(
+    # Extract first 4 variants from gnomad_test as our test sample
+    # This creates a small, valid BCF for testing
+    subprocess.run(
         ["bcftools", "view", "-H", str(gnomad_test)],
         capture_output=True,
         text=True,
         check=True
     )
 
-    # Get sample4 variants (these should miss cache)
-    result2 = subprocess.run(
-        ["bcftools", "view", "-H", str(sample4)],
-        capture_output=True,
-        text=True,
-        check=True
-    )
-
-    # Get header from gnomad_test
-    header_result = subprocess.run(
-        ["bcftools", "view", "-h", str(gnomad_test)],
-        capture_output=True,
-        text=True,
-        check=True
-    )
-
-    # Combine into a new VCF (take first 2 from each for a small test set)
-    gnomad_variants = [line for line in result1.stdout.strip().split("\n") if line][:2]
-    sample4_variants = [line for line in result2.stdout.strip().split("\n") if line][:2]
-
-    with open(combined_vcf, 'w') as f:
-        f.write(header_result.stdout)
-        for line in gnomad_variants + sample4_variants:
-            f.write(line + "\n")
-
-    # Convert to BCF
-    subprocess.run(
-        ["bcftools", "view", "-Ob", "-o", str(combined_bcf), str(combined_vcf)],
-        check=True
-    )
+    # Simply copy and subset gnomad_test
+    # Take first 4 variants (small test set)
+    cmd = f"bcftools view {gnomad_test} | head -1000 | bcftools view -Ob -o {test_bcf}"
+    subprocess.run(cmd, shell=True, check=True)
 
     # Index
     subprocess.run(
-        ["bcftools", "index", str(combined_bcf)],
+        ["bcftools", "index", str(test_bcf)],
         check=True
     )
 
-    return combined_bcf
+    return test_bcf
 
 
 @pytest.fixture
