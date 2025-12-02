@@ -515,7 +515,8 @@ def test_annotation_performance_with_cache(test_scenario, annotation_stash_path,
     vep_params = get_vcfstash_root() / "recipes" / "docker-annotated" / "params.yaml"
 
     output_dir = Path(test_output_dir) / "perf_test"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
 
     cmd = [
         "vcfstash", "annotate",
