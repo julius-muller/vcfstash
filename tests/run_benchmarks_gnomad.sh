@@ -24,7 +24,7 @@ for AF in "${AF_VALUES[@]}"; do
       vcfstash stash-init $VERBOSE \
         --vcf /mnt/data/resources/gnomad/vcf_gnomad_v4_hg19_exomes/gnomad.exomes.v4.1.sites.grch37.trimmed_liftover_norm_${AF}.bcf \
         --output ${STASH_DIR} \
-        -y /home/appuser/projects/vcfstash/tests/config/user_params.yaml
+        -y /home/appuser/projects/vcfstash/tests/config/test_params.yaml
     else
       echo "Skipping stash-init for ${AF} as ${STASH_DIR} exists."
     fi

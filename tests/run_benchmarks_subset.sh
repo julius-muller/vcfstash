@@ -81,6 +81,16 @@ run_bench() {
   local run_name="run_${mode:-cached}_${scale}"
   local run_dir_host="${outdir}/${run_name}"
   local run_dir_cont="/out/${run_name}"
+  local outfile="${run_dir_host}/${out_name}"
+
+  # Skip if output already exists
+  if [ -f "$outfile" ]; then
+    echo "Skipping $mode $scale - output already exists: $outfile"
+    local variants=$(bcftools index -n "$bcf")
+    tsv_log "$(date -Iseconds)\t${image}\t${mode}\t${scale}\t${variants}\t0\tSKIPPED\t${outfile}"
+    return 0
+  fi
+
   # ensure fresh run dir on host (vcfstash will create it)
   rm -rf "${run_dir_host}"
   local start=$(date -u +%s)
