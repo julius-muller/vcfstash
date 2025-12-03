@@ -16,12 +16,28 @@ set -euo pipefail
 #   - VEP cache directory (set VEP_CACHE_DIR)
 #
 # Usage:
-#   ./tests/run_benchmarks_subset.sh [SOURCE_BCF]
+#   ./tests/run_benchmarks_subset.sh [OPTIONS] [SOURCE_BCF]
+#   Options:
+#     -a    Append mode: always run benchmarks even if they exist in logs
+#     -f    Force mode: delete all existing logs and re-run everything
+#
 #   SOURCE_BCF defaults to /mnt/data/samples/test_mgm/mgm_WGS_32.gatkWGS_norm_hg38.bcf
 #
 # Output:
 #   Logs are written to ./tests/benchmarks/ in TSV format:
 #     timestamp\timage\tmode\tscale\tvariants\tseconds\tstatus\toutput_bcf
+
+# Parse command-line flags
+APPEND_MODE=false
+FORCE_MODE=false
+while getopts "af" opt; do
+  case $opt in
+    a) APPEND_MODE=true ;;
+    f) FORCE_MODE=true ;;
+    *) echo "Usage: $0 [-a] [-f] [SOURCE_BCF]" >&2; exit 1 ;;
+  esac
+done
+shift $((OPTIND-1))
 
 SOURCE_BCF=${1:-/mnt/data/samples/test_mgm/mgm_WGS_32.gatkWGS_norm_hg38.bcf}
 VEP_CACHE_DIR=${VEP_CACHE_DIR:-/mnt/data/apps/ensembl-vep/115/cachedir}
@@ -81,6 +97,13 @@ run_bench() {
   local bcf=$4
   local outdir=$5
 
+  # Format mode for display (remove leading dashes)
+  local mode_display="${mode#--}"
+  mode_display="${mode_display:-cached}"
+
+  # Print what we're about to benchmark
+  echo ">>> Running: ${image##*:} | $mode_display | $scale"
+
   mkdir -p "$outdir"
   local bname
   bname="$(basename "$bcf")"
@@ -90,23 +113,29 @@ run_bench() {
   local run_dir_cont="/out/${run_name}"
   local outfile="${run_dir_host}/${out_name}"
 
-  # Check if this benchmark was already completed (log file has at least 2 lines)
-  local log_entry_count=0
+  # Check log file status
+  local total_lines=0
   if [ -f "$LOG_FILE" ]; then
-    log_entry_count=$(grep -c "^[0-9]" "$LOG_FILE" || true)
+    total_lines=$(wc -l < "$LOG_FILE")
   fi
 
-  # Check if this specific run is already in the log
-  if [ -f "$LOG_FILE" ] && grep -q "${mode}.*${scale}" "$LOG_FILE" 2>/dev/null; then
-    if [ "$log_entry_count" -ge 1 ]; then
-      echo "Skipping $mode $scale - already completed"
+  # If log has less than 2 lines (header only or corrupted), delete it
+  if [ -f "$LOG_FILE" ] && [ "$total_lines" -lt 2 ]; then
+    echo "    Log file incomplete (<2 lines), deleting and re-running"
+    rm -f "$LOG_FILE"
+    total_lines=0
+  fi
+
+  # Skip logic (only applies if NOT in append mode and NOT in force mode)
+  if [ "$APPEND_MODE" = false ] && [ "$total_lines" -ge 2 ]; then
+    # Check if this specific benchmark already exists in the log
+    if grep -q "${mode}.*${scale}" "$LOG_FILE" 2>/dev/null; then
+      echo "    Skipping - already completed (use -a to append)"
       return 0
-    else
-      # Log exists but incomplete, delete and re-run
-      rm -f "$LOG_FILE"
     fi
   fi
 
+  # If we get here, we're running the benchmark
   # ensure fresh run dir on host (vcfstash will create it)
   rm -rf "${run_dir_host}"
   local start=$(date -u +%s)
@@ -147,7 +176,7 @@ run_bench() {
   # Clean up intermediate files on success, keep only logs
   if [ "$status" -eq 0 ]; then
     rm -rf "${run_dir_host}/work" "${run_dir_host}/.nxf" 2>/dev/null || true
-    find "${run_dir_host}" -name "*.bcf" -o -name "*.bcf.csi" -o -name "*.html" | xargs rm -f 2>/dev/null || true
+    find "${run_dir_host}" -name "*.bcf" -o -name "*.bcf.csi" -o -name "*.html" -print0 2>/dev/null | xargs -0 rm -f 2>/dev/null || true
   fi
 }
 
@@ -173,8 +202,22 @@ main() {
   echo ""
   echo "Modes: cached, uncached"
   echo "Total benchmarks: $((${#SCALES[@]} * ${#IMAGES[@]} * 2))"
+  echo ""
+  if [ "$FORCE_MODE" = true ]; then
+    echo "FORCE MODE: Will delete all existing logs and re-run"
+  elif [ "$APPEND_MODE" = true ]; then
+    echo "APPEND MODE: Will run all benchmarks and append to logs"
+  else
+    echo "DEFAULT MODE: Will skip already completed benchmarks"
+  fi
   echo "==============================="
   echo ""
+
+  # Force mode: delete all existing logs
+  if [ "$FORCE_MODE" = true ]; then
+    echo "Deleting all existing log files..."
+    find "$LOG_DIR" -name "*.log" -type f -delete 2>/dev/null || true
+  fi
 
   for scale_def in "${SCALES[@]}"; do
     IFS=":" read -r scale_name nvars <<<"$scale_def"
