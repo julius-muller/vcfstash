@@ -78,6 +78,9 @@ run_bench() {
   local bname
   bname="$(basename "$bcf")"
   local out_name="${bname%.bcf}_vst.bcf"
+  local run_dir="/out/run_${mode:-cached}_${scale}"
+  # ensure fresh run dir on host
+  rm -rf "${outdir}/run_${mode:-cached}_${scale}"
   local start=$(date -u +%s)
   set +e
   docker run --rm \
@@ -89,17 +92,17 @@ run_bench() {
     -w /app \
     --entrypoint /bin/bash \
     "$image" \
-    -lc "mkdir -p /out/tmp && TMPDIR=/out/tmp vcfstash annotate ${mode} \
+    -lc "vcfstash annotate ${mode} \
          -a /cache/db/stash/vep_gnomad \
          --vcf /work/input.bcf \
-         --output /out \
+         --output ${run_dir} \
          -y /app/recipes/docker-annotated/params.yaml \
          -vv"
   status=$?
   set -e
   local end=$(date -u +%s)
   local elapsed=$((end - start))
-  local outfile="$outdir/$out_name"
+  local outfile="${outdir}/run_${mode:-cached}_${scale}/${out_name}"
   tsv_log "$(date -Iseconds)\t${image}\t${mode}\t${scale}\t$(bcftools index -n "$bcf")\t${elapsed}\t${status}\t${outfile}"
 }
 
