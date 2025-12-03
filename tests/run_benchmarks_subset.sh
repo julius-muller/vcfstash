@@ -81,9 +81,8 @@ run_bench() {
   local run_name="run_${mode:-cached}_${scale}"
   local run_dir_host="${outdir}/${run_name}"
   local run_dir_cont="/out/${run_name}"
-  # ensure fresh run dir on host
+  # ensure fresh run dir on host (vcfstash will create it)
   rm -rf "${run_dir_host}"
-  mkdir -p "${run_dir_host}/tmp"
   local start=$(date -u +%s)
   set +e
   docker run --rm \
@@ -96,9 +95,10 @@ run_bench() {
     --user "$(id -u):$(id -g)" \
     --entrypoint /bin/bash \
     "$image" \
-    -lc "NXF_HOME=${run_dir_cont}/.nxf NXF_WORK=${run_dir_cont}/work TMPDIR=${run_dir_cont}/tmp \
+    -lc "NXF_HOME=${run_dir_cont}/.nxf NXF_WORK=${run_dir_cont}/work \
          VCFSTASH_LOGLEVEL=ERROR VCFSTASH_FILE_LOGLEVEL=ERROR NXF_ANSI_LOG=false \
          vcfstash annotate ${mode} \
+         --force \
          -a /cache/db/stash/vep_gnomad \
          --vcf /work/input.bcf \
          --output ${run_dir_cont} \
