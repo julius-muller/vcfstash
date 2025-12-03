@@ -526,25 +526,32 @@ class NextflowWorkflow:
         return result
 
     def _setup_nextflow_skeleton(self) -> None:
-        """Sets up a skeleton .nextflow directory structure in workflow_dir and includes the jar file.
+        """Sets up a skeleton .nextflow directory structure in output_dir and includes the jar file.
 
         Args:
             nxf_parent (Path): Path to the Nextflow parent dir
         """
-        self.nxf_home = self.workflow_dir / ".nextflow"
+        # Use output_dir for writable nextflow home, copy JAR from workflow_dir
+        self.nxf_home = self.output_dir / ".nextflow"
         jar_dir = self.nxf_home / "framework" / self.NXF_VERSION
         jar_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create some other common subdirectories, however they should exist already as they are copied from workflow_dir_src at stash-init
+        # Create some other common subdirectories
         dirs = ["cache", "plugins", "plr"]
         for d in dirs:
             dir_path = Path(self.nxf_home / d)
             dir_path.mkdir(parents=True, exist_ok=True)
 
+        # Copy JAR file from workflow_dir to output_dir if it doesn't exist
         jar_fl = jar_dir / f"nextflow-{self.NXF_VERSION}-dist"
         if not jar_fl.exists():
-            self.logger.error(f"Nextflow JAR file not found: {jar_fl}")
-            raise FileNotFoundError(f"Nextflow JAR file not found: {jar_fl}")
+            source_jar = self.workflow_dir / ".nextflow" / "framework" / self.NXF_VERSION / f"nextflow-{self.NXF_VERSION}-dist"
+            if not source_jar.exists():
+                self.logger.error(f"Nextflow JAR file not found: {source_jar}")
+                raise FileNotFoundError(f"Nextflow JAR file not found: {source_jar}")
+            import shutil
+            shutil.copy2(source_jar, jar_fl)
+            self.logger.debug(f"Copied Nextflow JAR from {source_jar} to {jar_fl}")
 
         # Create an empty history file
         with open(self.nxf_home / "history", "w"):
