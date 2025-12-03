@@ -16,6 +16,13 @@ TEST_SAMPLE = TEST_DATA_DIR / "sample4.bcf"
 TEST_PARAMS = TEST_ROOT / "config" / "test_params.yaml"
 TEST_ANNO_CONFIG = TEST_ROOT / "config" / "test_annotation.config"
 VCFSTASH_CMD = "vcfstash"
+VCFSTASH_ROOT = get_vcfstash_root()
+
+
+def _env():
+    env = os.environ.copy()
+    env["VCFSTASH_ROOT"] = str(VCFSTASH_ROOT)
+    return env
 
 
 def run_stash_init(input_vcf, output_dir, force=False, normalize=False):
@@ -42,7 +49,8 @@ def run_stash_init(input_vcf, output_dir, force=False, normalize=False):
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        text=True,
+        env=_env(),
     )
     return result
 
@@ -63,7 +71,8 @@ def run_stash_add(db_dir, input_vcf, normalize=False):
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        text=True,
+        env=_env(),
     )
     return result
 
@@ -89,7 +98,8 @@ def run_stash_annotate(db_dir, name, force=False):
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            env=_env(),
         )
         return result
 
@@ -117,7 +127,8 @@ def run_annotate(annotation_db, input_vcf, output_dir, force=False):
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        text=True,
+        env=_env(),
     )
     return result
 

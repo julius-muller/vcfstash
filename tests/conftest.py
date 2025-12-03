@@ -8,6 +8,9 @@ from pathlib import Path
 from vcfstash.utils.paths import get_vcfstash_root
 import shutil
 
+# Ensure VCFSTASH_ROOT is set for CLI subprocesses
+os.environ.setdefault("VCFSTASH_ROOT", str(get_vcfstash_root()))
+
 # Constants
 TEST_ROOT = get_vcfstash_root() / "tests"
 TEST_DATA_DIR = TEST_ROOT / "data" / "nodata"
