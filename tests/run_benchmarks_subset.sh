@@ -6,6 +6,7 @@ set -euo pipefail
 # Scales:
 #   PANEL  - 5k variants (approx. targeted panel)
 #   WES    - 100k variants (approx. exome)
+#   WGS    - all variants from source (full WGS)
 #
 # Requirements on host:
 #   - bcftools, tabix, shuf
@@ -38,7 +39,7 @@ if [[ ! -d "$VEP_CACHE_DIR" ]]; then
   exit 1
 fi
 
-SCALES=("PANEL:5000" "WES:100000")
+SCALES=("PANEL:5000" "WES:100000" "WGS:0")
 IMAGES=(
   "ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af010-vep115"
   "ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af001-vep115"
@@ -131,7 +132,13 @@ main() {
   for scale_def in "${SCALES[@]}"; do
     IFS=":" read -r scale_name nvars <<<"$scale_def"
     bench_dir="$LOG_DIR/${scale_name,,}_$(date -u +%Y%m%dT%H%M%S)"
-    subset_bcf=$(mk_subset "$scale_name" "$nvars" "$bench_dir/subset")
+
+    # Use full source file for WGS (nvars=0), create subset for others
+    if [ "$nvars" -eq 0 ]; then
+      subset_bcf="$SOURCE_BCF"
+    else
+      subset_bcf=$(mk_subset "$scale_name" "$nvars" "$bench_dir/subset")
+    fi
 
     for image in "${IMAGES[@]}"; do
       LOG_FILE="$bench_dir/${image##*:}_${scale_name}.log"
