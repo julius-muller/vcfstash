@@ -94,7 +94,7 @@ class NextflowWorkflow:
         workflow_resource = importlib.resources.files("vcfstash") / "workflow"
         self.workflow_dir_src = Path(str(workflow_resource))
 
-        self.logger.info(f"Initializing Nextflow workflow in: {self.workflow_dir}")
+        self.logger.debug(f"Initializing Nextflow workflow in: {self.workflow_dir}")
 
         self.nf_config = self.nf_config_content = None
         if config_file:
@@ -740,8 +740,68 @@ class NextflowWorkflow:
         self.logger.debug(f"Running command: {' '.join(map(str, cmd))}")
 
         try:
-            # Run without capturing output to show live progress
-            result = subprocess.run(cmd, check=True, cwd=self.output_dir, env=env)
+            # In debug mode, show all output; otherwise, capture and show clean summary
+            if self.verbosity >= 2:
+                # Debug mode: pass through all output
+                result = subprocess.run(cmd, check=True, cwd=self.output_dir, env=env)
+            else:
+                # Normal mode: capture output and show clean progress
+                import sys
+                import re
+
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    cwd=self.output_dir,
+                    env=env,
+                    text=True,
+                    bufsize=1,
+                    universal_newlines=True,
+                )
+
+                # Track if we're showing any output
+                last_progress_line = None
+                shown_launch = False
+
+                # Read output line by line
+                for line in process.stdout:
+                    line = line.rstrip()
+
+                    # Save to log file if logger is available
+                    if self.logger:
+                        self.logger.debug(f"Nextflow: {line}")
+
+                    # Skip empty lines and ANSI escape sequences in summary
+                    if not line or line.startswith('['):
+                        continue
+
+                    # Show important lines in INFO mode
+                    if self.verbosity >= 1:
+                        # Show key messages like launching, completion, errors
+                        if any(keyword in line for keyword in ['Launching', 'ERROR', 'WARN', 'Completed at:', 'Duration']):
+                            print(line, flush=True)
+                        elif 'executor >' in line or '✔' in line:
+                            # Show process completion
+                            print(line, flush=True)
+                    else:
+                        # Minimal output: just show launching message once
+                        if 'Launching' in line and not shown_launch:
+                            # Extract workflow name if possible
+                            match = re.search(r'\[([^\]]+)\]', line)
+                            workflow_name = match.group(1) if match else "workflow"
+                            print(f"Running annotation workflow [{workflow_name}]...", flush=True)
+                            shown_launch = True
+
+                # Wait for process to complete
+                returncode = process.wait()
+
+                if returncode != 0:
+                    raise subprocess.CalledProcessError(returncode, cmd)
+
+                # Create a minimal result object
+                result = subprocess.CompletedProcess(cmd, returncode)
+
             return result
         except subprocess.CalledProcessError as e:
             self.warn_temp_files()

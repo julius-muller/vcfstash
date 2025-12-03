@@ -213,9 +213,9 @@ def main() -> None:
     # Check bcftools if params file is provided (required for stash-init)
     # For other commands, we'll use params from the database or fall back to init.yaml
     bcftools_path = None
-    logger.info(f"Expected bcftools version: {EXPECTED_BCFTOOLS_VERSION}")
+    logger.debug(f"Expected bcftools version: {EXPECTED_BCFTOOLS_VERSION}")
     if args.params:
-        logger.info(f"Checking bcftools installation using params file: {args.params}")
+        logger.debug(f"Checking bcftools installation using params file: {args.params}")
         bcftools_path = check_bcftools_installed(Path(args.params))
     elif args.command in ["stash-add", "stash-annotate", "annotate"]:
         # For these commands, try to get bcftools path from the workflow directory
@@ -226,7 +226,7 @@ def main() -> None:
             workflow_dir = Path(args.a).parent.parent / "workflow"
 
         if workflow_dir and workflow_dir.exists():
-            logger.info(f"Checking bcftools installation using init.yaml from: {workflow_dir}")
+            logger.debug(f"Checking bcftools installation using init.yaml from: {workflow_dir}")
             bcftools_path = check_bcftools_installed(workflow_dir=workflow_dir)
         else:
             logger.warning(f"Workflow directory not found: {workflow_dir}")
@@ -234,7 +234,7 @@ def main() -> None:
 
     try:
         if args.command == "stash-init":
-            logger.info(f"Initializing database: {Path(args.output).parent}")
+            logger.debug(f"Initializing database: {Path(args.output).parent}")
 
             initializer = DatabaseInitializer(
                 input_file=Path(args.i),
@@ -250,7 +250,7 @@ def main() -> None:
             initializer.initialize()
 
         elif args.command == "stash-add":
-            logger.info(f"Adding to database: {args.db}")
+            logger.debug(f"Adding to database: {args.db}")
             updater = DatabaseUpdater(
                 db_path=args.db,
                 input_file=args.i,
@@ -264,7 +264,7 @@ def main() -> None:
             updater.add()
 
         elif args.command == "stash-annotate":
-            logger.info(f"Running annotation workflow on database: {args.db}")
+            logger.debug(f"Running annotation workflow on database: {args.db}")
 
             annotator = DatabaseAnnotator(
                 annotation_name=args.name,
@@ -280,7 +280,10 @@ def main() -> None:
             annotator.annotate()
 
         elif args.command == "annotate":
-            logger.info(f"Annotating VCF: {args.i}")
+            # Show minimal info message for annotation command
+            if logger.isEnabledFor(logging.INFO):
+                input_name = Path(args.i).name
+                logger.info(f"Annotating {input_name}")
 
             vcf_annotator = VCFAnnotator(
                 annotation_db=args.a,

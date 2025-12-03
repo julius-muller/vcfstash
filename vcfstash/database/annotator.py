@@ -201,7 +201,8 @@ class DatabaseAnnotator(VCFDatabase):
                         f"Output directory must not exist if --force is not set and a valid stash directory: {self.stashed_annotations.annotation_dir}"
                     )
 
-        print(f"Creating stash structure: {self.stashed_annotations.annotation_dir}")
+        if self.logger:
+            self.logger.debug(f"Creating stash structure: {self.stashed_annotations.annotation_dir}")
         self.stashed_annotations.create_structure()
 
     def annotate(self, extra_files: bool = True) -> None:
@@ -452,7 +453,8 @@ class VCFAnnotator(VCFDatabase):
                     f"Output directory must not exist if --force is not set and a valid output directory: {self.output_annotations.root_dir}"
                 )
 
-        print(f"Creating output structure: {self.output_annotations.root_dir}")
+        if self.logger:
+            self.logger.debug(f"Creating output structure: {self.output_annotations.root_dir}")
         self.output_annotations.create_structure()
 
     def _validate_and_extract_sample_name(self) -> tuple[str, str]:
@@ -667,7 +669,7 @@ class VCFAnnotator(VCFDatabase):
         """
         start_time = time.time()
         if self.logger:
-            self.logger.info("Starting VCF annotation")
+            self.logger.debug("Starting VCF annotation")
 
         try:
 
@@ -681,7 +683,12 @@ class VCFAnnotator(VCFDatabase):
             )
             duration = time.time() - start_time
             if self.logger:
-                self.logger.info(f"VCF workflow completed in {duration:.1f}s")
+                # Show a clean completion message
+                if self.logger.isEnabledFor(logging.INFO):
+                    self.logger.info(f"Annotation completed in {duration:.1f}s")
+                else:
+                    # Even in default mode, show completion
+                    print(f"Annotation completed in {duration:.1f}s")
 
         except Exception:
             if self.logger:

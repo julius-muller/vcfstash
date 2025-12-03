@@ -38,8 +38,26 @@ def setup_logging(verbosity: int, log_file: Optional[Path] = None) -> logging.Lo
     logger = logging.getLogger("vcfstash")
     logger.setLevel(logging.DEBUG)  # Allow all levels to handlers
 
-    # Create formatters and handlers
-    formatter = logging.Formatter(
+    # Create formatters - different for console and file
+    # Console: Clean format, no timestamps (unless in debug mode)
+    if verbosity >= 2:
+        # Debug mode: show detailed info
+        console_formatter = logging.Formatter(
+            "[%(asctime)s] %(levelname)s [%(filename)s.%(funcName)s:%(lineno)d] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    elif verbosity == 1:
+        # Info mode: show timestamp but cleaner
+        console_formatter = logging.Formatter(
+            "[%(asctime)s] %(message)s",
+            datefmt="%H:%M:%S",
+        )
+    else:
+        # Default: minimal, clean output
+        console_formatter = logging.Formatter("%(message)s")
+
+    # File: Always detailed
+    file_formatter = logging.Formatter(
         "[%(asctime)s] %(levelname)s [%(name)s.%(filename)s.%(funcName)s:%(lineno)d] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
@@ -51,17 +69,16 @@ def setup_logging(verbosity: int, log_file: Optional[Path] = None) -> logging.Lo
     # Console handler - less verbose
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(console_level)
-    console_handler.setFormatter(formatter)
+    console_handler.setFormatter(console_formatter)
     logger.addHandler(console_handler)
 
     # File handler - more verbose (only if log_file is provided)
     if log_file is not None:
-        # raise ValueError(f"This was passed: {log_file}")
         # Create parent directory if it doesn't exist
         log_file.parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_file, mode="a")
         file_handler.setLevel(file_level)
-        file_handler.setFormatter(formatter)
+        file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)
         logger.debug(f"File logging enabled at: {log_file}")
         if not log_file.exists():
