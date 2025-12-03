@@ -90,11 +90,21 @@ run_bench() {
   local run_dir_cont="/out/${run_name}"
   local outfile="${run_dir_host}/${out_name}"
 
-  # Skip if already completed
-  if [ -f "$outfile" ] && [ -f "${outfile}.csi" ] && [ -f "${run_dir_host}/.done" ]; then
-    local variants=$(bcftools index -n "$bcf")
-    tsv_log "$(date -Iseconds)\t${image}\t${mode}\t${scale}\t${variants}\t0\tSKIPPED\t${outfile}"
-    return 0
+  # Check if this benchmark was already completed (log file has at least 2 lines)
+  local log_entry_count=0
+  if [ -f "$LOG_FILE" ]; then
+    log_entry_count=$(grep -c "^[0-9]" "$LOG_FILE" || true)
+  fi
+
+  # Check if this specific run is already in the log
+  if [ -f "$LOG_FILE" ] && grep -q "${mode}.*${scale}" "$LOG_FILE" 2>/dev/null; then
+    if [ "$log_entry_count" -ge 1 ]; then
+      echo "Skipping $mode $scale - already completed"
+      return 0
+    else
+      # Log exists but incomplete, delete and re-run
+      rm -f "$LOG_FILE"
+    fi
   fi
 
   # ensure fresh run dir on host (vcfstash will create it)
@@ -130,14 +140,42 @@ run_bench() {
   local end=$(date -u +%s)
   local elapsed=$((end - start))
   local outfile="${run_dir_host}/${out_name}"
-  # mark completion on success
-  if [ "$status" -eq 0 ] && [ -f "$outfile" ]; then
-    touch "${run_dir_host}/.done"
-  fi
+
+  # Log the result
   tsv_log "$(date -Iseconds)\t${image}\t${mode}\t${scale}\t$(bcftools index -n "$bcf")\t${elapsed}\t${status}\t${outfile}"
+
+  # Clean up intermediate files on success, keep only logs
+  if [ "$status" -eq 0 ]; then
+    rm -rf "${run_dir_host}/work" "${run_dir_host}/.nxf" 2>/dev/null || true
+    find "${run_dir_host}" -name "*.bcf" -o -name "*.bcf.csi" -o -name "*.html" | xargs rm -f 2>/dev/null || true
+  fi
 }
 
 main() {
+  # Pre-flight summary
+  echo "=== VCFstash Benchmark Plan ==="
+  echo "Source: $SOURCE_BCF"
+  echo ""
+  echo "Scales to test:"
+  for scale_def in "${SCALES[@]}"; do
+    IFS=":" read -r scale_name nvars <<<"$scale_def"
+    if [[ "$nvars" == "FULL" ]]; then
+      echo "  - $scale_name (full source file)"
+    else
+      echo "  - $scale_name ($nvars variants)"
+    fi
+  done
+  echo ""
+  echo "Docker images:"
+  for image in "${IMAGES[@]}"; do
+    echo "  - ${image##*:}"
+  done
+  echo ""
+  echo "Modes: cached, uncached"
+  echo "Total benchmarks: $((${#SCALES[@]} * ${#IMAGES[@]} * 2))"
+  echo "==============================="
+  echo ""
+
   for scale_def in "${SCALES[@]}"; do
     IFS=":" read -r scale_name nvars <<<"$scale_def"
     bench_dir="$LOG_DIR/${scale_name,,}"
