@@ -131,18 +131,26 @@ run_bench() {
 main() {
   for scale_def in "${SCALES[@]}"; do
     IFS=":" read -r scale_name nvars <<<"$scale_def"
-    bench_dir="$LOG_DIR/${scale_name,,}_$(date -u +%Y%m%dT%H%M%S)"
+    bench_dir="$LOG_DIR/${scale_name,,}"
 
     # Use full source file for WGS (nvars=0), create subset for others
     if [ "$nvars" -eq 0 ]; then
       subset_bcf="$SOURCE_BCF"
     else
-      subset_bcf=$(mk_subset "$scale_name" "$nvars" "$bench_dir/subset")
+      # Check if subset already exists, reuse it
+      if [ -f "$bench_dir/subset/${scale_name}.bcf" ]; then
+        subset_bcf="$bench_dir/subset/${scale_name}.bcf"
+      else
+        subset_bcf=$(mk_subset "$scale_name" "$nvars" "$bench_dir/subset")
+      fi
     fi
 
     for image in "${IMAGES[@]}"; do
       LOG_FILE="$bench_dir/${image##*:}_${scale_name}.log"
-      tsv_log "timestamp\timage\tmode\tscale\tvariants\tseconds\tstatus\toutput_bcf"
+      # Only write header if log file doesn't exist
+      if [ ! -f "$LOG_FILE" ]; then
+        tsv_log "timestamp\timage\tmode\tscale\tvariants\tseconds\tstatus\toutput_bcf"
+      fi
       run_bench "$image" "--uncached" "$scale_name" "$subset_bcf" "$bench_dir/out_uncached"
       run_bench "$image" ""           "$scale_name" "$subset_bcf" "$bench_dir/out_cached"
     done
