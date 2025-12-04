@@ -120,6 +120,7 @@ COPY --from=builder /opt/vcfstash-cache /cache
 # vcfstash wrapper - use system python with venv in PYTHONPATH
 RUN printf '%s\n' '#!/bin/sh' \
                   'export PYTHONPATH=/app/venv/lib/python3.13/site-packages:$PYTHONPATH' \
+                  'export PATH=/app/venv/bin:$PATH' \
                   'exec python3 -m vcfstash.cli "$@"' \
     > /usr/local/bin/vcfstash && chmod +x /usr/local/bin/vcfstash
 
@@ -133,3 +134,14 @@ WORKDIR /work
 
 ENTRYPOINT ["/usr/local/bin/vcfstash"]
 CMD ["--help"]
+
+# Basic sanity test when the image is built locally (skipped in CI)
+RUN /app/venv/bin/python - <<'PY'
+import importlib
+import sys
+
+mod = importlib.import_module('vcfstash')
+cli = importlib.import_module('vcfstash.cli')
+print('vcfstash package import OK; version:', getattr(mod, '__version__', 'unknown'))
+print('cli module loaded; main attr exists:', hasattr(cli, 'main'))
+PY
