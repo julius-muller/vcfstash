@@ -135,6 +135,7 @@ COPY --from=builder /build/resources /app/resources
 COPY --from=builder /build/tools /app/tools
 COPY --from=builder /build/tests /app/tests
 COPY --from=builder /build/recipes /app/recipes
+COPY --from=builder /build/vcfstash /app/vcfstash
 
 # Copy BCF file and annotation script for post-build annotation step
 COPY --from=builder /tmp/gnomad.bcf /tmp/gnomad.bcf
@@ -155,12 +156,14 @@ RUN mkdir -p /cache
 
 # vcfstash wrapper - use Python 3.13 with venv in PYTHONPATH
 RUN printf '%s\n' '#!/bin/sh' \
-                  'export PYTHONPATH=/app/venv/lib/python3.13/site-packages:$PYTHONPATH' \
+                  'export PYTHONPATH=/app/venv/lib/python3.13/site-packages:/app:$PYTHONPATH' \
+                  'export PATH=/app/venv/bin:$PATH' \
                   'exec python3.13 -m vcfstash.cli "$@"' \
     > /usr/local/bin/vcfstash && chmod +x /usr/local/bin/vcfstash
 
 ENV PATH="/app/venv/bin:/opt/vep/ensembl-vep:${PATH}"
 ENV VCFSTASH_ROOT="/app"
+ENV PYTHONPATH="/app/venv/lib/python3.13/site-packages:/app"
 
 # Non-root for HPC compatibility
 RUN useradd -m vcfstash && chown -R vcfstash /cache /app
