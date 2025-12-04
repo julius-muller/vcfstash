@@ -119,3 +119,34 @@ def test_show_command_outputs_annotation_tool_cmd(test_output_dir):
 
     assert result.returncode == 0, result.stderr
     assert expected_cmd in result.stdout
+
+
+def test_list_shows_available_annotations(test_output_dir):
+    """--list should enumerate annotation directories containing vcfstash_annotated.bcf."""
+
+    stash_dir = Path(test_output_dir) / "stash"
+    stash_dir.mkdir(parents=True, exist_ok=True)
+
+    anno1 = stash_dir / "vep_gnomad"
+    anno1.mkdir()
+    (anno1 / "vcfstash_annotated.bcf").write_text("dummy")
+
+    anno2 = stash_dir / "custom"
+    anno2.mkdir()
+    (anno2 / "vcfstash_annotated.bcf").write_text("dummy")
+
+    result = subprocess.run(
+        [
+            VCFSTASH_CMD,
+            "annotate",
+            "--list",
+            "-a",
+            str(stash_dir),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "vep_gnomad" in result.stdout
+    assert "custom" in result.stdout

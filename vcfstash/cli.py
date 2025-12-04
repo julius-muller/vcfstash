@@ -56,6 +56,43 @@ def _print_annotation_command(annotation_dir: Path) -> None:
     print(command)
 
 
+def _find_stash_dir(path_hint: Path) -> Path:
+    """Resolve various user inputs to the stash directory.
+
+    Accepts either the stash root, the stash directory itself, or a specific
+    annotation directory (e.g., /cache/db/stash/vep_gnomad). Returns the path to
+    the stash directory that contains annotation subfolders.
+    """
+
+    if (path_hint / "stash").exists():
+        return path_hint / "stash"
+
+    if path_hint.name == "stash" and path_hint.exists():
+        return path_hint
+
+    annotation_dir = path_hint
+    if (annotation_dir / "vcfstash_annotated.bcf").exists():
+        return annotation_dir.parent
+
+    raise FileNotFoundError(
+        "Could not locate a stash directory. Provide -a pointing to a stash root, "
+        "stash directory, or an annotation directory containing vcfstash_annotated.bcf."
+    )
+
+
+def _list_annotation_caches(path_hint: Path) -> list[str]:
+    """Return sorted annotation cache names under the given path hint."""
+
+    stash_dir = _find_stash_dir(path_hint)
+    names = []
+    for child in stash_dir.iterdir():
+        if not child.is_dir():
+            continue
+        if (child / "vcfstash_annotated.bcf").exists():
+            names.append(child.name)
+    return sorted(names)
+
+
 def main() -> None:
     """Main entry point for the vcfstash command-line interface.
 
@@ -242,14 +279,26 @@ def main() -> None:
             "Skips running any annotation jobs."
         ),
     )
+    vcf_parser.add_argument(
+        "--list",
+        action="store_true",
+        help=(
+            "List available cached annotation names. Provide -a pointing to a stash root, "
+            "a stash directory, or an annotation directory."
+        ),
+    )
 
     args = parser.parse_args(args=None if sys.argv[1:] else ["--help"])
 
     show_command_only = args.command == "annotate" and getattr(
         args, "show_command", False
     )
+    list_only = args.command == "annotate" and getattr(args, "list", False)
 
-    if args.command == "annotate" and not show_command_only:
+    if show_command_only and list_only:
+        parser.error("--show-command and --list cannot be used together")
+
+    if args.command == "annotate" and not (show_command_only or list_only):
         if not args.i or not args.output:
             parser.error(
                 "annotate command requires -i/--vcf and -o/--output unless --show-command is used"
@@ -266,7 +315,7 @@ def main() -> None:
     # Check bcftools if params file is provided (required for stash-init)
     # For other commands, we'll use params from the database or fall back to init.yaml
     bcftools_path = None
-    if not show_command_only:
+    if not (show_command_only or list_only):
         logger.debug(f"Expected bcftools version: {EXPECTED_BCFTOOLS_VERSION}")
         if args.params:
             logger.debug(
@@ -343,6 +392,16 @@ def main() -> None:
         elif args.command == "annotate":
             if args.show_command:
                 _print_annotation_command(Path(args.a))
+                return
+
+            if args.list:
+                names = _list_annotation_caches(Path(args.a) if args.a else Path.cwd())
+                if not names:
+                    print("No cached annotations found.")
+                else:
+                    print("Available cached annotations:")
+                    for name in names:
+                        print(f"- {name}")
                 return
 
             # Always show what we're doing (even in default mode)
