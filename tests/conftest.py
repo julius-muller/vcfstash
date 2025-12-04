@@ -28,16 +28,26 @@ def setup_test_environment():
     """Set up test environment with correct PATH for bundled tools.
 
     This fixture runs automatically before any tests and ensures that
-    the bundled bcftools is available in PATH.
+    the appropriate bcftools is available in PATH.
+
+    For annotated Docker images with VEP, prioritize compiled bcftools 1.22
+    from /opt/bcftools/bin (which supports --write-index and matches GLIBC).
+    Otherwise, use the bundled bcftools from tools/ directory.
     """
     vcfstash_root = get_vcfstash_root()
     tools_dir = vcfstash_root / "tools"
+    current_path = os.environ.get("PATH", "")
 
-    # Add tools directory to PATH if it exists and contains bcftools
-    if tools_dir.exists() and (tools_dir / "bcftools").exists():
-        current_path = os.environ.get("PATH", "")
+    # Check if we're in annotated scenario with compiled bcftools 1.22
+    compiled_bcftools = Path("/opt/bcftools/bin")
+    if compiled_bcftools.exists() and (compiled_bcftools / "bcftools").exists():
+        # Annotated scenario: use compiled bcftools 1.22
+        os.environ["PATH"] = f"{compiled_bcftools}:{current_path}"
+        print(f"\n[Test Setup] Using compiled bcftools 1.22 from {compiled_bcftools}")
+    elif tools_dir.exists() and (tools_dir / "bcftools").exists():
+        # Blueprint/vanilla scenario: use bundled bcftools
         os.environ["PATH"] = f"{tools_dir}:{current_path}"
-        print(f"\n[Test Setup] Added {tools_dir} to PATH for bundled bcftools")
+        print(f"\n[Test Setup] Using bundled bcftools from {tools_dir}")
 
     yield
 
