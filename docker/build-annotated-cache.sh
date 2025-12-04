@@ -39,7 +39,11 @@ fi
 
 if [[ ! -f "${BCF_FILE}.csi" ]]; then
     echo "Indexing BCF file..."
-    /app/tools/bcftools index "${BCF_FILE}"
+    if [ -x "/opt/bcftools/bin/bcftools" ]; then
+        /opt/bcftools/bin/bcftools index "${BCF_FILE}"
+    else
+        bcftools index "${BCF_FILE}"
+    fi
 fi
 
 if [[ -z "${PARAMS_FILE}" ]] || [[ ! -f "${PARAMS_FILE}" ]]; then
@@ -124,5 +128,10 @@ echo "========================================="
 # Show some stats
 echo ""
 echo "Cache statistics:"
-/app/tools/bcftools stats "${ANNOTATED_BCF}" | grep "number of records:"
+# Use compiled bcftools 1.22 if available, otherwise use bcftools in PATH
+if [ -x "/opt/bcftools/bin/bcftools" ]; then
+    /opt/bcftools/bin/bcftools stats "${ANNOTATED_BCF}" | grep "number of records:"
+else
+    bcftools stats "${ANNOTATED_BCF}" | grep "number of records:"
+fi
 echo ""
