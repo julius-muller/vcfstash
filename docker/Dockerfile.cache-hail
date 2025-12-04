@@ -27,17 +27,22 @@ ENV PATH="/root/.local/bin:${PATH}"
 # Prepare workspace
 WORKDIR /build
 
-# Copy repo (only what's needed)
+# Copy only pyproject.toml first to cache dependency installation layer
 COPY pyproject.toml README.md ./
+
+# Install dependencies FIRST (this layer gets cached and won't rebuild unless pyproject.toml changes!)
+# Create venv and install all dependencies including pysam compilation
+RUN python3 -m venv /build/venv && \
+    uv pip install --python /build/venv/bin/python --verbose ".[dev]"
+
+# NOW copy the actual code (code changes won't trigger pysam rebuild!)
 COPY vcfstash ./vcfstash/
 COPY resources ./resources
 COPY tools ./tools
 COPY tests ./tests
 
-# Install vcfstash with dev dependencies using uv (much faster than pip)
-# Use --no-build-isolation-package pysam to speed up builds
-RUN python3 -m venv /build/venv && \
-    uv pip install --python /build/venv/bin/python --verbose ".[dev]"
+# Re-install in editable mode (fast, no compilation, just links the code)
+RUN uv pip install --python /build/venv/bin/python --no-deps -e .
 
 # Make CLI available in PATH for the build step
 ENV PATH="/build/venv/bin:${PATH}"
