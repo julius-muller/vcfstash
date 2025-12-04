@@ -35,6 +35,18 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
         liblzma-dev && \
     rm -rf /var/lib/apt/lists/*
 
+# Install bcftools 1.22 from source (VEP image has 1.13 which lacks --write-index)
+RUN cd /tmp && \
+    wget https://github.com/samtools/bcftools/releases/download/1.22/bcftools-1.22.tar.bz2 && \
+    tar -xjf bcftools-1.22.tar.bz2 && \
+    cd bcftools-1.22 && \
+    ./configure --prefix=/opt/bcftools && \
+    make -j$(nproc) && \
+    make install && \
+    cd / && rm -rf /tmp/bcftools-1.22*
+
+ENV PATH="/opt/bcftools/bin:${PATH}"
+
 # Install uv for fast package management
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:${PATH}"
@@ -105,7 +117,7 @@ USER root
 LABEL org.opencontainers.image.title="VCFstash annotated cache image"
 LABEL org.opencontainers.image.description="Contains VEP pipeline and pre-annotated cache"
 
-# Install minimal dependencies (Python 3.14 for vcfstash, procps for 'ps', tabix for annotation)
+# Install minimal dependencies (Python 3.13 for vcfstash, procps for 'ps', tabix for annotation)
 # NOTE: No Java/JRE needed - we use pure Python workflow manager now!
 # Set timezone non-interactively to avoid prompts
 ENV DEBIAN_FRONTEND=noninteractive
@@ -118,12 +130,33 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
     apt-get update && \
     apt-get install -y --no-install-recommends \
         python3.13 \
-        bcftools \
         libcurl4 \
         ca-certificates \
         procps \
-        tabix && \
+        tabix \
+        wget \
+        build-essential \
+        gcc \
+        make \
+        zlib1g-dev \
+        libbz2-dev \
+        liblzma-dev && \
     rm -rf /var/lib/apt/lists/*
+
+# Install bcftools 1.22 from source (VEP image has 1.13 which lacks --write-index)
+RUN cd /tmp && \
+    wget https://github.com/samtools/bcftools/releases/download/1.22/bcftools-1.22.tar.bz2 && \
+    tar -xjf bcftools-1.22.tar.bz2 && \
+    cd bcftools-1.22 && \
+    ./configure --prefix=/opt/bcftools && \
+    make -j$(nproc) && \
+    make install && \
+    cd / && rm -rf /tmp/bcftools-1.22* && \
+    apt-get purge -y build-essential gcc make wget && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/opt/bcftools/bin:${PATH}"
 
 # Copy venv with vcfstash installed, plus resources/tools/tests (includes test data)
 # NOTE: All test code AND test data are copied. This allows running the full
@@ -161,7 +194,7 @@ RUN printf '%s\n' '#!/bin/sh' \
                   'exec python3.13 -m vcfstash.cli "$@"' \
     > /usr/local/bin/vcfstash && chmod +x /usr/local/bin/vcfstash
 
-ENV PATH="/app/venv/bin:/opt/vep/ensembl-vep:${PATH}"
+ENV PATH="/opt/bcftools/bin:/app/venv/bin:/opt/vep/ensembl-vep:${PATH}"
 ENV VCFSTASH_ROOT="/app"
 ENV PYTHONPATH="/app/venv/lib/python3.13/site-packages:/app"
 
