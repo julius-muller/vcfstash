@@ -4,8 +4,8 @@
 ## * REQUIRED RESOURCES *
 annotation_tool_cmd: "vep"  # Not used during cache init
 tool_version_command: "vep --version | head -1 | awk '{print $2}'"
-# Use system bcftools (bundled one has GLIBC compatibility issues in Docker)
-bcftools_cmd: "bcftools"
+# Bundled bcftools works with Python 3.14/Trixie (GLIBC 2.41)
+bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
 chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
 temp_dir: "/tmp"
 

@@ -5,7 +5,7 @@ FROM ensemblorg/ensembl-vep:release_115.2 AS builder
 
 USER root
 
-# Install system dependencies including Python 3.13 (matches blueprint image)
+# Install system dependencies including Python 3.14 (matches blueprint image)
 # Set timezone non-interactively to avoid prompts
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
@@ -16,9 +16,9 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
     add-apt-repository -y ppa:deadsnakes/ppa && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        python3.13 \
-        python3.13-venv \
-        python3.13-dev \
+        python3.14 \
+        python3.14-venv \
+        python3.14-dev \
         python3-pip \
         curl \
         wget \
@@ -40,8 +40,8 @@ COPY tools ./tools
 COPY recipes ./recipes
 COPY tests ./tests
 
-# Install vcfstash with dev dependencies into a venv using Python 3.13
-RUN python3.13 -m venv /build/venv && \
+# Install vcfstash with dev dependencies into a venv using Python 3.14
+RUN python3.14 -m venv /build/venv && \
     /build/venv/bin/pip install --upgrade pip && \
     /build/venv/bin/pip install --no-cache-dir ".[dev]"
 
@@ -90,7 +90,7 @@ USER root
 LABEL org.opencontainers.image.title="VCFstash annotated cache image"
 LABEL org.opencontainers.image.description="Contains VEP pipeline and pre-annotated cache"
 
-# Install minimal dependencies (Python 3.13 for vcfstash, procps for 'ps', tabix for annotation)
+# Install minimal dependencies (Python 3.14 for vcfstash, procps for 'ps', tabix for annotation)
 # NOTE: No Java/JRE needed - we use pure Python workflow manager now!
 # Set timezone non-interactively to avoid prompts
 ENV DEBIAN_FRONTEND=noninteractive
@@ -102,7 +102,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
     add-apt-repository -y ppa:deadsnakes/ppa && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        python3.13 \
+        python3.14 \
         bcftools \
         libcurl4 \
         ca-certificates \
@@ -130,18 +130,18 @@ COPY --from=builder /tmp/dummy.fa* /tmp/
 # Ensure bcftools shim is executable
 RUN chmod +x /app/tools/bcftools
 
-# Fix shebangs in venv scripts (they reference /build/venv/bin/python3.13 from builder stage)
-RUN find /app/venv/bin -type f -exec sed -i '1s|^#!.*/python.*|#!/usr/bin/env python3.13|' {} + 2>/dev/null || true
+# Fix shebangs in venv scripts (they reference /build/venv/bin/python3.14 from builder stage)
+RUN find /app/venv/bin -type f -exec sed -i '1s|^#!.*/python.*|#!/usr/bin/env python3.14|' {} + 2>/dev/null || true
 
 # Create cache directory structure (will be populated during post-build annotation)
 RUN mkdir -p /cache
 
 # Note: VEP cache not bundled to keep image size reasonable; mount at runtime if needed
 
-# vcfstash wrapper - use Python 3.13 with venv in PYTHONPATH
+# vcfstash wrapper - use Python 3.14 with venv in PYTHONPATH
 RUN printf '%s\n' '#!/bin/sh' \
-                  'export PYTHONPATH=/app/venv/lib/python3.13/site-packages:$PYTHONPATH' \
-                  'exec python3.13 -m vcfstash.cli "$@"' \
+                  'export PYTHONPATH=/app/venv/lib/python3.14/site-packages:$PYTHONPATH' \
+                  'exec python3.14 -m vcfstash.cli "$@"' \
     > /usr/local/bin/vcfstash && chmod +x /usr/local/bin/vcfstash
 
 ENV PATH="/app/venv/bin:/opt/vep/ensembl-vep:${PATH}"

@@ -5,8 +5,8 @@
 annotation_tool_cmd: "vep"
 # Parse the version line from VEP stdout (same pattern as tests/config/example_params.yaml)
 tool_version_command: "vep | grep -oP \"ensembl-vep\\s+:\\s+\\K\\d+\\.\\d+\""
-# Use system bcftools (bundled one has GLIBC compatibility issues in Docker)
-bcftools_cmd: "bcftools"
+# Bundled bcftools works with Python 3.14/Trixie (GLIBC 2.41)
+bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
 reference: "/tmp/dummy.fa"  # Placeholder - not used during cache init from BCF
 chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
 temp_dir: "/tmp"
