@@ -32,7 +32,7 @@ echo "Setting up cache with pre-generated BCF file"
 
 # Use proper VEP configuration (not test config)
 PARAMS_FILE="${PARAMS_FILE:-/tmp/recipe/params.yaml}"
-CONFIG_FILE="${CONFIG_FILE:-/tmp/recipe/annotation.config}"
+CONFIG_FILE="${CONFIG_FILE:-/tmp/recipe/annotation.yaml}"
 
 # Create working directory
 WORK_DIR="/tmp/gnomad_work"

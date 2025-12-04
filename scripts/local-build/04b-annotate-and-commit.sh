@@ -130,7 +130,7 @@ docker run \
         --cache-name 'gnomad_grch38_joint_af010' \
         --genome 'GRCh38' \
         --params /app/recipes/docker-annotated/params.yaml \
-        --annotation-config /app/recipes/docker-annotated/annotation.config \
+        --annotation-config /app/recipes/docker-annotated/annotation.yaml \
         --annotation-name 'vep_gnomad' \
         --vep-cache '/opt/vep/.vep'"
 

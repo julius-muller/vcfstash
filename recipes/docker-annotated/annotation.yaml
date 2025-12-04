@@ -1,0 +1,44 @@
+## Annotated Docker Image Annotation Configuration
+## VEP annotation command for blueprint annotation
+
+annotation_cmd: |
+  ${params.bcftools_cmd} view ${INPUT_BCF} | \
+  ${params.annotation_tool_cmd} \
+    --offline \
+    --buffer_size ${params.vep_buffer} \
+    --fork ${params.vep_forks} \
+    --no_stats \
+    --cache \
+    --dir_cache ${params.vep_cache} \
+    --format vcf \
+    --vcf \
+    --force_overwrite \
+    -i STDIN \
+    -o STDOUT \
+    --warning_file ${AUXILIARY_DIR}/vep_warnings.log \
+    -a GRCh38 \
+    --transcript_version \
+    --total_length \
+    --flag_pick \
+    --exclude_predicted \
+    --hgvs \
+    --hgvsg \
+    --spdi \
+    --variant_class \
+    --uniprot \
+    --gene_version \
+    --protein \
+    --symbol \
+    --canonical \
+    --appris \
+    --mane \
+    --biotype \
+    --domains | \
+    ${params.bcftools_cmd} view -o ${OUTPUT_BCF} -Ob -W
+
+must_contain_info_tag: CSQ
+required_tool_version: "115.2"
+
+optional_checks:
+  vep_cache_version: "115"
+  genome_build: "GRCh38"
