@@ -21,12 +21,39 @@ import sys
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 
+import yaml
+
 from vcfstash import EXPECTED_BCFTOOLS_VERSION
 from vcfstash.database.annotator import DatabaseAnnotator, VCFAnnotator
 from vcfstash.database.initializer import DatabaseInitializer
 from vcfstash.database.updater import DatabaseUpdater
 from vcfstash.utils.logging import log_command, setup_logging
 from vcfstash.utils.validation import check_bcftools_installed
+
+
+def _print_annotation_command(annotation_dir: Path) -> None:
+    """Print the stored annotation_tool_cmd from an annotation stash.
+
+    Args:
+        annotation_dir: Path to the stash/<annotation_name> directory.
+    """
+
+    params_file = annotation_dir / "annotation.yaml"
+    if not params_file.exists():
+        raise FileNotFoundError(
+            f"Params file not found in annotation cache: {params_file}"
+        )
+
+    params = yaml.safe_load(params_file.read_text()) or {}
+    command = params.get("annotation_tool_cmd")
+
+    if not command:
+        raise ValueError(
+            "annotation_tool_cmd not found in annotation.yaml; cache may be incomplete"
+        )
+
+    print("Annotation command recorded in cache:")
+    print(command)
 
 
 def main() -> None:
@@ -183,9 +210,9 @@ def main() -> None:
         help="Path to the annotation database directory",
     )
     vcf_parser.add_argument(
-        "-i", "--vcf", dest="i", required=True, help="Input VCF file to annotate"
+        "-i", "--vcf", dest="i", required=False, help="Input VCF file to annotate"
     )
-    vcf_parser.add_argument("-o", "--output", required=True, help="Output directory")
+    vcf_parser.add_argument("-o", "--output", required=False, help="Output directory")
     vcf_parser.add_argument(
         "--uncached",
         action="store_true",
@@ -207,8 +234,26 @@ def main() -> None:
         help="Convert the final bcf file to parquet format optimized for duck.db access",
         default=False,
     )
+    vcf_parser.add_argument(
+        "--show-command",
+        action="store_true",
+        help=(
+            "Show the annotation_tool_cmd recorded in the annotation cache and exit. "
+            "Skips running any annotation jobs."
+        ),
+    )
 
     args = parser.parse_args(args=None if sys.argv[1:] else ["--help"])
+
+    show_command_only = args.command == "annotate" and getattr(
+        args, "show_command", False
+    )
+
+    if args.command == "annotate" and not show_command_only:
+        if not args.i or not args.output:
+            parser.error(
+                "annotate command requires -i/--vcf and -o/--output unless --show-command is used"
+            )
 
     # Check if required args exists based on command
     if args.command == "stash-init" and not args.params:
@@ -221,24 +266,29 @@ def main() -> None:
     # Check bcftools if params file is provided (required for stash-init)
     # For other commands, we'll use params from the database or fall back to init.yaml
     bcftools_path = None
-    logger.debug(f"Expected bcftools version: {EXPECTED_BCFTOOLS_VERSION}")
-    if args.params:
-        logger.debug(f"Checking bcftools installation using params file: {args.params}")
-        bcftools_path = check_bcftools_installed(Path(args.params))
-    elif args.command in ["stash-add", "stash-annotate", "annotate"]:
-        # For these commands, try to get bcftools path from the workflow directory
-        workflow_dir = None
-        if args.command == "stash-add" or args.command == "stash-annotate":
-            workflow_dir = Path(args.db) / "workflow"
-        elif args.command == "annotate":
-            workflow_dir = Path(args.a).parent.parent / "workflow"
+    if not show_command_only:
+        logger.debug(f"Expected bcftools version: {EXPECTED_BCFTOOLS_VERSION}")
+        if args.params:
+            logger.debug(
+                f"Checking bcftools installation using params file: {args.params}"
+            )
+            bcftools_path = check_bcftools_installed(Path(args.params))
+        elif args.command in ["stash-add", "stash-annotate", "annotate"]:
+            # For these commands, try to get bcftools path from the workflow directory
+            workflow_dir = None
+            if args.command == "stash-add" or args.command == "stash-annotate":
+                workflow_dir = Path(args.db) / "workflow"
+            elif args.command == "annotate":
+                workflow_dir = Path(args.a).parent.parent / "workflow"
 
-        if workflow_dir and workflow_dir.exists():
-            logger.debug(f"Checking bcftools installation using init.yaml from: {workflow_dir}")
-            bcftools_path = check_bcftools_installed(workflow_dir=workflow_dir)
-        else:
-            logger.warning(f"Workflow directory not found: {workflow_dir}")
-            bcftools_path = check_bcftools_installed()
+            if workflow_dir and workflow_dir.exists():
+                logger.debug(
+                    f"Checking bcftools installation using init.yaml from: {workflow_dir}"
+                )
+                bcftools_path = check_bcftools_installed(workflow_dir=workflow_dir)
+            else:
+                logger.warning(f"Workflow directory not found: {workflow_dir}")
+                bcftools_path = check_bcftools_installed()
 
     try:
         if args.command == "stash-init":
@@ -291,6 +341,10 @@ def main() -> None:
             annotator.annotate()
 
         elif args.command == "annotate":
+            if args.show_command:
+                _print_annotation_command(Path(args.a))
+                return
+
             # Always show what we're doing (even in default mode)
             input_name = Path(args.i).name
             mode = "uncached" if args.uncached else "cached"

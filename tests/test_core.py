@@ -19,22 +19,38 @@ def test_error_handling(test_output_dir, params_file, test_scenario):
     print(f"\n=== Testing error handling (scenario: {test_scenario}) ===")
 
     # Test with non-existent input file
-    init_cmd = [VCFSTASH_CMD, "stash-init", "-i", "nonexistent.bcf",
-                "-o", test_output_dir, "-y", params_file]
+    init_cmd = [
+        VCFSTASH_CMD,
+        "stash-init",
+        "-i",
+        "nonexistent.bcf",
+        "-o",
+        test_output_dir,
+        "-y",
+        params_file,
+    ]
     result = subprocess.run(init_cmd, capture_output=True, text=True)
     assert result.returncode != 0, "Should fail with non-existent input"
 
     # Test with invalid output location
-    init_cmd = [VCFSTASH_CMD, "stash-init", "-i", str(TEST_VCF),
-                "-o", test_output_dir, "-y", "nonexistent.yaml"]
+    init_cmd = [
+        VCFSTASH_CMD,
+        "stash-init",
+        "-i",
+        str(TEST_VCF),
+        "-o",
+        test_output_dir,
+        "-y",
+        "nonexistent.yaml",
+    ]
     result = subprocess.run(init_cmd, capture_output=True, text=True)
     assert result.returncode != 0, "Should fail with invalid yaml"
 
     # Test add without init
-    add_cmd = [VCFSTASH_CMD, "stash-add", "--db", test_output_dir,
-               "-i", str(TEST_VCF)]
+    add_cmd = [VCFSTASH_CMD, "stash-add", "--db", test_output_dir, "-i", str(TEST_VCF)]
     result = subprocess.run(add_cmd, capture_output=True, text=True)
     assert result.returncode != 0, "Should fail without initialization"
+
 
 def test_file_validation(test_output_dir: str, test_scenario):
     """Test file validation and integrity checks."""
@@ -46,6 +62,7 @@ def test_file_validation(test_output_dir: str, test_scenario):
     # Test MD5 calculation
     md5_hash = compute_md5(ref_file)
     assert md5_hash == "ec59e3976d29e276414191a6283499f7"
+
 
 def test_vcf_reference_validation(test_scenario):
     """Test VCF reference validation."""
@@ -75,3 +92,30 @@ def test_vcf_reference_validation(test_scenario):
     result, error = db.validate_vcf_reference(vcf_file, Path("nonexistent.fasta"))
     assert not result, "Validation should fail with non-existent reference file"
     assert "not found" in error
+
+
+def test_show_command_outputs_annotation_tool_cmd(test_output_dir):
+    """--show-command should print the frozen annotation tool command."""
+
+    annotation_dir = Path(test_output_dir) / "stash" / "vep_gnomad"
+    annotation_dir.mkdir(parents=True, exist_ok=True)
+
+    expected_cmd = "docker run --rm -i vep:latest"
+    (annotation_dir / "annotation.yaml").write_text(
+        f'annotation_tool_cmd: "{expected_cmd}"\n'
+    )
+
+    result = subprocess.run(
+        [
+            VCFSTASH_CMD,
+            "annotate",
+            "--show-command",
+            "-a",
+            str(annotation_dir),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert expected_cmd in result.stdout
