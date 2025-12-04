@@ -26,8 +26,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
         bcftools \
         samtools \
         procps \
-        ca-certificates \
-        openjdk-21-jre-headless && \
+        ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 # Prepare workspace
@@ -91,7 +90,8 @@ USER root
 LABEL org.opencontainers.image.title="VCFstash annotated cache image"
 LABEL org.opencontainers.image.description="Contains VEP pipeline and pre-annotated cache"
 
-# Install minimal dependencies (Python 3.13 for vcfstash, JRE for Nextflow, procps for 'ps', tabix for annotation)
+# Install minimal dependencies (Python 3.13 for vcfstash, procps for 'ps', tabix for annotation)
+# NOTE: No Java/JRE needed - we use pure Python workflow manager now!
 # Set timezone non-interactively to avoid prompts
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
@@ -103,7 +103,8 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
     apt-get update && \
     apt-get install -y --no-install-recommends \
         python3.13 \
-        openjdk-21-jre-headless \
+        bcftools \
+        libcurl4 \
         ca-certificates \
         procps \
         tabix && \

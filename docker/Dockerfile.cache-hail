@@ -16,11 +16,11 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install bcftools and htslib from apt (Ubuntu 25.04 should have recent versions)
+# NOTE: No Java/JRE needed - we use pure Python workflow manager now!
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         bcftools \
-        samtools \
-        openjdk-21-jre-headless && \
+        samtools && \
     rm -rf /var/lib/apt/lists/*
 
 # Prepare workspace
@@ -78,9 +78,19 @@ FROM python:3.13-slim AS runtime
 LABEL org.opencontainers.image.title="VCFstash cache image"
 LABEL org.opencontainers.image.description="Contains prebuilt cache and vcfstash CLI"
 
-# Minimal OS deps; JRE for Nextflow, procps for 'ps', tabix for test annotation
+# Minimal OS deps for pure Python workflow (no Java needed!)
+# - bcftools: VCF manipulation (also needed for bundled bcftools dependencies)
+# - libcurl4: Required by bcftools for network operations
+# - procps: Provides 'ps' command
+# - tabix: For test annotation
+# - ca-certificates: For HTTPS operations
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends default-jre-headless ca-certificates procps tabix && \
+    apt-get install -y --no-install-recommends \
+        bcftools \
+        libcurl4 \
+        ca-certificates \
+        procps \
+        tabix && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy venv with vcfstash installed, plus resources/tools/tests (includes test data)
