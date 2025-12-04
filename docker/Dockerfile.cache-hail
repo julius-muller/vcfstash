@@ -1,24 +1,15 @@
 # =====================  stage 0: build cache + CLI  ======================
-# Use Ubuntu 25.04 as base since that's the development environment
-FROM ubuntu:25.04 AS builder
+# Use Python 3.14 builder to match runtime (ensures venv compatibility)
+FROM python:3.14.1-slim-trixie AS builder
 
-# Install system dependencies including ps command
+# Install system dependencies (Python 3.14 already in base image)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        python3 \
-        python3-pip \
-        python3-venv \
         curl \
         wget \
         tabix \
         procps \
-        ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install bcftools and htslib from apt (Ubuntu 25.04 should have recent versions)
-# NOTE: No Java/JRE needed - we use pure Python workflow manager now!
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+        ca-certificates \
         bcftools \
         samtools && \
     rm -rf /var/lib/apt/lists/*
