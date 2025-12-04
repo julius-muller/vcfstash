@@ -106,10 +106,10 @@ RUN apt-get update && \
 # All scenarios (vanilla, blueprint, annotated) run the same tests but adapt
 # based on available resources (cache, VEP).
 WORKDIR /app
-COPY --from=builder /build/venv /app/venv
-COPY --from=builder /build/resources /app/resources
-COPY --from=builder /build/tools /app/tools
-COPY --from=builder /build/tests /app/tests
+COPY --from=builder /app/venv /app/venv
+COPY --from=builder /app/resources /app/resources
+COPY --from=builder /app/tools /app/tools
+COPY --from=builder /app/tests /app/tests
 
 # Ensure bcftools shim is executable (your repo's static bcftools)
 RUN chmod +x /app/tools/bcftools
