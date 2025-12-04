@@ -1,0 +1,36 @@
+# Exclude benchmark data from Docker builds (can be 1-2GB)
+tests/benchmarks/
+
+# Exclude git and version control
+.git/
+.github/
+.gitignore
+
+# Exclude Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg-info/
+dist/
+build/
+
+# Exclude IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Exclude data directories (large)
+/data/
+
+# Exclude Nextflow work directories
+work/
+.nextflow/
+.nextflow.log*
+
+# Exclude documentation build artifacts
+docs/_build/
