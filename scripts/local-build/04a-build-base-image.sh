@@ -99,7 +99,7 @@ if [ -z "${TAG}" ]; then
   GENOME_LOWER=$(echo "${GENOME}" | tr '[:upper:]' '[:lower:]')
   TYPE_LOWER=$(echo "${TYPE}" | tr '[:upper:]' '[:lower:]')
   VEP_MAJOR=$(echo "${VEP_VERSION}" | cut -d. -f1)
-  TAG="gnomad-v41-${GENOME_LOWER}-${TYPE_LOWER}-af${AF_CLEAN}-vep${VEP_MAJOR}"
+  TAG="gnomad-${GENOME_LOWER}-${TYPE_LOWER}-af${AF_CLEAN}-vep${VEP_MAJOR}"
 fi
 
 # Generate cache name
