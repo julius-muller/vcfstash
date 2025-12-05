@@ -1,1205 +1,673 @@
 # VCFstash Wiki
 
-This wiki provides detailed information about advanced usage scenarios, configuration options, and best practices for VCFstash.
+Comprehensive guide to VCFstash configuration, deployment, and best practices.
+
+---
 
 ## Table of Contents
 
-1. [Quick Start Examples](#quick-start-examples)
-2. [Setting Up a gnomAD-based Cache](#setting-up-a-gnomad-based-cache)
-3. [Optional Checks](#optional-checks)
-4. [Configuration Instructions](#configuration-instructions)
-5. [Advanced Configuration Options](#advanced-configuration-options)
-6. [Cache Structure](#cache-structure)
-7. [Using Docker](#using-docker)
-8. [Performance Optimization](#performance-optimization)
-9. [Testing & Validation](#testing--validation)
-10. [Troubleshooting](#troubleshooting)
-11. [Annotation Tool Examples](#annotation-tool-examples)
+1. [Quick Start](#quick-start)
+2. [Cache Structure](#cache-structure)
+3. [Configuration Files](#configuration-files)
+4. [Deployment Modes](#deployment-modes)
+5. [Building Caches](#building-caches)
+6. [Annotation Tools](#annotation-tools)
+7. [Performance Optimization](#performance-optimization)
+8. [Testing & Validation](#testing--validation)
+9. [Troubleshooting](#troubleshooting)
+10. [Docker Best Practices](#docker-best-practices)
 
-## Quick Start Examples
+---
 
-### **Tier 1: Pre-built Cache (30 seconds)** ⚡
+## Quick Start
 
-The fastest way to test VCFstash - uses existing cache images:
+### 30-Second Test (Pre-built Cache)
 
 ```bash
-# 1. Pull the image (only needed once)
-docker pull ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.2
-
-# 2. Create test data
-mkdir -p test-data
-cat > test-data/sample.vcf << 'EOF'
-##fileformat=VCFv4.2
-##contig=<ID=1,length=248956422>
-#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
-1	10001	.	T	C	.	PASS	.
-1	10002	.	A	G	.	PASS	.
-EOF
-
-# 3. Compress and index
-bgzip test-data/sample.vcf
-tabix -p vcf test-data/sample.vcf.gz
-
-# 4. Annotate instantly!
+# Pull image and annotate
+docker pull ghcr.io/julius-muller/vcfstash-annotated:latest
 docker run --rm \
-  -v $(pwd)/test-data:/data \
-  -v $(pwd)/results:/results \
-  ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.2 \
+  -v $(pwd)/samples:/data \
+  -v $(pwd)/results:/output \
+  ghcr.io/julius-muller/vcfstash-annotated:latest \
   annotate \
-  -a /cache/stash/vep_gnomad \
-  --vcf /data/sample.vcf.gz \
-  --output /results
-
-# 5. Check results
-ls -la results/
-zcat results/sample_vst.vcf.gz | head -20
+    -a /cache/db/stash/vep_gnomad \
+    --vcf /data/sample.vcf.gz \
+    --output /output
 ```
 
-**Expected result:** Annotated VCF with VEP CSQ tags in `results/sample_vst.vcf.gz`
-
-### **Tier 2: Custom Production Setup (2-3 hours)** 🏭
-
-Full production pipeline with VEP:
+### 15-Minute Local Test
 
 ```bash
-# 1. Setup directories and get VEP
-mkdir -p data/{references,vep_cache,vcfs} results
-docker pull ensemblorg/ensembl-vep:release_115.2
-
-# 2. Reference genome
-# Normalization now only splits multiallelic variants, so no FASTA download is required.
-
-# 3. Install VEP cache (10-30 minutes)
-docker run --rm -v $(pwd)/data:/data ensemblorg/ensembl-vep:release_115.2 \
-  INSTALL.pl -a cf -s homo_sapiens -y GRCh38 -c /data/vep_cache/115
-
-# 4. Get sample population data
-cd data/vcfs
-cat > test_pop.vcf << 'EOF'
-##fileformat=VCFv4.2
-##contig=<ID=1,length=248956422>
-##INFO=<ID=AF,Number=A,Type=Float,Description="Allele Frequency">
-#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	pop1	pop2
-1	10001	.	T	C	.	PASS	AF=0.15	GT	0/1	0/0
-1	10002	.	A	G	.	PASS	AF=0.25	GT	1/1	0/1
-1	10003	.	C	T	.	PASS	AF=0.05	GT	0/0	0/1
-EOF
-bgzip test_pop.vcf && tabix -p vcf test_pop.vcf.gz
-cd ../..
-
-# 5. Setup VCFstash
+# Clone and install
 git clone https://github.com/julius-muller/vcfstash.git
 cd vcfstash
+uv venv .venv && source .venv/bin/activate
+uv pip install -e ".[dev]"
 
-# 6. Build cache (5-10 minutes)
-vcfstash stash-init \
-  --vcf ../data/vcfs/test_pop.vcf.gz \
-  --output ../data/vcfstash_cache \
-  -y recipes/hg38_vep115_complete/params.yaml
-
-vcfstash stash-annotate \
-  --name vep_test \
-  --db ../data/vcfstash_cache \
-  -a recipes/hg38_vep115_complete/annotation.config
-
-# 7. Test annotation
-vcfstash annotate \
-  -a ../data/vcfstash_cache/stash/vep_test \
-  --vcf ../data/vcfs/test_pop.vcf.gz \
-  --output ../results \
-  -y recipes/hg38_vep115_complete/params.yaml
-
-# 8. Check results
-ls -la ../results/
-zcat ../results/test_pop_vst.vcf.gz | grep "^1" | head -5
-```
-
-**Expected result:** Full VEP annotations with CSQ tags containing SIFT, PolyPhen, etc.
-
-### **Tier 3: Development/Local Testing (15 minutes)** 👨‍💻
-
-Local development with built-in test data:
-
-```bash
-# 1. Clone and setup
-git clone https://github.com/julius-muller/vcfstash.git
-cd vcfstash
-python3 -m venv .venv
-source .venv/bin/activate
-
-# 2. Install VCFstash
-pip install -e .
-
-# 3. Quick test with built-in test data
-vcfstash stash-init \
-  --vcf tests/data/nodata/gnomad_test.bcf \
-  --output /tmp/test_cache \
-  -y tests/config/test_params.yaml
-
-vcfstash stash-annotate \
-  --name test_anno \
-  --db /tmp/test_cache \
-  -a tests/config/test_annotation.config
-
-# 4. Test annotation
-vcfstash annotate \
-  -a /tmp/test_cache/stash/test_anno \
-  --vcf tests/data/nodata/gnomad_test.bcf \
-  --output /tmp/results \
-  -y tests/config/test_params.yaml
-
-# 5. Check results  
-ls -la /tmp/results/
-bcftools view /tmp/results/gnomad_test_vst.bcf | head -20
-
-# 6. Run full test suite
+# Run tests
 python -m pytest tests/ -v
 ```
 
-**Expected result:** All tests pass, annotated file contains MOCK_ANNO tags
+### Production Setup (2-3 hours)
 
-### **Performance Comparison**
+See [Building Caches](#building-caches) section below.
 
-Testing same 1000-variant file:
-
-| Tier | Setup Time | Annotation Time | Cache Hits | Use Case |
-|------|------------|----------------|------------|----------|
-| **Tier 1** | 30 seconds | ~5 seconds | 70-90% | Instant usage, demos |
-| **Tier 2** | 2-3 hours | ~10 seconds | Custom | Production workflows |
-| **Tier 3** | 15 minutes | ~2 seconds | 100% | Development, testing |
-
-## Setting Up a gnomAD-based Cache
-
-gnomAD (Genome Aggregation Database) is an excellent source of common variants for initializing your VCFstash cache. This section provides a step-by-step guide to setting up a comprehensive gnomAD-based cache.
-
-### Prerequisites
-
-- gnomAD VCF files (exomes and/or genomes)
-- Sufficient disk space (varies based on filtering criteria)
-- VCFstash installed and configured
-
-### Basic Workflow
-
-Here's a basic workflow for setting up a gnomAD-based cache:
-
-1. **Initialize the cache with gnomAD exomes data**:
-   ```bash
-   vcfstash stash-init \
-     --vcf /path/to/gnomad.exomes.vcf.gz \
-     --output /path/to/cache_dir \
-     -y params.yaml
-   ```
-
-2. **Annotate the exomes data**:
-   ```bash
-   vcfstash stash-annotate \
-     --name gnomad_ex \
-     -a example_annotation.config \
-     --db /path/to/cache_dir
-   ```
-
-3. **Add gnomAD genomes data to the cache**:
-   ```bash
-   vcfstash stash-add \
-     --db /path/to/cache_dir \
-     -i /path/to/gnomad.genomes.vcf.gz
-   ```
-
-4. **Re-annotate the combined data**:
-   ```bash
-   vcfstash stash-annotate \
-     --name gnomad_genex \
-     -a example_annotation.config \
-     --db /path/to/cache_dir
-   ```
-
-5. **Optionally add other sources (e.g., dbSNP)**:
-   ```bash
-   vcfstash stash-add \
-     --db /path/to/cache_dir \
-     -i /path/to/dbsnp.vcf.gz
-   ```
-
-6. **Re-annotate the final combined data**:
-   ```bash
-   vcfstash stash-annotate \
-     --name gnomad_genex_dbsnp \
-     -a example_annotation.config \
-     --db /path/to/cache_dir
-   ```
-
-### Filtering by Allele Frequency
-
-For optimal performance, consider filtering gnomAD data by allele frequency. This reduces the cache size while still capturing the most common variants:
-
-1. **Filter gnomAD files by allele frequency**:
-   ```bash
-   bcftools view -i 'AF>=0.01' /path/to/gnomad.vcf.gz -Ob -o gnomad_af0.01.bcf
-   bcftools index gnomad_af0.01.bcf
-   ```
-
-2. **Initialize cache with filtered data**:
-   ```bash
-   vcfstash stash-init \
-     --vcf gnomad_af0.01.bcf \
-     --output /path/to/cache_dir \
-     -y params.yaml
-   ```
-
-Common allele frequency thresholds:
-- 0.1 (10%): Very common variants, smallest cache size
-- 0.05 (5%): Good balance of coverage and size
-- 0.01 (1%): More comprehensive coverage, larger cache
-- 0.001 (0.1%): Very comprehensive, but much larger cache
-
-### Complete Example Script
-
-Here's a complete script for setting up a gnomAD-based cache with different allele frequency thresholds:
-
-```bash
-#!/bin/bash
-set -euo pipefail
-
-# Define allele frequency threshold
-AF="0.01"
-
-# Define the base stash directory
-STASH_DIR="/path/to/gnomad_${AF}"
-
-# Step 1: Stash Initialization with gnomAD exomes
-vcfstash stash-init -v \
-  --vcf /path/to/gnomad.exomes.filtered_${AF}.bcf \
-  --output ${STASH_DIR} \
-  -y params.yaml
-
-# Step 2: First Annotation
-vcfstash stash-annotate -v \
-  --name gnomad_ex_${AF} \
-  -a example_annotation.config \
-  --db ${STASH_DIR}
-
-# Step 3: Add gnomAD genomes data
-vcfstash stash-add -v \
-  --db ${STASH_DIR} \
-  -i /path/to/gnomad.genomes.filtered_${AF}.bcf
-
-# Step 4: Second Annotation
-vcfstash stash-annotate -v \
-  --name gnomad_genex_${AF} \
-  -a example_annotation.config \
-  --db ${STASH_DIR}
-
-# Step 5: Add dbSNP data
-vcfstash stash-add -v \
-  --db ${STASH_DIR} \
-  -i /path/to/dbsnp.bcf
-
-# Step 6: Final Annotation
-vcfstash stash-annotate -v \
-  --name gnomad_complete_${AF} \
-  -a example_annotation.config \
-  --db ${STASH_DIR}
-
-echo "Cache setup complete: ${STASH_DIR}"
-```
-
-## Optional Checks
-
-VCFstash provides a mechanism for optional checks to ensure consistency between cache creation and annotation. These checks help prevent issues that might arise from environment changes or inconsistent configurations.
-
-### Available Optional Checks
-
-#### 1. Annotation Asset Check (e.g., VEP cache)
-
-Verify that large assets such as the VEP cache match between cache creation and annotation:
-
-```yaml
-optional_checks:
-  vep_cache_version: "115"
-```
-
-This blocks accidental cache rebuilds with a mismatched resource bundle.
-
-#### 2. Tool Version Checks
-
-You can verify that the annotation tool version matches the expected version:
-
-```bash
-# In example_annotation.config
-required_tool_version = '115.0'
-```
-```yaml
-# In params.yaml
-tool_version_command: "vep | grep -oP \"ensembl-vep\\s+:\\s+\\K\\d+\\.\\d+\""
-```
-
-This ensures that the same version of the annotation tool is used, preventing inconsistencies in annotation results.
-
-#### 3. Custom Checks
-
-You can add any custom checks needed for your specific workflow:
-
-```yaml
-optional_checks:
-  vep_cache_version: "115"
-  genome_build: "GRCh37"
-```
-
-These values must match exactly between the params.yaml file and the annotation.config file.
-
-### How Optional Checks Work
-
-1. During `stash-annotate`, VCFstash reads the optional_checks from params.yaml and stores them in the cache
-2. During `annotate`, VCFstash compares the current params.yaml values with the stored values
-3. If any values don't match, VCFstash raises an error, preventing inconsistent annotations
-
-### Best Practices for Optional Checks
-
-1. **Pin major assets**: Capture things like VEP cache versions or container tags so annotations stay reproducible
-2. **Include tool version checks**: Especially important for tools like VEP where different versions can produce different annotations
-3. **Document your checks**: Add comments explaining what each check verifies and why it's important
-4. **Be specific**: Use precise version numbers and checksums rather than ranges or patterns
-
-## Configuration Instructions
-
-VCFstash works with **any annotation tool** by wrapping your existing command. Just split it into two parts:
-
-1. **annotation.config**: Your command structure which will be applied to cache *and* input vcf files. This file is fixed at stash-annotate and unavailable at vcfstash annotate! 
-2. **params.yaml**: Configurable values (paths, resources) which can be changed for each run
-
-### Example: From VEP command to VCFstash
-
-#### Original command:
-
-```bash
-   vep \
-   --offline \
-   --buffer_size 500000 \
-   --fork 4 \
-   --cache \
-   --dir_cache /path/to/vep_cache/115/cachedir \
-   -i sample.vcf \
-   -o annotated.vcf \
-   --format vcf \
-   --canonical
-```
-
-### Step 1: Create annotation.config
-
-As a first step, the original annotation command needs to be adapted to the VCFstash format and copied to the .config file.
-
-Conventions here are:
-1. The annotation tool command should be replaced by ${params.annotation_tool_cmd} and the actual command should be listed in the params.yaml file.
-2. The input filename has to be replaced with the variable ${INPUT_BCF}
-3. The output filename hat to be replaced with the variable ${OUTPUT_BCF}
-
-```bash
-   ${params.annotation_tool_cmd} \
-   --offline \
-   --buffer_size 500000 \
-   --fork 4 \
-   --cache \
-   --dir_cache /path/to/vep_cache/115/cachedir \
-   -i ${INPUT_BCF} \
-   -o ${OUTPUT_BCF} \
-   --format vcf \
-   --canonical 
-```
-
-If there are any parts of the command that need to be kept configurable during vcfstash annotate (e.g., paths, parameters), they have to be replaced with the corresponding variable names starting with `params.`, and listed under 'OPTIONAL RESOURCES' within the params.yaml file:
-
-```bash
-   ${params.annotation_tool_cmd} \
-   --offline \
-   --buffer_size ${params.vep_buffer} \
-    --fork ${params.vep_forks} \
-    --cache \
-    --dir_cache ${params.vep_cache}/115/cachedir \
-    -i ${INPUT_BCF} \
-   -o ${OUTPUT_BCF} \
-   --format vcf \
-   --canonical 
-```
-
-If the annotation tool (here vep) doesn't support bcf as input, the input file needs to be converted and ideally piped through bcftools view. Similarly, the output is expected to be an indexed bcf file. If the tool does not natively support such output, it can be piped through bcftools view with option -W for conversion. Instead of piping, the conversion could be done in multiple steps, however this is not recommended as it would require writing the intermediate files to disk. 
-
-```bash
-annotation_cmd = """
-   ${params.bcftools_cmd} view ${INPUT_BCF} 
-   | ${params.annotation_tool_cmd} \
-   --offline \
-   --buffer_size ${params.vep_buffer} \
-   --fork ${params.vep_forks} \
-   --cache \
-   --dir_cache ${params.vep_cachedir}/115/cachedir \
-   -i stdin \
-   -o stdout \
-   --format vcf \
-   --canonical \
-   | ${params.bcftools_cmd} view -o ${OUTPUT_BCF} -Ob --write-index
-    """
-```
-
-Finally the expected tag in the output file needs to be specified using `must_contain_info_tag`:
-```bash
-    must_contain_info_tag = 'CSQ'
-```
-
-#### **Important requirements for annotation.config:**
-
-- **${INPUT_BCF}**: This variable must be used as the input source. It represents an indexed BCF file that VCFstash will provide to your annotation pipeline.
-- **${params.bcftools_cmd}**: Use this to convert or pipe the input as needed for your annotation tool.
-- **${OUTPUT_BCF}**: Your command must output an indexed BCF file using this variable name. The final output must be in BCF format with an index.
-
-The example above shows a typical pattern: read from ${INPUT_BCF}, pipe through your annotation tool, and write the result to ${OUTPUT_BCF} with indexing.
-
-#### Variable Substitution in Annotation Commands
-When writing your annotation command in `annotation.config`, you can use the following variables that will be automatically replaced with the correct paths: 
-- Path to the input BCF file `INPUT_BCF`
-- Path where the annotated BCF file should be written `OUTPUT_BCF`
-- Directory where additional files can be written (auxiliary subdirectory of cwd) `AUXILIARY_DIR`
-
-These variables can be used in either format:
-- Plain format: `INPUT_BCF`, `OUTPUT_BCF`, `AUXILIARY_DIR`
-- Shell variable format: `${INPUT_BCF}`, `${OUTPUT_BCF}`, `${AUXILIARY_DIR}`
-
-### Step 2: Create params.yaml
-
-As a second step, the parameters need to be defined in the params.yaml file. The YAML file is structured into three main sections:
-
-#### 1. REQUIRED RESOURCES
-
-These are essential parameters that must be defined and are used by the core functionality:
-
-```yaml
-## * REQUIRED RESOURCES *
-# Do not change the key names in this section, as they are used in the code.
-
-# Tool paths and commands
-annotation_tool_cmd: "vep"
-tool_version_command: "vep | grep -oP \"ensembl-vep\\s+:\\s+\\K\\d+\\.\\d+\""
-
-# bcftools - best to leave as default since this is the tested and shipped version v1.20
-bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-
-# Mapping of chromosome names between the reference genome and the VCF file
-chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
-
-# Temporary directory for storing intermediate files
-temp_dir: "/tmp"
-```
-
-#### 2. OPTIONAL RESOURCES
-
-These parameters can be customized for each annotation run and are referenced in your annotation.config file:
-
-```yaml
-## * OPTIONAL RESOURCES *
-# All keys here can be utilized in the example_annotation.config file as ${params.MYKEY}
-vep_buffer: 500000
-vep_forks: 4
-vep_cache: "/path/to/vep_cachedir"
-```
-
-#### 3. OPTIONAL CHECKS
-
-These parameters provide verification mechanisms to ensure consistency between cache creation and annotation:
-
-```yaml
-## * OPTIONAL CHECKS *
-# Optional checks and verifications. These can be set to any key:value pair, 
-# but all keys must match the values in the example_annotation.config.
-optional_checks:
-  vep_cache_version: "115"
-  # Add other optional verifications here
-  # example_version: "1.2.3"
-  # example_option: "value"
-```
-
-The final example of the params.yaml can be found in the repository: [test_params.yaml](https://github.com/julius-muller/vcfstash/blob/main/tests/config/test_params.yaml) and for annotation.config: [test_annotation.config](https://github.com/julius-muller/vcfstash/blob/main/tests/config/test_annotation.config).
-
-> **Important**: It is the responsibility of the user that any optional resource listed here impacting annotation results is never changed between cache creation and annotation. The optional checks section helps enforce this consistency.
-
-## Advanced Configuration Options
-
-VCFstash offers several advanced configuration options for customizing its behavior to suit your specific needs.
-
-### Environment Variables
-
-VCFstash uses the `VCFSTASH_ROOT` environment variable to locate resources. This is automatically set by the application, but you can override it if needed:
-
-```bash
-export VCFSTASH_ROOT=/custom/path/to/vcfstash
-```
-
-### Nextflow Resource Configuration
-
-You can customize CPU, memory, and executor settings in a Nextflow configuration file:
-
-```groovy
-// Process configuration
-process {
-    executor = 'slurm'  // Use SLURM for job submission
-    cpus = 8            // Default CPUs for all processes
-    memory = '16 GB'    // Default memory for all processes
-
-    // Process-specific settings
-    withName: 'RenameAndNormalizeVCF' {
-        memory = '20 GB'   // More memory for this specific process
-    }
-
-    withName: 'RunAnnotation' {
-        cpus = 16          // More CPUs for annotation
-        memory = '32 GB'    
-    }
-}
-```
-
-### Docker/Singularity Integration
-
-VCFstash works well with containerized annotation tools. Example using Docker with VEP:
-
-```yaml
-# In params.yaml
-annotation_tool_cmd: "docker run --user $(id -u):$(id -g) -i -v /mnt/data:/mnt/data --rm ensemblorg/ensembl-vep:release_115.2 vep"
-tool_version_command: "docker run --user $(id -u):$(id -g) -i -v /mnt/data:/mnt/data --rm ensemblorg/ensembl-vep:release_115.2 vep | grep -oP \"ensembl-vep\\s+:\\s+\\K\\d+\\.\\d+\""
-```
+---
 
 ## Cache Structure
 
-The VCFstash cache is organized in a structured directory hierarchy that maintains both the normalized variants and their annotations. Understanding this structure can help you manage and troubleshoot your caches.
-
-### Directory Structure
+VCFstash organizes caches in a standardized directory structure:
 
 ```
-cache_directory/
-├── blueprint/                  # Contains normalized variants
-│   ├── vcfstash.bcf            # Normalized variants from input VCF files
-│   ├── vcfstash.bcf.csi        # Index for the normalized variants
-│   ├── sources.info            # Information about input VCF files
-│   └── ...                     # Nextflow reports and logs
-│
-├── stash/                      # Contains annotated variants
-│   └── [annotation_name]/      # Named annotation directory (e.g., "vep_gnomad")
-│       ├── annotation.config   # Locked annotation configuration
-│       ├── blueprint_snapshot.info  # Blueprint info at annotation time
-│       ├── vcfstash_annotated.bcf   # Annotated variants
-│       ├── vcfstash_annotated.bcf.csi  # Index for annotated variants
-│       ├── annotation.yaml         # Configuration for annotation tools
-│       └── ...                 # Nextflow reports and logs
-│
-├── workflow/                   # Contains Nextflow workflow files
-│   ├── init.yaml               # Initial configuration
-│   ├── main.nf                 # Nextflow workflow file
-│   ├── modules/                # Nextflow modules
-│   └── ...                     # Workflow logs
-│
-└── vcfdb.log                   # Log file for cache operations
+cache_dir/
+├── blueprint/                    # Normalized variant blueprint
+│   ├── vcfstash.bcf             # All variants from input VCFs (normalized, deduplicated)
+│   ├── vcfstash.bcf.csi         # Index
+│   └── sources.info             # Tracking file (MD5 hashes of input VCFs)
+├── stash/                        # Annotation caches
+│   └── <annotation_name>/       # Named annotation (e.g., "vep_gnomad")
+│       ├── vcfstash_annotated.bcf     # Annotated blueprint (THE CACHE)
+│       ├── vcfstash_annotated.bcf.csi # Index
+│       ├── annotation.yaml            # Annotation command used
+│       ├── params.snapshot.yaml       # Params at annotation time
+│       └── auxiliary/                 # Optional tool outputs (logs, etc.)
+├── db/                           # Database metadata (SQLite)
+│   ├── stash.db                 # Cache metadata, version tracking
+│   └── workflow/                # Workflow files (copied during init)
+└── work/                         # Temporary workflow files (can be deleted)
 ```
 
-### Key Files Explained
+### Key Concepts
 
-#### Blueprint Files
+- **Blueprint**: The normalized, deduplicated variant set used as the basis for all annotations
+- **Stash**: A named annotation of the blueprint (can have multiple stashes per blueprint)
+- **Sources tracking**: MD5 hashes prevent re-adding duplicate input VCFs
 
-- **vcfstash.bcf**: The core normalized variant database containing all variants from input VCF files. This file is created during `stash-init` and updated during `stash-add`.
-- **sources.info**: JSON file tracking all input VCF files that have been added to the cache, including their MD5 checksums and timestamps.
+---
 
-#### Stash Files
+## Configuration Files
 
-- **annotation.yaml**: Contains configuration for annotation tools, including paths, commands, and resource settings.
-- **annotation.config**: The locked annotation configuration that defines exactly how variants are annotated. This file is frozen after `stash-annotate` to ensure consistency.
-- **blueprint_snapshot.info**: Records the state of the blueprint at the time of annotation, ensuring traceability.
-- **vcfstash_annotated.bcf**: The annotated variant database that serves as the cache for future annotations.
+VCFstash uses **two YAML files** for configuration (no Groovy, no Java required):
 
-#### Workflow Files
+### 1. `params.yaml` - Resource Paths and Settings
 
-- **init.yaml**: Initial configuration used by the Nextflow workflow.
-- **main.nf**: The Nextflow workflow that orchestrates the normalization and annotation processes.
+**Purpose**: Define where tools and resources are located. This file can be shared across multiple annotations.
 
-### Cache Lifecycle
-
-1. **Initialization** (`stash-init`): Creates the blueprint directory and normalizes input variants
-2. **Addition** (`stash-add`): Updates the blueprint with additional variants
-3. **Annotation** (`stash-annotate`): Creates a named annotation in the stash directory
-4. **Usage** (`annotate`): Uses the annotated cache to speed up annotation of new samples
-
-Understanding this structure helps when:
-- Troubleshooting annotation issues
-- Managing multiple annotation versions
-- Sharing caches between environments
-- Backing up or archiving caches
-
-The cache is designed to be portable - you can copy an entire cache directory to another location or system and use it there, as long as the paths in your `params.yaml` file are updated accordingly.
-
-## Using Docker
-
-VCFstash provides Docker support for easy deployment and consistent execution across different environments. This section covers various ways to use VCFstash with Docker.
-
-### Basic Docker Usage
-
-#### Building the Docker Image
-
-You can build the Docker image from the repository:
-
-```bash
-# Clone the repository
-git clone https://github.com/julius-muller/vcfstash.git
-cd vcfstash
-
-# Build the Docker image
-docker-compose -f docker/docker-compose.yml build
-```
-
-#### Running VCFstash with Docker
-
-Once the image is built, you can run VCFstash commands:
-
-```bash
-# Run VCFstash with the help command
-docker run --rm vcfstash --help
-
-# Mount volumes for data access
-docker run --rm \
-  -v /path/to/data:/data \
-  -v /path/to/cache:/cache \
-  vcfstash <command> <options>
-```
-
-### Using Docker Compose
-
-VCFstash includes a Docker Compose configuration for easier management of volumes and environment variables.
-
-#### Running with Docker Compose
-
-```bash
-# Navigate to the repository
-cd vcfstash
-
-# Set environment variables (optional)
-export DATA_DIR=/path/to/data
-export CACHE_DIR=/path/to/cache
-
-# Run VCFstash with Docker Compose
-docker-compose -f docker/docker-compose.yml run --rm vcfstash <command> <options>
-```
-
-#### Using the Helper Script
-
-VCFstash provides a helper script (`run-vcfstash.sh`) that simplifies running with Docker Compose:
-
-```bash
-# Make the script executable
-chmod +x docker/run-vcfstash.sh
-
-# Run VCFstash using the helper script
-./docker/run-vcfstash.sh <command> <options>
-
-# With custom directories
-DATA_DIR=/path/to/data CACHE_DIR=/path/to/cache \
-  ./docker/run-vcfstash.sh <command> <options>
-```
-
-### Volume Mounting
-
-When using Docker with VCFstash, mount volumes for:
-
-1. **Input/output data**: Contains input VCF files and output directories
-2. **Cache directory**: Stores the VCFstash cache
-
-#### Example with Explicit Volume Mounts
-
-```bash
-docker run --rm \
-  -v /path/to/data:/data \
-  -v /path/to/cache:/cache \
-  vcfstash stash-init \
-  --vcf /data/gnomad.vcf.gz \
-  --output /cache \
-  -y /data/params.yaml
-```
-
-#### Adjusting params.yaml for Docker
-
-When using Docker, update your `params.yaml` to use paths inside the container:
+**Structure**:
 
 ```yaml
-# params.yaml for Docker
-temp_dir: "/data/temp"
+## Required Resources (keys are fixed - don't rename)
+bcftools_cmd: "bcftools"                    # Path to bcftools binary
+annotation_tool_cmd: "vep"                  # Path to annotation tool
+tool_version_command: "vep --version"       # Command to get tool version
+chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"  # Chromosome renaming file
+temp_dir: "/tmp"                            # Temporary directory
+
+## Optional Resources (can be referenced in annotation.yaml as ${params.KEY})
+vep_buffer: 500000                          # VEP buffer size
+vep_forks: 8                                # VEP parallel processes
+vep_cache: "/path/to/vep/cache"            # VEP cache directory
+
+## Optional Checks (validated during annotation)
+optional_checks:
+  genome_build: "GRCh38"                   # Expected genome build
+  vep_cache_version: "115"                 # Expected VEP cache version
 ```
 
-### Complete Examples
+**Variable Substitution**:
+- `${VCFSTASH_ROOT}`: Package installation directory
+- Environment variables: `${HOME}`, `${USER}`, etc.
 
-#### Example 1: Initialize a Cache with Docker
+### 2. `annotation.yaml` - Annotation Command
 
-```bash
-# Create directories
-mkdir -p data cache
+**Purpose**: Define the exact command used to annotate variants. This file is **locked** after `stash-annotate` and stored with the cache to ensure reproducibility.
 
-# Copy files
-cp /path/to/gnomad.vcf.gz data/
-cp /path/to/params.yaml data/
-
-# Run stash-init
-./docker/run-vcfstash.sh stash-init \
-  --vcf /data/gnomad.vcf.gz \
-  --output /cache \
-  -y /data/params.yaml
-```
-
-#### Example 2: Annotate with Docker
-
-```bash
-# Create example_annotation.config
-cat > data/example_annotation.config << 'EOF'
-params {
-    annotation_cmd = """
-        ${params.annotation_tool_cmd} \
-        --offline \
-        --buffer_size ${params.vep_buffer} \
-        --fork ${params.vep_forks} \
-        --cache \
-        --dir_cache ${params.vep_cache} \
-        -i ${INPUT_BCF} \
-        -o ${OUTPUT_BCF} \
-        --format vcf \
-        --canonical
-    """
-    must_contain_info_tag = 'CSQ'
-}
-EOF
-
-# Run stash-annotate
-./docker/run-vcfstash.sh stash-annotate \
-  --name vep_gnomad \
-  -a /data/example_annotation.config \
-  --db /cache
-```
-
-#### Example 3: Annotate a Sample with Docker
-
-```bash
-# Copy sample VCF
-cp /path/to/sample.vcf.gz data/
-
-# Run annotate
-./docker/run-vcfstash.sh annotate \
-  -a /cache/stash/vep_gnomad \
-  --vcf /data/sample.vcf.gz \
-  --output /data/results \
-  -y /data/params.yaml
-```
-
-### Docker Compose Configuration
-
-You can customize the Docker Compose configuration by creating your own `docker-compose.yml` file:
+**Structure**:
 
 ```yaml
-version: '3.8'
+# Annotation command (uses pipes for streaming)
+annotation_cmd: |
+  ${params.bcftools_cmd} view ${INPUT_BCF} | \
+  ${params.annotation_tool_cmd} \
+    --offline \
+    --cache \
+    --dir_cache ${params.vep_cache} \
+    --buffer_size ${params.vep_buffer} \
+    --fork ${params.vep_forks} \
+    --format vcf \
+    --vcf \
+    -i STDIN \
+    -o STDOUT | \
+  ${params.bcftools_cmd} view -o ${OUTPUT_BCF} -Ob -W
 
-services:
-  vcfstash:
-    image: vcfstash
-    volumes:
-      - /path/to/data:/data
-      - /path/to/cache:/cache
-    command: --help
-```
+# Validation tag (must appear in output)
+must_contain_info_tag: CSQ
 
-### Parquet Output
+# Tool version check
+required_tool_version: "115.2"
 
-VCFstash supports converting the final BCF file to Parquet format for efficient querying with tools like DuckDB:
-
-```bash
-vcfstash annotate -a /path/to/cache/stash/my_annotation \
-    --vcf sample.vcf.gz \
-    --output results \
-    -y params.yaml \
-    --parquet
-```
-
-## Performance Optimization
-
-### Cache Size vs. Coverage Tradeoffs
-
-The size of your cache affects both storage requirements and annotation speed:
-
-| Allele Frequency | Approximate Size | Coverage | Use Case |
-|------------------|------------------|----------|----------|
-| 10% (0.1)        | Smallest         | Common variants only | Quick testing, limited storage |
-| 5% (0.05)        | Small            | Most common variants | Good balance for most uses |
-| 1% (0.01)        | Medium           | Many variants | Production use with adequate storage |
-| 0.1% (0.001)     | Large            | Most variants | Comprehensive coverage, requires significant storage |
-
-### Hardware Recommendations
-
-For optimal performance:
-
-1. **Storage**: Use SSD storage for the cache directory to maximize I/O performance
-2. **Memory**: Allocate at least 8GB RAM for basic usage, 16-32GB for large files
-3. **CPU**: Multi-core processors benefit annotation tools like VEP that support parallelization
-4. **Network**: If using shared storage, ensure high-bandwidth, low-latency connections
-
-### Parallelization Strategies
-
-1. **Tool-level parallelization**: Configure your annotation tool to use multiple threads
-   ```yaml
-   vep_forks: 8  # For VEP
-   ```
-
-2. **Nextflow parallelization**: Configure Nextflow to use multiple CPUs
-   ```groovy
-   process {
-       cpus = 8
-   }
-   ```
-
-3. **Sample-level parallelization**: Process multiple samples in parallel using a workflow manager
-
-## Testing & Validation
-
-VCFstash includes comprehensive tests to ensure reliability and correctness:
-
-```bash
-# Install development dependencies
-pip install -e ".[dev]"
-
-# Run all tests
-python -m pytest
-
-# Run specific test with increased verbosity
-python -m pytest -xvs tests/test_core.py
-```
-
-### Test Structure
-
-The test suite is organized into two modules:
-
-- `test_core.py`: Tests basic utility functions like MD5 calculation
-- `test_annotate.py`: Tests the annotate command and full workflow
-
-Each test prints information about which part of the code is being tested, making it easier to understand test coverage.
-
-### Test Implementation
-
-The tests are designed to run on any system after installation of the package, without requiring external annotation tools. They use:
-
-- `tests/config/test_params.yaml`: Configuration for the test annotation tool (bcftools)
-- `tests/config/test_annotation.config`: Configuration for the test annotation command
-
-The tests create temporary directories for output and clean up after themselves. They use bcftools (included in the package) to simulate annotations, making the tests portable and reliable.
-
-### Running Tests
-
-To run the tests:
-
-```bash
-# Run all tests
-python -m pytest
-
-# Run a specific test file
-python -m pytest tests/test_annotate.py
-
-# Run a specific test with increased verbosity
-python -m pytest -xvs tests/test_annotate.py::test_annotate_workflow
-```
-
-All tests should pass on any system where the package is installed, without requiring any external tools or configuration.
-
-## Troubleshooting
-
-### Common Issues and Solutions
-
-#### 1. Chromosome Mapping or Normalization Issues
-
-**Symptoms**: Errors about chromosome names or normalization failures
-
-**Solution**: 
-- Verify the `chr_add` path in params.yaml points to the expected rename file
-- Ensure the input VCF/BCF is indexed (`.csi` or `.tbi`)
-- Re-run with `--debug` to inspect intermediate logs for the bcftools normalization step
-
-#### 2. Annotation Tool Errors
-
-**Symptoms**: Annotation process fails with tool-specific errors
-
-**Solution**:
-- Check tool installation and dependencies
-- Verify tool version matches required_tool_version
-- Test the annotation command directly outside VCFstash
-
-#### 3. Cache Consistency Issues
-
-**Symptoms**: Errors about mismatched optional checks
-
-**Solution**:
-- Ensure params.yaml values match those used during cache creation
-- Check for changes in reference genome or tool versions
-- Recreate the cache if necessary
-
-#### 4. Performance Problems
-
-**Symptoms**: Slow annotation or high resource usage
-
-**Solution**:
-- Filter input data by allele frequency
-- Adjust CPU and memory allocation in Nextflow config
-- Use SSD storage for cache directory
-- Check for network bottlenecks if using shared storage
-
-### Logging and Debugging
-
-VCFstash provides detailed logging to help diagnose issues:
-
-1. **Increase verbosity**: Use `-v` or `-vv` for more detailed logs
-   ```bash
-   vcfstash -vv annotate -a /path/to/cache ...
-   ```
-
-2. **Debug mode**: Use `--debug` to keep intermediate files
-   ```bash
-   vcfstash --debug annotate -a /path/to/cache ...
-   ```
-
-3. **Log files**: Check log files in the output directory
-   - `vcfdb.log`: Main log file
-   - `*.bcf.log`: Process-specific logs
-
-4. **Nextflow reports**: Enable Nextflow reports for detailed execution information
-   ```bash
-   vcfstash annotate -a /path/to/cache ... --report --timeline --dag
-   ```
-
-## Annotation Tool Examples
-
-VCFstash works with any annotation tool that can process VCF files. This section provides examples for popular annotation tools.
-
-### VEP (Variant Effect Predictor)
-
-#### params.yaml
-```yaml
-## * REQUIRED RESOURCES *
-annotation_tool_cmd: "vep"
-tool_version_command: "vep | grep -oP \"ensembl-vep\\s+:\\s+\\K\\d+\\.\\d+\""
-bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
-temp_dir: "/tmp"
-
-## * OPTIONAL RESOURCES *
-vep_buffer: 500000
-vep_forks: 4
-vep_cache: "/path/to/vep_cache"
-
-## * OPTIONAL CHECKS *
+# Additional checks (locked with cache)
 optional_checks:
   vep_cache_version: "115"
+  genome_build: "GRCh38"
 ```
 
-#### annotation.config
-```
-params {
-    annotation_cmd = """
-        ${params.bcftools_cmd} view ${INPUT_BCF} | \
-        ${params.annotation_tool_cmd} \
-        --offline \
-        --buffer_size ${params.vep_buffer} \
-        --fork ${params.vep_forks} \
-        --cache \
-        --dir_cache ${params.vep_cache} \
-        -i stdin \
-        -o stdout \
-        --format vcf \
-        --canonical | \
-        ${params.bcftools_cmd} view -o ${OUTPUT_BCF} -Ob --write-index
-    """
+**Special Variables** (automatically replaced during execution):
+- `${INPUT_BCF}`: Path to input BCF file
+- `${OUTPUT_BCF}`: Path to output BCF file
+- `${AUXILIARY_DIR}`: Directory for temporary/auxiliary files
+- `${params.*}`: Any key from params.yaml (e.g., `${params.vep_buffer}`)
 
-    must_contain_info_tag = 'CSQ'
-    required_tool_version = '115.2'
-}
+---
 
-optional_checks {
-    vep_cache_version = '115'
-}
+## Deployment Modes
+
+### Mode 1: Vanilla (From Source)
+
+**Best for**: Development, testing, custom workflows
+
+**Setup**:
+```bash
+git clone https://github.com/julius-muller/vcfstash.git
+cd vcfstash
+uv venv .venv && source .venv/bin/activate
+uv pip install -e ".[dev]"
 ```
 
-### ANNOVAR
+**Requirements**:
+- Python 3.13+
+- bcftools 1.20+
+- tabix
+- Annotation tool (VEP, etc.) - optional
 
-#### params.yaml
+**Tests**:
+```bash
+python -m pytest tests/ -v
+```
+
+---
+
+### Mode 2: Blueprint Docker
+
+**Best for**: Building custom caches, testing workflows
+
+**Pull Image**:
+```bash
+docker pull ghcr.io/julius-muller/vcfstash-blueprint:latest
+```
+
+**Create Cache**:
+```bash
+docker run --rm \
+  -v $(pwd)/data:/data \
+  -v $(pwd)/cache:/cache \
+  ghcr.io/julius-muller/vcfstash-blueprint:latest \
+  stash-init \
+    --vcf /data/gnomad_subset.bcf \
+    --output /cache \
+    -y /app/recipes/docker-cache/params.yaml
+```
+
+**Annotate Cache** (mock bcftools annotation):
+```bash
+docker run --rm \
+  -v $(pwd)/cache:/cache \
+  ghcr.io/julius-muller/vcfstash-blueprint:latest \
+  stash-annotate \
+    --name my_annotation \
+    --db /cache \
+    -a /app/recipes/docker-cache/annotation.yaml \
+    -y /app/recipes/docker-cache/params.yaml
+```
+
+**Tests** (no VEP required):
+```bash
+docker run --rm \
+  --entrypoint /bin/sh \
+  ghcr.io/julius-muller/vcfstash-blueprint:latest \
+  -c 'cd /app && python3.13 -m pytest tests/ -v'
+```
+
+---
+
+### Mode 3: Annotated Docker (Production)
+
+**Best for**: Production annotation, reproducible research
+
+**Pull Image**:
+```bash
+docker pull ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af010-vep115-py
+```
+
+**Annotate Samples**:
+```bash
+docker run --rm \
+  -v $(pwd)/samples:/data \
+  -v $(pwd)/results:/output \
+  ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af010-vep115-py \
+  annotate \
+    -a /cache/db/stash/vep_gnomad \
+    --vcf /data/sample.vcf.gz \
+    --output /output \
+    -y /app/recipes/docker-annotated/params.yaml
+```
+
+**Cache Details**:
+- **gnomAD v4.1** GRCh38
+- **Joint exomes + genomes**
+- **AF ≥ 1%** (~10 million variants)
+- **VEP 115** with HGVS, SIFT, PolyPhen, transcript info
+
+**Tests** (requires VEP cache mounted):
+```bash
+docker run --rm \
+  -v /path/to/vep/cache:/opt/vep/.vep:ro \
+  --entrypoint /bin/sh \
+  ghcr.io/julius-muller/vcfstash-annotated:latest \
+  -c 'cd /app && python3.13 -m pytest tests/ -v'
+```
+
+---
+
+## Building Caches
+
+### Preparing gnomAD Data
+
+```bash
+# Download gnomAD v4.1 (example: chr1 only)
+wget https://gnomad-public-us-east-1.s3.amazonaws.com/release/4.1/vcf/genomes/gnomad.genomes.v4.1.sites.chr1.vcf.bgz
+
+# Filter by allele frequency (optional but recommended)
+bcftools view -i 'AF>=0.01' \
+  gnomad.genomes.v4.1.sites.chr1.vcf.bgz \
+  -Ob -o gnomad_chr1_af0.01.bcf -W
+
+# The index (.csi) is created automatically with -W flag
+```
+
+### Creating a Cache (Vanilla)
+
+```bash
+# 1. Initialize blueprint
+vcfstash stash-init \
+  --vcf gnomad_chr1_af0.01.bcf \
+  --output ./my_cache \
+  --normalize \
+  -y params.yaml
+
+# 2. Annotate blueprint
+vcfstash stash-annotate \
+  --name vep_gnomad \
+  --db ./my_cache \
+  -a annotation.yaml \
+  -y params.yaml
+
+# 3. Verify cache
+ls -lh ./my_cache/stash/vep_gnomad/
+bcftools stats ./my_cache/stash/vep_gnomad/vcfstash_annotated.bcf | grep "number of records"
+```
+
+### Creating a Cache (Docker)
+
+```bash
+# Build blueprint Docker image with your gnomAD data
+./scripts/local-build/03-build-blueprint.sh gnomad_af0.01.bcf --push
+
+# Build annotated Docker image with VEP
+./scripts/local-build/04a-build-base-image.sh gnomad_af0.01.bcf --yes
+./scripts/local-build/04b-annotate-and-commit.sh \
+  --base-image <image-from-04a> \
+  --vep-cache-dir /path/to/vep/cache \
+  --yes
+```
+
+---
+
+## Annotation Tools
+
+### VEP (Ensembl Variant Effect Predictor)
+
+**params.yaml**:
 ```yaml
-## * REQUIRED RESOURCES *
-annotation_tool_cmd: "/path/to/annovar/table_annovar.pl"
-tool_version_command: "/path/to/annovar/table_annovar.pl | grep -oP 'Version: \\K[\\d\\.]+''"
-bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
-temp_dir: "/tmp"
-
-## * OPTIONAL RESOURCES *
-annovar_db: "/path/to/annovar/humandb"
-annovar_buildver: "hg38"
-annovar_protocol: "refGene,clinvar_20220320,gnomad211_genome"
-annovar_operation: "g,f,f"
-
-## * OPTIONAL CHECKS *
-optional_checks:
-  annovar_buildver: "hg38"
+annotation_tool_cmd: "vep"
+tool_version_command: "vep --version | head -1"
+vep_buffer: 500000
+vep_forks: 8
+vep_cache: "/path/to/vep/cache"
 ```
 
-#### annotation.config
-```
-params {
-    annotation_cmd = """
-        # Convert BCF to VCF for ANNOVAR
-        ${params.bcftools_cmd} view ${INPUT_BCF} -Ov -o ${AUXILIARY_DIR}/input.vcf
+**annotation.yaml**:
+```yaml
+annotation_cmd: |
+  ${params.bcftools_cmd} view ${INPUT_BCF} | \
+  ${params.annotation_tool_cmd} \
+    --offline \
+    --cache \
+    --dir_cache ${params.vep_cache} \
+    --buffer_size ${params.vep_buffer} \
+    --fork ${params.vep_forks} \
+    --format vcf \
+    --vcf \
+    -i STDIN \
+    -o STDOUT \
+    --hgvs \
+    --symbol \
+    --canonical \
+    --sift b \
+    --polyphen b | \
+  ${params.bcftools_cmd} view -o ${OUTPUT_BCF} -Ob -W
 
-        # Run ANNOVAR
-        ${params.annotation_tool_cmd} \
-        ${AUXILIARY_DIR}/input.vcf \
-        ${params.annovar_db} \
-        -buildver ${params.annovar_buildver} \
-        -out ${AUXILIARY_DIR}/output \
-        -remove \
-        -protocol ${params.annovar_protocol} \
-        -operation ${params.annovar_operation} \
-        -nastring . \
-        -vcfinput
-
-        # Convert back to BCF
-        ${params.bcftools_cmd} view ${AUXILIARY_DIR}/output.${params.annovar_buildver}_multianno.vcf \
-        -Ob -o ${OUTPUT_BCF} --write-index
-    """
-
-    must_contain_info_tag = 'ANNOVAR_DATE'
-    required_tool_version = '2020-06-08'
-}
-
-optional_checks {
-    annovar_buildver = 'hg38'
-}
+must_contain_info_tag: CSQ
+required_tool_version: "115"
 ```
 
 ### SnpEff
 
-#### params.yaml
+**params.yaml**:
 ```yaml
-## * REQUIRED RESOURCES *
 annotation_tool_cmd: "snpEff"
-tool_version_command: "snpEff -version | grep -oP 'SnpEff \\K[\\d\\.]+''"
-bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
-temp_dir: "/tmp"
-
-## * OPTIONAL RESOURCES *
-snpeff_datadir: "/path/to/snpeff/data"
-snpeff_genome: "GRCh38.105"
-snpeff_config: "/path/to/snpeff/snpEff.config"
-
-## * OPTIONAL CHECKS *
-optional_checks:
-  snpeff_genome: "GRCh38.105"
+tool_version_command: "snpEff -version 2>&1 | head -1"
+snpeff_db: "GRCh38.99"
 ```
 
-#### annotation.config
-```
-params {
-    annotation_cmd = """
-        ${params.annotation_tool_cmd} \
-        -dataDir ${params.snpeff_datadir} \
-        -config ${params.snpeff_config} \
-        -nodownload \
-        -v \
-        ${params.snpeff_genome} \
-        ${INPUT_BCF} | \
-        ${params.bcftools_cmd} view -o ${OUTPUT_BCF} -Ob --write-index
-    """
-
-    must_contain_info_tag = 'ANN'
-    required_tool_version = '5.1'
-}
-
-optional_checks {
-    snpeff_genome = 'GRCh38.105'
-}
-```
-
-### Custom Script Example
-
-This example shows how to use a custom Python script for annotation:
-
-#### params.yaml
+**annotation.yaml**:
 ```yaml
-## * REQUIRED RESOURCES *
-annotation_tool_cmd: "python3 /path/to/custom_annotator.py"
-tool_version_command: "python3 /path/to/custom_annotator.py --version"
-bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
-temp_dir: "/tmp"
+annotation_cmd: |
+  ${params.bcftools_cmd} view ${INPUT_BCF} | \
+  ${params.annotation_tool_cmd} \
+    -noStats \
+    ${params.snpeff_db} \
+    /dev/stdin | \
+  ${params.bcftools_cmd} view -o ${OUTPUT_BCF} -Ob -W
 
-## * OPTIONAL RESOURCES *
-custom_db: "/path/to/custom/database.db"
-custom_threads: 4
-
-## * OPTIONAL CHECKS *
-optional_checks:
-  custom_db_version: "1.2.3"
+must_contain_info_tag: ANN
 ```
 
-#### annotation.config
-```
-params {
-    annotation_cmd = """
-        ${params.annotation_tool_cmd} \
-        --input ${INPUT_BCF} \
-        --output ${OUTPUT_BCF} \
-        --database ${params.custom_db} \
-        --threads ${params.custom_threads} \
-        --write-index
-    """
+### ANNOVAR
 
-    must_contain_info_tag = 'CUSTOM_ANNO'
-    required_tool_version = '1.0.0'
-}
-
-optional_checks {
-    custom_db_version = '1.2.3'
-}
-```
-
-### Minimal Example
-
-Here's a minimal example that adds a simple annotation using bcftools:
-
-#### params.yaml
+**params.yaml**:
 ```yaml
-## * REQUIRED RESOURCES *
-annotation_tool_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-tool_version_command: "${VCFSTASH_ROOT}/tools/bcftools --version-only"
-bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
-temp_dir: "/tmp"
+annotation_tool_cmd: "table_annovar.pl"
+annovar_db: "/path/to/annovar/humandb"
+annovar_protocol: "refGene,gnomad41_genome"
+annovar_operation: "g,f"
+```
 
-## * OPTIONAL RESOURCES *
-annotation_file: "/path/to/annotations.vcf.gz"
+**annotation.yaml**:
+```yaml
+annotation_cmd: |
+  ${params.bcftools_cmd} view ${INPUT_BCF} > ${AUXILIARY_DIR}/input.vcf && \
+  ${params.annotation_tool_cmd} \
+    ${AUXILIARY_DIR}/input.vcf \
+    ${params.annovar_db} \
+    -buildver hg38 \
+    -out ${AUXILIARY_DIR}/output \
+    -remove \
+    -protocol ${params.annovar_protocol} \
+    -operation ${params.annovar_operation} \
+    -vcfinput && \
+  ${params.bcftools_cmd} view -o ${OUTPUT_BCF} -Ob -W \
+    ${AUXILIARY_DIR}/output.hg38_multianno.vcf
 
-## * OPTIONAL CHECKS *
+must_contain_info_tag: Func.refGene
+```
+
+---
+
+## Performance Optimization
+
+### Cache Hit Rates
+
+Typical hit rates with gnomAD AF ≥ 1% cache:
+
+| Sample Source | Cache Hits | Speedup |
+|---------------|------------|---------|
+| PopGen (WGS) | 85-95% | 8-15x |
+| Clinical Exome | 60-80% | 3-5x |
+| Rare Disease | 40-60% | 2-3x |
+| De novo calls | 10-30% | 1.2-1.5x |
+
+### Optimizing Cache Size vs. Hit Rate
+
+AF threshold trade-offs:
+
+| gnomAD AF | Cache Size | Variants | Typical Hit Rate |
+|-----------|------------|----------|------------------|
+| ≥ 10% | ~500MB | ~1M | 50-70% |
+| ≥ 5% | ~1.5GB | ~3M | 65-80% |
+| ≥ 1% | ~5GB | ~10M | 75-90% |
+| ≥ 0.1% | ~20GB | ~50M | 85-95% |
+
+**Recommendation**: Start with AF ≥ 1% (good balance of size vs. performance).
+
+### Parallelization
+
+**VEP forks**:
+```yaml
+vep_forks: 8  # Use number of CPU cores available
+```
+
+**bcftools threads** (not yet supported in all commands):
+```yaml
+bcftools_threads: 4
+```
+
+### Disk I/O Optimization
+
+- Store cache on **fast SSD** for best performance
+- Use **local cache** rather than network-mounted storage
+- Enable **bcftools index caching** with `-W` flag (writes index alongside BCF)
+
+---
+
+## Testing & Validation
+
+### Unit Tests
+
+```bash
+# Run all tests
+python -m pytest tests/ -v
+
+# Run specific test file
+python -m pytest tests/test_annotate.py -xvs
+
+# Run with coverage
+python -m pytest tests/ --cov=vcfstash --cov-report=html
+```
+
+### Docker Tests
+
+**Blueprint image**:
+```bash
+docker run --rm \
+  --entrypoint /bin/sh \
+  ghcr.io/julius-muller/vcfstash-blueprint:latest \
+  -c 'cd /app && python3.13 -m pytest tests/ -v'
+```
+
+**Annotated image** (requires VEP cache):
+```bash
+docker run --rm \
+  -v /path/to/vep/cache:/opt/vep/.vep:ro \
+  --entrypoint /bin/sh \
+  ghcr.io/julius-muller/vcfstash-annotated:latest \
+  -c 'cd /app && python3.13 -m pytest tests/ -v'
+```
+
+### Validating Annotations
+
+```bash
+# Check that annotations were applied
+bcftools view -h annotated_sample_vst.bcf | grep "##INFO=<ID=CSQ"
+
+# Count annotated variants
+bcftools query -f '%INFO/CSQ\n' annotated_sample_vst.bcf | grep -v "^\.$" | wc -l
+
+# Compare with direct annotation (should be identical)
+diff <(bcftools view -H direct_annotated.vcf | cut -f1-8) \
+     <(bcftools view -H cached_annotated_vst.vcf | cut -f1-8)
+```
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+#### 1. "Failed to check bcftools version"
+
+**Cause**: bcftools not in PATH or GLIBC incompatibility
+
+**Solution**:
+```bash
+# Check bcftools version
+bcftools --version
+
+# For Docker images, ensure you're using compatible base
+# Annotated images use bcftools 1.22 compiled with GLIBC 2.35 compat
+```
+
+#### 2. "Cache directory /opt/vep/.vep/homo_sapiens not found"
+
+**Cause**: VEP cache not mounted or not at expected location
+
+**Solution**:
+```bash
+# Mount VEP cache when running annotated Docker images
+docker run --rm \
+  -v /path/to/vep/cache:/opt/vep/.vep:ro \
+  ...
+```
+
+#### 3. "must_contain_info_tag 'CSQ' not found in output"
+
+**Cause**: Annotation command failed or didn't add expected tag
+
+**Solution**:
+- Check annotation command in `annotation.yaml`
+- Verify annotation tool is working: `vep --help`
+- Check `work/` directory logs for error messages
+- Test annotation command manually
+
+#### 4. "MD5 mismatch: input file has changed"
+
+**Cause**: Input VCF was modified after being added to cache
+
+**Solution**:
+- Use `--force` flag to override (not recommended)
+- Regenerate cache from scratch if source data changed
+
+#### 5. "No variants in cache overlap with sample"
+
+**Cause**: Different chromosome naming (chr1 vs. 1) or different genome build
+
+**Solution**:
+- Use `--normalize` flag during `stash-init` to standardize chromosome names
+- Verify genome build matches between cache and sample
+
+---
+
+## Docker Best Practices
+
+### Volume Mounts
+
+```bash
+# Best practice: use absolute paths
+docker run --rm \
+  -v /absolute/path/to/data:/data \
+  -v /absolute/path/to/results:/output \
+  vcfstash-image ...
+
+# Avoid relative paths (can be ambiguous)
+```
+
+### Resource Limits
+
+```bash
+# Limit memory and CPUs
+docker run --rm \
+  --memory=16g \
+  --cpus=8 \
+  vcfstash-image ...
+```
+
+### Image Tags
+
+```bash
+# Use specific tags for reproducibility
+docker pull ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af010-vep115-py
+
+# Avoid :latest in production
+```
+
+### Cleanup
+
+```bash
+# Remove stopped containers
+docker container prune
+
+# Remove unused images
+docker image prune
+
+# Remove all unused data
+docker system prune -a
+```
+
+---
+
+## Advanced Topics
+
+### Multi-Sample Annotation
+
+```bash
+# Annotate multiple samples in parallel
+for sample in samples/*.vcf.gz; do
+  docker run --rm \
+    -v $(pwd):/work \
+    vcfstash-annotated:latest \
+    annotate \
+      -a /cache/db/stash/vep_gnomad \
+      --vcf /work/$sample \
+      --output /work/results &
+done
+wait
+```
+
+### Custom Chromosome Sets
+
+**chr_add.txt** (for renaming chromosomes):
+```
+1 chr1
+2 chr2
+...
+X chrX
+Y chrY
+MT chrM
+```
+
+### Cache Versioning
+
+Store `optional_checks` in params.yaml to track cache versions:
+
+```yaml
 optional_checks:
-  annotation_file_version: "1.0"
+  genome_build: "GRCh38"
+  vep_cache_version: "115"
+  gnomad_version: "4.1"
+  cache_created: "2025-12-04"
 ```
 
-#### annotation.config
-```
-params {
-    annotation_cmd = """
-        ${params.annotation_tool_cmd} annotate \
-        -a ${params.annotation_file} \
-        -c INFO \
-        ${INPUT_BCF} \
-        -Ob -o ${OUTPUT_BCF} --write-index
-    """
+These are validated during annotation to prevent version mismatches.
 
-    must_contain_info_tag = 'AF'
-    required_tool_version = '1.20'
-}
+---
 
-optional_checks {
-    annotation_file_version = '1.0'
-}
-```
+## Getting Help
+
+- **GitHub Issues**: https://github.com/julius-muller/vcfstash/issues
+- **Documentation**: See [README.md](README.md) and [CLAUDE.md](CLAUDE.md)
+- **Tests**: Run `python -m pytest tests/ -v` to see example workflows
+
+---
+
+**Last Updated**: 2025-12-04

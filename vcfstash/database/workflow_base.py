@@ -14,7 +14,7 @@ import subprocess
 class WorkflowBase(ABC):
     """Abstract base class for workflow execution backends.
 
-    All workflow implementations (NextflowWorkflow, WorkflowManager) must
+    All workflow implementations (WorkflowManager) must
     inherit from this class and implement the required methods.
 
     Attributes:

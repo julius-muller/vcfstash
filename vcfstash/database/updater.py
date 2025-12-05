@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from vcfstash.database.base import NextflowWorkflow, VCFDatabase
+from vcfstash.database.base import VCFDatabase
 from vcfstash.utils.validation import check_duplicate_md5, compute_md5, get_bcf_stats
 
 
@@ -40,7 +40,6 @@ class DatabaseUpdater(VCFDatabase):
         verbosity: int = 0,
         debug: bool = False,
         normalize: bool = False,
-        use_nextflow: bool = False,
     ):
         super().__init__(Path(db_path), verbosity, debug, bcftools_path)
         self.stashed_output.validate_structure()
@@ -70,10 +69,9 @@ class DatabaseUpdater(VCFDatabase):
             wfini = self.workflow_dir / "init.yaml"
             self.params_file = wfini if wfini.exists() else None
 
-        # Initialize workflow backend (pure Python by default, Nextflow if --nf flag)
+        # Initialize workflow backend (pure Python)
         from vcfstash.database.base import create_workflow
         self.nx_workflow = create_workflow(
-            use_nextflow=use_nextflow,
             input_file=self.input_file,
             output_dir=self.blueprint_dir,
             name=f"add_{self.input_md5}",

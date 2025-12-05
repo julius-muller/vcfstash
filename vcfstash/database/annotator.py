@@ -16,7 +16,7 @@ from typing import Optional, Union
 
 import pysam
 
-from vcfstash.database.base import NextflowWorkflow, VCFDatabase
+from vcfstash.database.base import VCFDatabase
 from vcfstash.database.outputs import AnnotatedStashOutput, AnnotatedUserOutput
 from vcfstash.utils.logging import setup_logging
 
@@ -38,7 +38,7 @@ class DatabaseAnnotator(VCFDatabase):
         info_snapshot_file (Path): Path for storing snapshot information about the blueprint in use.
         anno_config_file (Path): Preprocessed annotation configuration file path.
         params_file (Path): Path to the annotation parameters YAML file.
-        nx_workflow (NextflowWorkflow): Object for managing the actual workflow.
+        nx_workflow (WorkflowManager): Object for managing the actual workflow.
 
     Methods:
         _preprocess_annotation_config(user_config: Path) -> Path
@@ -64,7 +64,6 @@ class DatabaseAnnotator(VCFDatabase):
         verbosity: int = 0,
         force: bool = False,
         debug: bool = False,
-        use_nextflow: bool = False,
     ):
         """Initialize database annotator.
 
@@ -118,10 +117,9 @@ class DatabaseAnnotator(VCFDatabase):
                 self.params_file.exists()
             ), f"Workflow params file not found: {self.params_file}"
 
-        # Initialize workflow backend (pure Python by default, Nextflow if --nf flag)
+        # Initialize workflow backend (pure Python)
         from vcfstash.database.base import create_workflow
         self.nx_workflow = create_workflow(
-            use_nextflow=use_nextflow,
             input_file=self.blueprint_bcf,
             output_dir=self.output_dir,
             name=self.annotation_name,
@@ -260,7 +258,7 @@ class VCFAnnotator(VCFDatabase):
         config_file (Optional[Path]): Path to the configuration file, if used.
         params_file (Path): Path to the parameters YAML file.
         logger (Logger): Logging instance for the class.
-        nx_workflow (NextflowWorkflow): Instance of the workflow manager.
+        nx_workflow (WorkflowManager): Instance of the workflow manager.
 
     Args:
         input_vcf (Path | str): Path to the input VCF/BCF file, which must be indexed.
@@ -308,7 +306,6 @@ class VCFAnnotator(VCFDatabase):
         verbosity: int = 0,
         force: bool = False,
         debug: bool = False,
-        use_nextflow: bool = False,
     ):
         """Initialize database annotator.
 
@@ -400,10 +397,9 @@ class VCFAnnotator(VCFDatabase):
         if not self.stash_file.exists():
             raise FileNotFoundError(f"Stash file not found: {self.stash_file}")
 
-        # Initialize workflow backend (pure Python by default, Nextflow if --nf flag)
+        # Initialize workflow backend (pure Python)
         from vcfstash.database.base import create_workflow
         self.nx_workflow = create_workflow(
-            use_nextflow=use_nextflow,
             input_file=self.input_vcf,
             output_dir=self.output_dir,
             name=self.annotation_name,

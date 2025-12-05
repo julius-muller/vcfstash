@@ -24,7 +24,7 @@ def test_module_imports(test_scenario):
     import vcfstash.utils.logging
 
     # Database classes
-    from vcfstash.database.base import VCFDatabase, NextflowWorkflow
+    from vcfstash.database.base import VCFDatabase
     from vcfstash.database.initializer import DatabaseInitializer
     from vcfstash.database.updater import DatabaseUpdater
     from vcfstash.database.annotator import DatabaseAnnotator, VCFAnnotator

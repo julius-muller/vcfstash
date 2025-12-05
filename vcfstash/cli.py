@@ -140,14 +140,6 @@ def main() -> None:
         required=False,
         help="Path to a nextflow yaml containing environment variables related to paths and resources",
     )
-    parent_parser.add_argument(
-        "--nf",
-        "--use-nextflow",
-        dest="use_nextflow",
-        action="store_true",
-        default=False,
-        help="Use legacy Nextflow backend (requires Java). Default is pure Python.",
-    )
 
     subparsers = parser.add_subparsers(
         dest="command", required=True, title="Available commands", metavar="command"
@@ -353,7 +345,6 @@ def main() -> None:
                 debug=args.debug,
                 bcftools_path=bcftools_path,
                 normalize=args.normalize,
-                use_nextflow=args.use_nextflow,
             )
             initializer.initialize()
 
@@ -368,7 +359,6 @@ def main() -> None:
                 debug=args.debug,
                 bcftools_path=bcftools_path,
                 normalize=args.normalize,
-                use_nextflow=args.use_nextflow,
             )
             updater.add()
 
@@ -385,7 +375,6 @@ def main() -> None:
                 force=args.force,
                 debug=args.debug,
                 bcftools_path=bcftools_path,
-                use_nextflow=args.use_nextflow,
             )
             annotator.annotate()
 
@@ -419,7 +408,6 @@ def main() -> None:
                 force=args.force,
                 debug=args.debug,
                 bcftools_path=bcftools_path,
-                use_nextflow=args.use_nextflow,
             )
 
             vcf_annotator.annotate(uncached=args.uncached, convert_parquet=args.parquet)

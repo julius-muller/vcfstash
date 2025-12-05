@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from vcfstash.database.base import NextflowWorkflow, VCFDatabase
+from vcfstash.database.base import VCFDatabase
 from vcfstash.utils.validation import compute_md5
 
 
@@ -39,7 +39,6 @@ class DatabaseInitializer(VCFDatabase):
         force: bool = False,
         debug: bool = False,
         normalize: bool = False,
-        use_nextflow: bool = False,
     ) -> None:
         """Initialize the database creator.
 
@@ -83,15 +82,13 @@ class DatabaseInitializer(VCFDatabase):
         self.config_yaml = self.workflow_dir / "init.yaml"
         shutil.copyfile(Path(params_file).expanduser().resolve(), self.config_yaml)
 
-        # Initialize workflow backend (pure Python by default, Nextflow if --nf flag)
+        # Initialize workflow backend (pure Python)
         if self.logger:
-            backend = "Nextflow" if use_nextflow else "pure Python"
-            self.logger.info(f"Initializing {backend} workflow...")
+            self.logger.info("Initializing pure Python workflow...")
         params_path = Path(params_file) if isinstance(params_file, str) else params_file
 
         from vcfstash.database.base import create_workflow
         self.nx_workflow = create_workflow(
-            use_nextflow=use_nextflow,
             input_file=self.input_file,
             output_dir=self.blueprint_dir,
             name="init",
