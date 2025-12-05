@@ -33,6 +33,7 @@ SKIP_TESTS=false
 SKIP_PUSH=false
 BUILD_AF010=true
 BUILD_AF001=true
+FORCE_BUILD=false
 
 # ============================================================================
 # Parse arguments
@@ -46,6 +47,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-push)
             SKIP_PUSH=true
+            shift
+            ;;
+        --force)
+            FORCE_BUILD=true
             shift
             ;;
         --af010-only)
@@ -62,6 +67,7 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  --skip-tests    Skip running tests after build"
             echo "  --skip-push     Skip pushing images to registry"
+            echo "  --force         Force rebuild even if images exist"
             echo "  --af010-only    Build only AF ≥ 0.10 images"
             echo "  --af001-only    Build only AF ≥ 0.01 images"
             echo "  -h, --help      Show this help message"
@@ -136,6 +142,11 @@ run_tests() {
     fi
 }
 
+image_exists() {
+    local image=$1
+    docker image inspect "$image" &>/dev/null
+}
+
 push_image() {
     local image=$1
     local description=$2
@@ -159,18 +170,34 @@ push_image() {
 build_af010() {
     log_info "Building AF ≥ 0.10 image set"
 
-    # 1. Build blueprint
-    log_step "Step 1/3: Building blueprint image"
-    if ! "$SCRIPT_DIR/03-build-blueprint.sh" \
-        "$GNOMAD_AF010" \
-        --host-network \
-        --genome GRCh38 \
-        --type joint; then
-        log_error "Failed to build blueprint image"
-        return 1
+    # Define expected image names (match what the scripts actually generate)
+    BLUEPRINT_IMAGE="ghcr.io/julius-muller/vcfstash-blueprint:gnomad-grch38-joint-af010"
+    BASE_IMAGE="ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af010-vep115-base"
+    ANNOTATED_IMAGE="ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af010-vep115"
+
+    # Check if images already exist
+    if [[ "$FORCE_BUILD" == "false" ]]; then
+        if image_exists "$ANNOTATED_IMAGE"; then
+            log_info "Annotated image already exists: $ANNOTATED_IMAGE"
+            log_info "Skipping build. Use --force to rebuild."
+            return 0
+        fi
     fi
 
-    BLUEPRINT_IMAGE="ghcr.io/julius-muller/vcfstash-blueprint:gnomad-v41-grch38-joint-af010"
+    # 1. Build blueprint
+    log_step "Step 1/3: Building blueprint image"
+    if [[ "$FORCE_BUILD" == "false" ]] && image_exists "$BLUEPRINT_IMAGE"; then
+        log_info "Blueprint image already exists, skipping build"
+    else
+        if ! "$SCRIPT_DIR/03-build-blueprint.sh" \
+            "$GNOMAD_AF010" \
+            --host-network \
+            --genome GRCh38 \
+            --type joint; then
+            log_error "Failed to build blueprint image"
+            return 1
+        fi
+    fi
 
     # Test blueprint
     if [[ "$SKIP_TESTS" == "false" ]]; then
@@ -184,27 +211,31 @@ build_af010() {
 
     # 2. Build base image
     log_step "Step 2/3: Building base annotated image"
-    if ! "$SCRIPT_DIR/04a-build-base-image.sh" \
-        "$GNOMAD_AF010" \
-        --host-network \
-        -y; then
-        log_error "Failed to build base annotated image"
-        return 1
+    if [[ "$FORCE_BUILD" == "false" ]] && image_exists "$BASE_IMAGE"; then
+        log_info "Base image already exists, skipping build"
+    else
+        if ! "$SCRIPT_DIR/04a-build-base-image.sh" \
+            "$GNOMAD_AF010" \
+            --host-network \
+            -y; then
+            log_error "Failed to build base annotated image"
+            return 1
+        fi
     fi
-
-    BASE_IMAGE="ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af010-vep115-base"
 
     # 3. Annotate with VEP and commit
     log_step "Step 3/3: Annotating with VEP"
-    if ! "$SCRIPT_DIR/04b-annotate-and-commit.sh" \
-        --base-image "$BASE_IMAGE" \
-        --vep-cache-dir "$VEP_CACHE_DIR" \
-        -y; then
-        log_error "Failed to annotate with VEP"
-        return 1
+    if [[ "$FORCE_BUILD" == "false" ]] && image_exists "$ANNOTATED_IMAGE"; then
+        log_info "Annotated image already exists, skipping annotation"
+    else
+        if ! "$SCRIPT_DIR/04b-annotate-and-commit.sh" \
+            --base-image "$BASE_IMAGE" \
+            --vep-cache-dir "$VEP_CACHE_DIR" \
+            -y; then
+            log_error "Failed to annotate with VEP"
+            return 1
+        fi
     fi
-
-    ANNOTATED_IMAGE="ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af010-vep115"
 
     # Test annotated image
     if [[ "$SKIP_TESTS" == "false" ]]; then
@@ -231,18 +262,34 @@ build_af010() {
 build_af001() {
     log_info "Building AF ≥ 0.01 image set"
 
-    # 1. Build blueprint
-    log_step "Step 1/3: Building blueprint image"
-    if ! "$SCRIPT_DIR/03-build-blueprint.sh" \
-        "$GNOMAD_AF001" \
-        --host-network \
-        --genome GRCh38 \
-        --type joint; then
-        log_error "Failed to build blueprint image"
-        return 1
+    # Define expected image names (match what the scripts actually generate)
+    BLUEPRINT_IMAGE="ghcr.io/julius-muller/vcfstash-blueprint:gnomad-grch38-joint-af001"
+    BASE_IMAGE="ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af001-vep115-base"
+    ANNOTATED_IMAGE="ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af001-vep115"
+
+    # Check if images already exist
+    if [[ "$FORCE_BUILD" == "false" ]]; then
+        if image_exists "$ANNOTATED_IMAGE"; then
+            log_info "Annotated image already exists: $ANNOTATED_IMAGE"
+            log_info "Skipping build. Use --force to rebuild."
+            return 0
+        fi
     fi
 
-    BLUEPRINT_IMAGE="ghcr.io/julius-muller/vcfstash-blueprint:gnomad-v41-grch38-joint-af001"
+    # 1. Build blueprint
+    log_step "Step 1/3: Building blueprint image"
+    if [[ "$FORCE_BUILD" == "false" ]] && image_exists "$BLUEPRINT_IMAGE"; then
+        log_info "Blueprint image already exists, skipping build"
+    else
+        if ! "$SCRIPT_DIR/03-build-blueprint.sh" \
+            "$GNOMAD_AF001" \
+            --host-network \
+            --genome GRCh38 \
+            --type joint; then
+            log_error "Failed to build blueprint image"
+            return 1
+        fi
+    fi
 
     # Test blueprint
     if [[ "$SKIP_TESTS" == "false" ]]; then
@@ -256,27 +303,31 @@ build_af001() {
 
     # 2. Build base image
     log_step "Step 2/3: Building base annotated image"
-    if ! "$SCRIPT_DIR/04a-build-base-image.sh" \
-        "$GNOMAD_AF001" \
-        --host-network \
-        -y; then
-        log_error "Failed to build base annotated image"
-        return 1
+    if [[ "$FORCE_BUILD" == "false" ]] && image_exists "$BASE_IMAGE"; then
+        log_info "Base image already exists, skipping build"
+    else
+        if ! "$SCRIPT_DIR/04a-build-base-image.sh" \
+            "$GNOMAD_AF001" \
+            --host-network \
+            -y; then
+            log_error "Failed to build base annotated image"
+            return 1
+        fi
     fi
-
-    BASE_IMAGE="ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af001-vep115-base"
 
     # 3. Annotate with VEP and commit
     log_step "Step 3/3: Annotating with VEP"
-    if ! "$SCRIPT_DIR/04b-annotate-and-commit.sh" \
-        --base-image "$BASE_IMAGE" \
-        --vep-cache-dir "$VEP_CACHE_DIR" \
-        -y; then
-        log_error "Failed to annotate with VEP"
-        return 1
+    if [[ "$FORCE_BUILD" == "false" ]] && image_exists "$ANNOTATED_IMAGE"; then
+        log_info "Annotated image already exists, skipping annotation"
+    else
+        if ! "$SCRIPT_DIR/04b-annotate-and-commit.sh" \
+            --base-image "$BASE_IMAGE" \
+            --vep-cache-dir "$VEP_CACHE_DIR" \
+            -y; then
+            log_error "Failed to annotate with VEP"
+            return 1
+        fi
     fi
-
-    ANNOTATED_IMAGE="ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af001-vep115"
 
     # Test annotated image
     if [[ "$SKIP_TESTS" == "false" ]]; then
@@ -301,6 +352,7 @@ main() {
     echo "Configuration:"
     echo "  - Skip tests: $SKIP_TESTS"
     echo "  - Skip push: $SKIP_PUSH"
+    echo "  - Force build: $FORCE_BUILD"
     echo "  - Build AF 0.10: $BUILD_AF010"
     echo "  - Build AF 0.01: $BUILD_AF001"
     echo ""
@@ -343,7 +395,7 @@ main() {
 
     if [[ "$BUILD_AF010" == "true" ]]; then
         echo "AF ≥ 0.10 (10%):"
-        echo "  Blueprint:  ghcr.io/julius-muller/vcfstash-blueprint:gnomad-v41-grch38-joint-af010"
+        echo "  Blueprint:  ghcr.io/julius-muller/vcfstash-blueprint:gnomad-grch38-joint-af010"
         echo "  Annotated:  ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af010-vep115"
         echo "  Latest:     ghcr.io/julius-muller/vcfstash-annotated:latest"
         echo ""
@@ -351,7 +403,7 @@ main() {
 
     if [[ "$BUILD_AF001" == "true" ]]; then
         echo "AF ≥ 0.01 (1%):"
-        echo "  Blueprint:  ghcr.io/julius-muller/vcfstash-blueprint:gnomad-v41-grch38-joint-af001"
+        echo "  Blueprint:  ghcr.io/julius-muller/vcfstash-blueprint:gnomad-grch38-joint-af001"
         echo "  Annotated:  ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af001-vep115"
         echo ""
     fi
@@ -359,7 +411,7 @@ main() {
     if [[ "$SKIP_PUSH" == "true" ]]; then
         echo "NOTE: Images were not pushed (--skip-push)"
         echo "To push manually:"
-        echo "  docker push ghcr.io/julius-muller/vcfstash-blueprint:gnomad-v41-grch38-joint-af010"
+        echo "  docker push ghcr.io/julius-muller/vcfstash-blueprint:gnomad-grch38-joint-af010"
         echo "  docker push ghcr.io/julius-muller/vcfstash-annotated:gnomad-v41-grch38-joint-af010-vep115"
         echo ""
     fi
