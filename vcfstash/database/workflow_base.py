@@ -36,10 +36,10 @@ class WorkflowBase(ABC):
 
     def __init__(
         self,
-        workflow: Path,
         input_file: Path,
         output_dir: Path,
         name: str,
+        workflow: Path | None = None,
         config_file: Optional[Path] = None,
         anno_config_file: Optional[Path] = None,
         params_file: Optional[Path] = None,
@@ -57,7 +57,11 @@ class WorkflowBase(ABC):
             params_file: Optional path to YAML parameters file
             verbosity: Verbosity level (0=quiet, 1=info, 2=debug)
         """
-        self.workflow_file = Path(workflow).expanduser()
+        if workflow is None:
+            # Pure Python backend doesn't need a workflow script; use a placeholder
+            self.workflow_file = Path(output_dir) / "workflow.stub"
+        else:
+            self.workflow_file = Path(workflow).expanduser()
         self.workflow_dir = self.workflow_file.parent
         self.input_file = Path(input_file).expanduser()
         self.output_dir = Path(output_dir).expanduser()

@@ -23,7 +23,9 @@ from vcfstash.utils.logging import setup_logging
 class BcftoolsCommand:
     """Helper class to execute and log bcftools commands."""
 
-    def __init__(self, cmd: str, logger, work_dir: Path, log_file: Optional[Path] = None):
+    def __init__(
+        self, cmd: str, logger, work_dir: Path, log_file: Optional[Path] = None
+    ):
         """Initialize a bcftools command.
 
         Args:
@@ -98,10 +100,10 @@ class WorkflowManager(WorkflowBase):
 
     def __init__(
         self,
-        workflow: Path,
         input_file: Path,
         output_dir: Path,
         name: str,
+        workflow: Path | None = None,
         config_file: Optional[Path] = None,
         anno_config_file: Optional[Path] = None,
         params_file: Optional[Path] = None,
@@ -144,7 +146,9 @@ class WorkflowManager(WorkflowBase):
             self.params_file = Path(params_file).expanduser().resolve()
             if not self.params_file.exists():
                 self.logger.error(f"Parameters file not found: {self.params_file}")
-                raise FileNotFoundError(f"Parameters file not found: {self.params_file}")
+                raise FileNotFoundError(
+                    f"Parameters file not found: {self.params_file}"
+                )
 
             # Load params with environment variable expansion
             params_content = self.params_file.read_text()
@@ -159,7 +163,9 @@ class WorkflowManager(WorkflowBase):
         if anno_config_file:
             self.nfa_config = Path(anno_config_file).expanduser().resolve()
             if not self.nfa_config.exists():
-                self.logger.error(f"Annotation config file not found: {self.nfa_config}")
+                self.logger.error(
+                    f"Annotation config file not found: {self.nfa_config}"
+                )
                 raise FileNotFoundError(
                     f"Annotation config file not found: {self.nfa_config}"
                 )
@@ -252,7 +258,9 @@ class WorkflowManager(WorkflowBase):
             if trace:
                 self._write_trace_file(db_mode, start_time, end_time)
 
-            self.logger.info(f"Workflow completed successfully in {(end_time - start_time).total_seconds():.1f}s")
+            self.logger.info(
+                f"Workflow completed successfully in {(end_time - start_time).total_seconds():.1f}s"
+            )
 
             return result
 
@@ -281,11 +289,11 @@ class WorkflowManager(WorkflowBase):
 
         input_bcf = self.input_file
         output_bcf = self.output_dir / "vcfstash.bcf"
-        bcftools = self.params_file_content['bcftools_cmd']
+        bcftools = self.params_file_content["bcftools_cmd"]
 
         if normalize:
             # Full normalization pipeline
-            chr_add = self.params_file_content['chr_add']
+            chr_add = self.params_file_content["chr_add"]
             self.logger.info("Applying full normalization with chromosome renaming")
 
             cmd = f"""{bcftools} view -G -Ou {input_bcf} | \\
@@ -303,7 +311,9 @@ class WorkflowManager(WorkflowBase):
 
         return BcftoolsCommand(cmd, self.logger, work_task).run()
 
-    def _run_stash_add(self, db_bcf: Path, normalize: bool) -> subprocess.CompletedProcess:
+    def _run_stash_add(
+        self, db_bcf: Path, normalize: bool
+    ) -> subprocess.CompletedProcess:
         """Add variants to existing blueprint.
 
         Args:
@@ -318,14 +328,14 @@ class WorkflowManager(WorkflowBase):
         work_task = self.work_dir / "stash-add"
         work_task.mkdir(parents=True, exist_ok=True)
 
-        bcftools = self.params_file_content['bcftools_cmd']
+        bcftools = self.params_file_content["bcftools_cmd"]
 
         # Step 1: Normalize/filter new input (same as stash-init)
         normalized = work_task / "normalized.bcf"
         input_bcf = self.input_file
 
         if normalize:
-            chr_add = self.params_file_content['chr_add']
+            chr_add = self.params_file_content["chr_add"]
             self.logger.info("Normalizing new input")
 
             norm_cmd = f"""{bcftools} view -G -Ou {input_bcf} | \\
@@ -346,7 +356,9 @@ class WorkflowManager(WorkflowBase):
         output_bcf = self.output_dir / "vcfstash.bcf"
         self.logger.info(f"Merging with existing blueprint: {db_bcf}")
 
-        merge_cmd = f"{bcftools} merge {db_bcf} {normalized} -o {output_bcf} -Ob --write-index"
+        merge_cmd = (
+            f"{bcftools} merge {db_bcf} {normalized} -o {output_bcf} -Ob --write-index"
+        )
 
         return BcftoolsCommand(merge_cmd, self.logger, work_task).run()
 
@@ -372,12 +384,12 @@ class WorkflowManager(WorkflowBase):
 
         # Substitute variables in annotation command
         anno_cmd = self._substitute_variables(
-            self.nfa_config_content['annotation_cmd'],
+            self.nfa_config_content["annotation_cmd"],
             extra_vars={
-                'INPUT_BCF': str(db_bcf),
-                'OUTPUT_BCF': str(output_bcf),
-                'AUXILIARY_DIR': str(aux_dir),
-            }
+                "INPUT_BCF": str(db_bcf),
+                "OUTPUT_BCF": str(output_bcf),
+                "AUXILIARY_DIR": str(aux_dir),
+            },
         )
 
         self.logger.info("Running annotation command on blueprint")
@@ -386,7 +398,7 @@ class WorkflowManager(WorkflowBase):
         result = BcftoolsCommand(anno_cmd, self.logger, work_task).run()
 
         # Validate output has required INFO tag
-        tag = self.nfa_config_content['must_contain_info_tag']
+        tag = self.nfa_config_content["must_contain_info_tag"]
         self._validate_info_tag(output_bcf, tag)
 
         self.logger.info(f"Annotation complete, cache created at: {output_bcf}")
@@ -413,19 +425,23 @@ class WorkflowManager(WorkflowBase):
 
         sample_name = self.input_file.stem
         input_bcf = self.input_file
-        bcftools = self.params_file_content['bcftools_cmd']
-        tag = self.nfa_config_content['must_contain_info_tag']
+        bcftools = self.params_file_content["bcftools_cmd"]
+        tag = self.nfa_config_content["must_contain_info_tag"]
 
         # Step 1: Add cache annotations
         self.logger.info("Step 1/4: Adding cache annotations")
         step1_bcf = work_task / f"{sample_name}_isecvst.bcf"
-        cmd1 = f"{bcftools} annotate -a {db_bcf} {input_bcf} -c INFO -o {step1_bcf} -Ob -W"
+        cmd1 = (
+            f"{bcftools} annotate -a {db_bcf} {input_bcf} -c INFO -o {step1_bcf} -Ob -W"
+        )
         BcftoolsCommand(cmd1, self.logger, work_task).run()
 
         # Step 2: Filter to get missing annotations
         self.logger.info("Step 2/4: Identifying variants missing from cache")
         step2_bcf = work_task / f"{sample_name}_isecvst_miss.bcf"
-        cmd2 = f"{bcftools} filter -i 'INFO/{tag}==\"\"' -Ob -o {step2_bcf} {step1_bcf} -W"
+        cmd2 = (
+            f"{bcftools} filter -i 'INFO/{tag}==\"\"' -Ob -o {step2_bcf} {step1_bcf} -W"
+        )
         BcftoolsCommand(cmd2, self.logger, work_task).run()
 
         # Count missing variants
@@ -435,7 +451,9 @@ class WorkflowManager(WorkflowBase):
             capture_output=True,
             text=True,
         )
-        missing_count = int(count_result.stdout.strip()) if count_result.returncode == 0 else 0
+        missing_count = (
+            int(count_result.stdout.strip()) if count_result.returncode == 0 else 0
+        )
         self.logger.info(f"Found {missing_count} variants not in cache")
 
         # Step 3: Annotate only missing variants
@@ -446,12 +464,12 @@ class WorkflowManager(WorkflowBase):
             aux_dir.mkdir(exist_ok=True)
 
             anno_cmd = self._substitute_variables(
-                self.nfa_config_content['annotation_cmd'],
+                self.nfa_config_content["annotation_cmd"],
                 extra_vars={
-                    'INPUT_BCF': str(step2_bcf),
-                    'OUTPUT_BCF': str(step3_bcf),
-                    'AUXILIARY_DIR': str(aux_dir),
-                }
+                    "INPUT_BCF": str(step2_bcf),
+                    "OUTPUT_BCF": str(step3_bcf),
+                    "AUXILIARY_DIR": str(aux_dir),
+                },
             )
             BcftoolsCommand(anno_cmd, self.logger, work_task).run()
         else:
@@ -495,25 +513,27 @@ class WorkflowManager(WorkflowBase):
         aux_dir.mkdir(exist_ok=True)
 
         anno_cmd = self._substitute_variables(
-            self.nfa_config_content['annotation_cmd'],
+            self.nfa_config_content["annotation_cmd"],
             extra_vars={
-                'INPUT_BCF': str(input_bcf),
-                'OUTPUT_BCF': str(output_bcf),
-                'AUXILIARY_DIR': str(aux_dir),
-            }
+                "INPUT_BCF": str(input_bcf),
+                "OUTPUT_BCF": str(output_bcf),
+                "AUXILIARY_DIR": str(aux_dir),
+            },
         )
 
         result = BcftoolsCommand(anno_cmd, self.logger, work_task).run()
 
         # Validate output
-        tag = self.nfa_config_content['must_contain_info_tag']
+        tag = self.nfa_config_content["must_contain_info_tag"]
         self._validate_info_tag(output_bcf, tag)
 
         self.logger.info(f"Direct annotation complete: {output_bcf}")
 
         return result
 
-    def _substitute_variables(self, text: str, extra_vars: Optional[Dict[str, str]] = None) -> str:
+    def _substitute_variables(
+        self, text: str, extra_vars: Optional[Dict[str, str]] = None
+    ) -> str:
         """Replace variables in command strings.
 
         Order of substitution:
@@ -534,7 +554,7 @@ class WorkflowManager(WorkflowBase):
         # 2. Params file variables
         if self.params_file_content:
             for key, value in self.params_file_content.items():
-                if key != 'optional_checks':
+                if key != "optional_checks":
                     text = text.replace(f"${{params.{key}}}", str(value))
 
         # 3. Special workflow variables
@@ -555,7 +575,7 @@ class WorkflowManager(WorkflowBase):
         Raises:
             RuntimeError: If tag is not found in header
         """
-        bcftools = self.params_file_content['bcftools_cmd']
+        bcftools = self.params_file_content["bcftools_cmd"]
 
         result = subprocess.run(
             f"{bcftools} view -h {bcf_path} | grep '##INFO=<ID={tag},'",
@@ -584,7 +604,7 @@ class WorkflowManager(WorkflowBase):
 
         duration = (end_time - start_time).total_seconds()
 
-        with open(trace_file, 'w') as f:
+        with open(trace_file, "w") as f:
             f.write(f"task_id\tname\tstatus\texit\tduration\n")
             f.write(f"1\t{mode}\tCOMPLETED\t0\t{duration:.1f}s\n")
 

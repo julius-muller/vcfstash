@@ -50,6 +50,14 @@ def create_workflow(**kwargs) -> WorkflowBase:
         ... )
     """
     from vcfstash.database.workflow_manager import WorkflowManager
+
+    # Ensure a placeholder workflow path exists for compatibility
+    if "workflow" not in kwargs or kwargs.get("workflow") is None:
+        output_dir = kwargs.get("output_dir")
+        if output_dir is None:
+            raise ValueError("output_dir is required to initialize workflow backend")
+        kwargs["workflow"] = Path(output_dir) / "workflow.stub"
+
     return WorkflowManager(**kwargs)
 
 
@@ -244,7 +252,6 @@ class VCFDatabase:
             # Use bcftools to extract chromosomes from the index
             cmd = [self.bcftools_path, "index", "--stats", str(vcf_index_file)]
             result = subprocess.run(cmd, capture_output=True, text=True)
-
 
             # Parse chromosomes from output
             for line in result.stdout.splitlines():

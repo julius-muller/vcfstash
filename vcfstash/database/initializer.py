@@ -56,7 +56,7 @@ class DatabaseInitializer(VCFDatabase):
             Path(output_dir) if isinstance(output_dir, str) else output_dir,
             verbosity,
             debug,
-            bcftools_path
+            bcftools_path,
         )
         self.normalize = normalize
         self._setup_stash(force=force)
@@ -88,6 +88,7 @@ class DatabaseInitializer(VCFDatabase):
         params_path = Path(params_file) if isinstance(params_file, str) else params_file
 
         from vcfstash.database.base import create_workflow
+
         self.nx_workflow = create_workflow(
             input_file=self.input_file,
             output_dir=self.blueprint_dir,
@@ -217,7 +218,11 @@ class DatabaseInitializer(VCFDatabase):
             # Pass the normalize parameter to the workflow
             nextflow_args = ["--normalize", str(self.normalize).lower()]
             self.nx_workflow.run(
-                db_mode="stash-init", nextflow_args=nextflow_args, trace=True, dag=True, report=True
+                db_mode="stash-init",
+                nextflow_args=nextflow_args,
+                trace=True,
+                dag=True,
+                report=True,
             )
             if self.logger:
                 self.logger.info("Workflow execution completed.")
