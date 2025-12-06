@@ -8,25 +8,28 @@ alias="GRCh38-af010-vep115.2_basic"
 work=/tmp/vcfstash_dummy_upload
 rm -rf "$work"
 mkdir -p "$work"
+export CACHE_DIR="$work/cache_$alias"
+export TAR_PATH="$work/${alias}.tar.gz"
 
 echo "[1/6] Create dummy cache"
 python - <<'PY'
+import os
 from pathlib import Path
 from tests.test_cli_alias_and_pull import make_dummy_cache
-tmp = Path("$work")
+
+tmp = Path(os.environ["CACHE_DIR"]).parent
 tmp.mkdir(parents=True, exist_ok=True)
-cache = make_dummy_cache(tmp, "$alias")
+cache = make_dummy_cache(tmp, os.environ["alias"])
 print(cache)
 PY
-
-cache_dir="$work/cache_$alias"
 
 echo "[2/6] Tar cache"
 tar_path="$work/${alias}.tar.gz"
 python - <<'PY'
+import os
 from pathlib import Path
 from vcfstash.utils.archive import tar_cache
-tar_cache(Path("$cache_dir"), Path("$tar_path"))
+tar_cache(Path(os.environ["CACHE_DIR"]), Path(os.environ["TAR_PATH"]))
 PY
 
 echo "[3/6] Upload to Zenodo (prod)"
@@ -37,7 +40,7 @@ from vcfstash.integrations import zenodo
 
 token = os.environ["ZENODO_TOKEN"]
 sandbox = os.environ.get("ZENODO_SANDBOX", "0") == "1"
-tar_path = Path("$tar_path")
+tar_path = Path(os.environ["TAR_PATH"])
 
 dep = zenodo.create_deposit(token, sandbox=sandbox)
 zenodo.upload_file(dep, tar_path, token, sandbox=sandbox)
@@ -53,7 +56,7 @@ from vcfstash.integrations import zenodo
 
 token = os.environ["ZENODO_TOKEN"]
 sandbox = os.environ.get("ZENODO_SANDBOX", "0") == "1"
-tar_path = Path("$tar_path")
+tar_path = Path(os.environ["TAR_PATH"])
 
 dep = zenodo.create_deposit(token, sandbox=sandbox)
 zenodo.upload_file(dep, tar_path, token, sandbox=sandbox)
@@ -65,7 +68,7 @@ PY)
 md5=$(python - <<'PY'
 from pathlib import Path
 from vcfstash.utils.archive import file_md5
-print(file_md5(Path("$tar_path")))
+print(file_md5(Path(os.environ["TAR_PATH"])))
 PY)
 
 echo "[4/6] Download to verify"
