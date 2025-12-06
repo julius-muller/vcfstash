@@ -28,6 +28,7 @@ python - <<'PY'
 import os
 from pathlib import Path
 from vcfstash.utils.archive import tar_cache
+
 tar_cache(Path(os.environ["CACHE_DIR"]), Path(os.environ["TAR_PATH"]))
 PY
 
@@ -36,31 +37,72 @@ python - <<'PY'
 import os
 from pathlib import Path
 from vcfstash.integrations import zenodo
+import requests
+
+metadata = {
+    "title": f"VCFstash dummy cache {os.environ['ALIAS']}",
+    "upload_type": "dataset",
+    "description": "Dummy cache generated for automated testing of VCFstash Zenodo upload pipeline.",
+    "creators": [{"name": "VCFstash Bot"}],
+}
 
 token = os.environ["ZENODO_TOKEN"]
 sandbox = os.environ.get("ZENODO_SANDBOX", "0") == "1"
+api_base = zenodo.ZENODO_SANDBOX_API if sandbox else zenodo.ZENODO_API
+
 tar_path = Path(os.environ["TAR_PATH"])
 
+# Create deposit
+print("Creating deposition...")
 dep = zenodo.create_deposit(token, sandbox=sandbox)
+
+# Set metadata
+print("Setting metadata...")
+requests.put(
+    f"{api_base}/deposit/depositions/{dep['id']}",
+    params={"access_token": token},
+    json={"metadata": metadata},
+    timeout=30,
+).raise_for_status()
+
+# Upload file
+print("Uploading tar...")
 zenodo.upload_file(dep, tar_path, token, sandbox=sandbox)
-if not sandbox:
-    dep = zenodo.publish_deposit(dep, token, sandbox=sandbox)
-print(dep.get("doi", "draft"), dep.get("id"))
+
+# Publish
+print("Publishing...")
+dep = zenodo.publish_deposit(dep, token, sandbox=sandbox)
+print(dep.get("doi", "draft"))
 PY
 
 doi=$(python - <<'PY'
 import os
 from pathlib import Path
 from vcfstash.integrations import zenodo
+import requests
+
+metadata = {
+    "title": f"VCFstash dummy cache {os.environ['ALIAS']}",
+    "upload_type": "dataset",
+    "description": "Dummy cache generated for automated testing of VCFstash Zenodo upload pipeline.",
+    "creators": [{"name": "VCFstash Bot"}],
+}
 
 token = os.environ["ZENODO_TOKEN"]
 sandbox = os.environ.get("ZENODO_SANDBOX", "0") == "1"
+api_base = zenodo.ZENODO_SANDBOX_API if sandbox else zenodo.ZENODO_API
+
 tar_path = Path(os.environ["TAR_PATH"])
 
 dep = zenodo.create_deposit(token, sandbox=sandbox)
+requests.put(
+    f"{api_base}/deposit/depositions/{dep['id']}",
+    params={"access_token": token},
+    json={"metadata": metadata},
+    timeout=30,
+).raise_for_status()
 zenodo.upload_file(dep, tar_path, token, sandbox=sandbox)
-if not sandbox:
-    dep = zenodo.publish_deposit(dep, token, sandbox=sandbox)
+dep = zenodo.publish_deposit(dep, token, sandbox=sandbox)
 print(dep.get("doi", "draft"))
 PY)
 
