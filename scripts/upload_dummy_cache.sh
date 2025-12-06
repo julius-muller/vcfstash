@@ -33,56 +33,15 @@ tar_cache(Path(os.environ["CACHE_DIR"]), Path(os.environ["TAR_PATH"]))
 PY
 
 echo "[3/6] Upload to Zenodo (prod)"
-python - <<'PY'
+DOI=$(python - <<'PY'
 import os
 from pathlib import Path
-from vcfstash.integrations import zenodo
 import requests
-
-metadata = {
-    "title": f"VCFstash dummy cache {os.environ['ALIAS']}",
-    "upload_type": "dataset",
-    "description": "Dummy cache generated for automated testing of VCFstash Zenodo upload pipeline.",
-    "creators": [{"name": "VCFstash Bot"}],
-}
-
-token = os.environ["ZENODO_TOKEN"]
-sandbox = os.environ.get("ZENODO_SANDBOX", "0") == "1"
-api_base = zenodo.ZENODO_SANDBOX_API if sandbox else zenodo.ZENODO_API
-
-tar_path = Path(os.environ["TAR_PATH"])
-
-# Create deposit
-print("Creating deposition...")
-dep = zenodo.create_deposit(token, sandbox=sandbox)
-
-# Set metadata
-print("Setting metadata...")
-requests.put(
-    f"{api_base}/deposit/depositions/{dep['id']}",
-    params={"access_token": token},
-    json={"metadata": metadata},
-    timeout=30,
-).raise_for_status()
-
-# Upload file
-print("Uploading tar...")
-zenodo.upload_file(dep, tar_path, token, sandbox=sandbox)
-
-# Publish
-print("Publishing...")
-dep = zenodo.publish_deposit(dep, token, sandbox=sandbox)
-print(dep.get("doi", "draft"))
-PY
-
-doi=$(python - <<'PY'
-import os
-from pathlib import Path
 from vcfstash.integrations import zenodo
-import requests
 
+alias = os.environ["ALIAS"]
 metadata = {
-    "title": f"VCFstash dummy cache {os.environ['ALIAS']}",
+    "title": f"VCFstash dummy cache {alias}",
     "upload_type": "dataset",
     "description": "Dummy cache generated for automated testing of VCFstash Zenodo upload pipeline.",
     "creators": [{"name": "VCFstash Bot"}],
@@ -102,14 +61,17 @@ requests.put(
     timeout=30,
 ).raise_for_status()
 zenodo.upload_file(dep, tar_path, token, sandbox=sandbox)
-dep = zenodo.publish_deposit(dep, token, sandbox=sandbox)
+if not sandbox:
+    dep = zenodo.publish_deposit(dep, token, sandbox=sandbox)
 print(dep.get("doi", "draft"))
 PY)
+
+echo "DOI: $DOI"
 
 md5=$(python - <<'PY'
 from pathlib import Path
 from vcfstash.utils.archive import file_md5
-print(file_md5(Path(os.environ["TAR_PATH"])))
+print(file_md5(Path("$TAR_PATH")))
 PY)
 
 echo "[4/6] Download to verify"
@@ -119,7 +81,7 @@ python - <<'PY'
 from pathlib import Path
 from vcfstash.integrations.zenodo import download_doi
 from vcfstash.utils.archive import extract_cache
-doi = "$doi"
+doi = "$DOI"
 tar_dest = Path("$dl_dir") / "cache.tar.gz"
 download_doi(doi, tar_dest)
 extracted = extract_cache(tar_dest, Path("$dl_dir"))
@@ -129,7 +91,7 @@ PY
 echo "[5/6] Manifest entry to add:"
 cat <<EOF2
 - alias: $ALIAS
-  doi: $doi
+  doi: $DOI
   genome: GRCh38
   af: "0.10"
   tool: vep115.2
