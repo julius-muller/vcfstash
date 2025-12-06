@@ -66,7 +66,8 @@ zenodo.upload_file(dep, tar_path, token, sandbox=sandbox)
 if not sandbox:
     dep = zenodo.publish_deposit(dep, token, sandbox=sandbox)
 print(dep.get("doi", "draft"))
-PY)
+PY
+)
 echo "DOI: $DOI"
 
 md5=$(python - "$TAR_PATH" <<'PY'
@@ -74,7 +75,8 @@ import sys
 from pathlib import Path
 from vcfstash.utils.archive import file_md5
 print(file_md5(Path(sys.argv[1])))
-PY)
+PY
+)
 
 echo "[4/6] Download to verify"
 mkdir -p "$DL_DIR"

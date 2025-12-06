@@ -1,10 +1,10 @@
 ---
 - alias: GRCh38-af010-vep115.2_basic
-  doi: 10.5281/zenodo.0000000
+  doi: 10.5281/zenodo.17843517
   genome: GRCh38
   af: "0.10"
   tool: vep115.2
   image_tag: vcfstash:vep115.2_basic
-  updated_at: 2025-01-01
-  md5: placeholder
+  updated_at: 2025-12-06
+  md5: 939f976bcb9a6aee4ced74741d6657a4
   annotation_yaml_md5: placeholder
