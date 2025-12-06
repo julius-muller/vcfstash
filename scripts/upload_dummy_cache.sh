@@ -4,12 +4,12 @@ set -euo pipefail
 : "${ZENODO_TOKEN:?Please export ZENODO_TOKEN (prod token)}"
 ZENODO_SANDBOX=${ZENODO_SANDBOX:-0}
 
-alias="GRCh38-af010-vep115.2_basic"
+ALIAS="GRCh38-af010-vep115.2_basic"
 work=/tmp/vcfstash_dummy_upload
 rm -rf "$work"
 mkdir -p "$work"
-export CACHE_DIR="$work/cache_$alias"
-export TAR_PATH="$work/${alias}.tar.gz"
+export CACHE_DIR="$work/cache_$ALIAS"
+export TAR_PATH="$work/${ALIAS}.tar.gz"
 
 echo "[1/6] Create dummy cache"
 python - <<'PY'
@@ -19,12 +19,11 @@ from tests.test_cli_alias_and_pull import make_dummy_cache
 
 tmp = Path(os.environ["CACHE_DIR"]).parent
 tmp.mkdir(parents=True, exist_ok=True)
-cache = make_dummy_cache(tmp, os.environ["alias"])
+cache = make_dummy_cache(tmp, os.environ["ALIAS"])
 print(cache)
 PY
 
 echo "[2/6] Tar cache"
-tar_path="$work/${alias}.tar.gz"
 python - <<'PY'
 import os
 from pathlib import Path
@@ -87,7 +86,7 @@ PY
 
 echo "[5/6] Manifest entry to add:"
 cat <<EOF2
-- alias: $alias
+- alias: $ALIAS
   doi: $doi
   genome: GRCh38
   af: "0.10"
