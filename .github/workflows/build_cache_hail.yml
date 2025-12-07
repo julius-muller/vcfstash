@@ -283,7 +283,7 @@ jobs:
             CACHE_NAME=${{ steps.defaults.outputs.cache_name }}
             BCF_FILE=docker/gnomad-data/${{ needs.export-gnomad.outputs.bcf-name }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/vcfstash-blueprint:${{ steps.image-tag.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/vcfstash-blueprint:latest
+            ghcr.io/${{ github.repository_owner }}/vcfcache-blueprint:${{ steps.image-tag.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/vcfcache-blueprint:latest
           cache-from: type=gha
           cache-to:   type=gha,mode=max

@@ -10,7 +10,7 @@ ENV PATH="/root/.local/bin:${PATH}"
 # Only copy what's needed for building
 WORKDIR /build
 COPY pyproject.toml README.md ./
-COPY vcfstash ./vcfstash/
+COPY vcfcache ./vcfcache/
 
 # Build the package (not in development mode)
 RUN uv venv /build/venv && \
@@ -38,13 +38,13 @@ RUN chmod +x /app/tools/bcftools
 
 # Set environment variables
 ENV PATH="/app/venv/bin:${PATH}"
-ENV VCFSTASH_ROOT="/app"
+ENV VCFCACHE_ROOT="/app"
 
 # Create the executable
-RUN echo '#!/bin/bash' > /usr/local/bin/vcfstash && \
-    echo 'source /app/venv/bin/activate' >> /usr/local/bin/vcfstash && \
-    echo 'python -m vcfstash.cli "$@"' >> /usr/local/bin/vcfstash && \
-    chmod +x /usr/local/bin/vcfstash
+RUN echo '#!/bin/bash' > /usr/local/bin/vcfcache && \
+    echo 'source /app/venv/bin/activate' >> /usr/local/bin/vcfcache && \
+    echo 'python -m vcfcache.cli "$@"' >> /usr/local/bin/vcfcache && \
+    chmod +x /usr/local/bin/vcfcache
 
-ENTRYPOINT ["/usr/local/bin/vcfstash"]
+ENTRYPOINT ["/usr/local/bin/vcfcache"]
 CMD ["--help"]

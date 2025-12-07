@@ -1,6 +1,6 @@
-# VCFstash Scripts
+# VCFcache Scripts
 
-This directory contains utility scripts for working with VCFstash.
+This directory contains utility scripts for working with VCFcache.
 
 ## export_gnomad_hail.py
 
@@ -92,26 +92,26 @@ python scripts/export_gnomad_hail.py \
 | 0.10         | all         | ~1,200,000      | ~240 MB      |
 | 0.01         | all         | ~20,000,000     | ~4 GB        |
 
-### Using with VCFstash
+### Using with VCFcache
 
 Once you have the BCF file, use it to build a cache:
 
 ```bash
 # Initialize cache
-vcfstash stash-init \
+vcfcache blueprint-init \
   --vcf gnomad_af0.10.bcf \
   --output /path/to/cache \
   -y params.yaml
 
 # Annotate the cache
-vcfstash stash-annotate \
+vcfcache cache-build \
   --name vep_gnomad \
   --db /path/to/cache \
   -a annotation.config
 
 # Use the cache to annotate samples
-vcfstash annotate \
-  -a /path/to/cache/stash/vep_gnomad \
+vcfcache annotate \
+  -a /path/to/cache/cache/vep_gnomad \
   --vcf sample.vcf.gz \
   --output results \
   -y params.yaml

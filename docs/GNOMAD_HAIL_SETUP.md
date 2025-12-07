@@ -1,10 +1,10 @@
 # gnomAD BCF Generation with Hail
 
-This document explains the smart caching system for gnomAD BCF files used by VCFstash.
+This document explains the smart caching system for gnomAD BCF files used by VCFcache.
 
 ## Overview
 
-VCFstash uses gnomAD data to pre-populate variant caches. Instead of downloading huge VCF files every time, we:
+VCFcache uses gnomAD data to pre-populate variant caches. Instead of downloading huge VCF files every time, we:
 
 1. **Query gnomAD directly** using Hail from the public bucket (no auth required!)
 2. **Use the joint WES+WGS dataset** for comprehensive coverage
@@ -63,7 +63,7 @@ Actions → Precompute gnomAD BCF → Run workflow
 1. Checks if pre-computed BCF exists in releases
 2. If yes → Downloads (~30 seconds)
 3. If no → Runs Hail query (~10-30 minutes)
-4. Builds Docker image with VCFstash + gnomAD cache
+4. Builds Docker image with VCFcache + gnomAD cache
 
 **Triggers:**
 - Manual: Custom configurations
@@ -100,11 +100,11 @@ python scripts/export_gnomad_hail.py \
 
 ```bash
 # Download from releases
-wget https://github.com/YOUR_USER/vcfstash/releases/download/gnomad-bcf-v4.1-af0.10-genome/gnomad_v4.1_GRCh38_af0.10.bcf
-wget https://github.com/YOUR_USER/vcfstash/releases/download/gnomad-bcf-v4.1-af0.10-genome/gnomad_v4.1_GRCh38_af0.10.bcf.csi
+wget https://github.com/YOUR_USER/vcfcache/releases/download/gnomad-bcf-v4.1-af0.10-genome/gnomad_v4.1_GRCh38_af0.10.bcf
+wget https://github.com/YOUR_USER/vcfcache/releases/download/gnomad-bcf-v4.1-af0.10-genome/gnomad_v4.1_GRCh38_af0.10.bcf.csi
 
-# Use with VCFstash
-vcfstash stash-init \
+# Use with VCFcache
+vcfcache blueprint-init \
   --vcf gnomad_v4.1_GRCh38_af0.10.bcf \
   --output /path/to/cache \
   -y params.yaml

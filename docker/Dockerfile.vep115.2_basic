@@ -3,7 +3,7 @@ FROM ensemblorg/ensembl-vep:release_115.2
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Python + bcftools for vcfstash CLI
+# Python + bcftools for vcfcache CLI
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.13 python3.13-venv python3.13-dev \
     bcftools tabix ca-certificates procps wget curl && \
@@ -17,7 +17,7 @@ RUN python3.13 -m venv /app/venv && \
     /app/venv/bin/pip install --no-cache-dir "uv" && \
     /app/venv/bin/uv pip install --python /app/venv/bin/python --verbose .[dev]
 
-COPY vcfstash ./vcfstash
+COPY vcfcache ./vcfcache
 COPY resources ./resources
 COPY tools ./tools
 COPY tests ./tests
@@ -33,11 +33,11 @@ RUN /app/venv/bin/uv pip install --python /app/venv/bin/python --no-deps -e .
 # Entry point
 RUN printf '%s\n' '#!/bin/sh' \
     'export PYTHONPATH=/app/venv/lib/python3.13/site-packages:$PYTHONPATH' \
-    'exec /app/venv/bin/python -m vcfstash.cli "$@"' > /usr/local/bin/vcfstash && chmod +x /usr/local/bin/vcfstash
+    'exec /app/venv/bin/python -m vcfcache.cli "$@"' > /usr/local/bin/vcfcache && chmod +x /usr/local/bin/vcfcache
 
 ENV PATH="/app/venv/bin:${PATH}" \
-    VCFSTASH_ROOT="/app"
+    VCFCACHE_ROOT="/app"
 
 WORKDIR /work
-ENTRYPOINT ["/usr/local/bin/vcfstash"]
+ENTRYPOINT ["/usr/local/bin/vcfcache"]
 CMD ["--help"]

@@ -17,7 +17,7 @@ set -euo pipefail
 #   --genome GENOME         Genome build (default: GRCh38)
 #   --type TYPE             Dataset type (default: joint)
 #   --vep-version VER       VEP version (default: 115.2)
-#   --annotation-name NAME  Annotation stash name (default: vep_gnomad)
+#   --annotation-name NAME  Annotation cache name (default: vep_gnomad)
 #   --tag TAG               Docker tag (default: auto-generated)
 #   --registry REGISTRY     Docker registry (default: ghcr.io/julius-muller)
 #   --no-cache              Build without using Docker cache
@@ -107,7 +107,7 @@ GENOME_LOWER=$(echo "${GENOME}" | tr '[:upper:]' '[:lower:]')
 CACHE_NAME="gnomad_${GENOME_LOWER}_${TYPE}_af${AF_CLEAN}"
 
 # Full image name (base image, not final)
-IMAGE_NAME="${REGISTRY}/vcfstash-annotated:${TAG}-base"
+IMAGE_NAME="${REGISTRY}/vcfcache-annotated:${TAG}-base"
 
 echo "==============================================================================="
 echo "Building Annotated Base Image (Pure Python - Docker only, NO annotation)"
@@ -134,8 +134,8 @@ else
   echo "Auto-confirming (--yes flag provided)"
 fi
 
-# Prepare build context on large disk (/mnt/data/vcfstash_data)
-BUILD_CONTEXT_DIR="/mnt/data/vcfstash_data/build-context"
+# Prepare build context on large disk (/mnt/data/vcfcache_data)
+BUILD_CONTEXT_DIR="/mnt/data/vcfcache_data/build-context"
 rm -rf "${BUILD_CONTEXT_DIR}"
 mkdir -p "${BUILD_CONTEXT_DIR}"
 

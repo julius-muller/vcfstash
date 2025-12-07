@@ -2,7 +2,7 @@
 # Do not change the key names in this section, as they are used in the code.
 
 # Mapping of chromosome names between the reference genome and the VCF file
-chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
+chr_add: "${VCFCACHE_ROOT}/resources/chr_add.txt"
 # Temporary directory for storing intermediate files
 temp_dir: "/tmp"
 # Tool paths and commands

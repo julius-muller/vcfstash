@@ -13,8 +13,8 @@ def run_cmd(cmd, cwd=None, env=None):
 
 
 @pytest.mark.skipif(
-    os.environ.get("VCFSTASH_RUN_INTEGRATION", "0") != "1",
-    reason="Integration test requires network and VCFSTASH_RUN_INTEGRATION=1",
+    os.environ.get("VCFCACHE_RUN_INTEGRATION", "0") != "1",
+    reason="Integration test requires network and VCFCACHE_RUN_INTEGRATION=1",
 )
 def test_full_integration_annotation():
     """
@@ -29,13 +29,13 @@ def test_full_integration_annotation():
     sample_vcf = Path(__file__).resolve().parent / "data" / "nodata" / "sample4.bcf"
     params = Path(__file__).resolve().parent / "config" / "test_params.yaml"
 
-    outdir = Path(tempfile.mkdtemp(prefix="vcfstash_integration_"))
+    outdir = Path(tempfile.mkdtemp(prefix="vcfcache_integration_"))
     home = outdir / "home"
     home.mkdir(parents=True, exist_ok=True)
 
     try:
         cmd = (
-            f"vcfstash annotate -a {alias} "
+            f"vcfcache annotate -a {alias} "
             f"--vcf {sample_vcf} "
             f"--output {outdir} "
             f"--manifest {manifest} "

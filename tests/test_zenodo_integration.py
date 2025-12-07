@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from vcfstash.integrations.zenodo import download_doi
+from vcfcache.integrations.zenodo import download_doi
 
 
 @pytest.mark.integration

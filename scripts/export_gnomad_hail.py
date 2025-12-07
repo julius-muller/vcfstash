@@ -24,7 +24,7 @@ def download_gcs_connector() -> str:
     Returns:
         Path to the GCS connector JAR file.
     """
-    jar_dir = Path.home() / ".vcfstash" / "jars"
+    jar_dir = Path.home() / ".vcfcache" / "jars"
     jar_dir.mkdir(parents=True, exist_ok=True)
 
     # Use version 2.2.30 (newer and more stable)

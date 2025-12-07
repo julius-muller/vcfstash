@@ -4,7 +4,7 @@ set -euo pipefail
 #===============================================================================
 # Build Blueprint Docker Image Locally
 #===============================================================================
-# This script builds the vcfstash-blueprint (lean) Docker image from a
+# This script builds the vcfcache-blueprint (lean) Docker image from a
 # pre-generated BCF file.
 #
 # Usage:
@@ -98,7 +98,7 @@ GENOME_LOWER=$(echo "${GENOME}" | tr '[:upper:]' '[:lower:]')
 CACHE_NAME="gnomad_${GENOME_LOWER}_${TYPE}_af${AF_CLEAN}"
 
 # Full image name
-IMAGE_NAME="${REGISTRY}/vcfstash-blueprint:${TAG}"
+IMAGE_NAME="${REGISTRY}/vcfcache-blueprint:${TAG}"
 
 echo "==============================================================================="
 echo "Building Blueprint Docker Image (Pure Python - No Nextflow/Java)"
@@ -114,8 +114,8 @@ echo "Push to GHCR:    ${PUSH}"
 echo "==============================================================================="
 echo ""
 
-# Prepare build context on large disk (/mnt/data/vcfstash_data)
-BUILD_CONTEXT_DIR="/mnt/data/vcfstash_data/build-context"
+# Prepare build context on large disk (/mnt/data/vcfcache_data)
+BUILD_CONTEXT_DIR="/mnt/data/vcfcache_data/build-context"
 rm -rf "${BUILD_CONTEXT_DIR}"
 mkdir -p "${BUILD_CONTEXT_DIR}"
 
@@ -156,7 +156,7 @@ docker build \
   --build-arg CACHE_NAME="${CACHE_NAME}" \
   --build-arg BCF_FILE="docker/gnomad-data/${BCF_BASENAME}" \
   -t "${IMAGE_NAME}" \
-  -t "${REGISTRY}/vcfstash-blueprint:latest" \
+  -t "${REGISTRY}/vcfcache-blueprint:latest" \
   ${NO_CACHE} \
   ${NETWORK} \
   "${BUILD_CONTEXT_DIR}"
@@ -190,7 +190,7 @@ echo ""
 if [ "${PUSH}" = true ]; then
   echo "📤 Pushing to registry..."
   docker push "${IMAGE_NAME}"
-  docker push "${REGISTRY}/vcfstash-blueprint:latest"
+  docker push "${REGISTRY}/vcfcache-blueprint:latest"
   echo "✅ Pushed to ${REGISTRY}"
   echo ""
 fi

@@ -61,17 +61,17 @@ def test_sample_with_hits_and_misses(test_output_dir):
 
 
 @pytest.fixture
-def annotation_stash_path(test_scenario):
-    """Get path to annotation stash based on scenario.
+def annotation_cache_path(test_scenario):
+    """Get path to annotation cache based on scenario.
 
     Returns:
-        Path or None: Path to annotation stash in annotated scenario, None otherwise
+        Path or None: Path to annotation cache in annotated scenario, None otherwise
     """
     if test_scenario == "annotated":
-        # Check if vep_gnomad stash exists
-        stash_path = Path("/cache/db/stash/vep_gnomad")
-        if stash_path.exists():
-            return stash_path
+        # Check if vep_gnomad cache exists
+        cache_path = Path("/cache/db/cache/vep_gnomad")
+        if cache_path.exists():
+            return cache_path
     return None
 
 
@@ -79,20 +79,20 @@ def annotation_stash_path(test_scenario):
 # Annotation Workflow Tests
 # ============================================================================
 
-def test_annotated_stash_exists(test_scenario, annotation_stash_path):
-    """Test that pre-annotated stash exists in annotated scenario."""
+def test_annotated_cache_exists(test_scenario, annotation_cache_path):
+    """Test that pre-annotated cache exists in annotated scenario."""
     if test_scenario != "annotated":
         pytest.skip("Only applicable to annotated scenario")
 
-    assert annotation_stash_path is not None, "Annotation stash path not found"
-    assert annotation_stash_path.exists(), f"Annotation stash does not exist: {annotation_stash_path}"
+    assert annotation_cache_path is not None, "Annotation cache path not found"
+    assert annotation_cache_path.exists(), f"Annotation cache does not exist: {annotation_cache_path}"
 
     # Check for annotated cache file
-    annotated_bcf = annotation_stash_path / "vcfstash_annotated.bcf"
+    annotated_bcf = annotation_cache_path / "vcfcache_annotated.bcf"
     assert annotated_bcf.exists(), "Annotated cache BCF not found"
 
     # Check index
-    annotated_csi = annotation_stash_path / "vcfstash_annotated.bcf.csi"
+    annotated_csi = annotation_cache_path / "vcfcache_annotated.bcf.csi"
     assert annotated_csi.exists(), "Annotated cache index not found"
 
     # Verify it's a valid BCF with annotations
@@ -106,30 +106,30 @@ def test_annotated_stash_exists(test_scenario, annotation_stash_path):
     # Should have CSQ tag for VEP annotations
     assert "##INFO=<ID=CSQ" in result.stdout, "CSQ INFO tag not found in annotated cache"
 
-    print(f"✓ Annotated stash verified at {annotation_stash_path}")
+    print(f"✓ Annotated cache verified at {annotation_cache_path}")
 
 
 def test_annotate_with_cache(test_scenario, test_sample_with_hits_and_misses,
-                             annotation_stash_path, test_output_dir):
+                             annotation_cache_path, test_output_dir):
     """Test annotation using pre-built cache in annotated scenario."""
     if test_scenario != "annotated":
         pytest.skip("Only applicable to annotated scenario")
 
-    assert annotation_stash_path is not None, "No annotation stash available"
+    assert annotation_cache_path is not None, "No annotation cache available"
 
-    from tests.conftest import get_vcfstash_root
+    from tests.conftest import get_vcfcache_root
 
     # Use the real VEP params that match the Docker build
-    vep_params = get_vcfstash_root() / "recipes" / "docker-annotated" / "params.yaml"
+    vep_params = get_vcfcache_root() / "recipes" / "docker-annotated" / "params.yaml"
     assert vep_params.exists(), f"VEP params not found: {vep_params}"
 
     output_dir = Path(test_output_dir) / "annotated_output"
-    # Don't create the output directory - vcfstash will create it
+    # Don't create the output directory - vcfcache will create it
 
     # Run annotation using the pre-built cache
     cmd = [
-        "vcfstash", "annotate",
-        "-a", str(annotation_stash_path),
+        "vcfcache", "annotate",
+        "-a", str(annotation_cache_path),
         "--vcf", str(test_sample_with_hits_and_misses),
         "--output", str(output_dir),
         "-y", str(vep_params),
@@ -161,9 +161,9 @@ def test_annotate_with_cache(test_scenario, test_sample_with_hits_and_misses,
     with open(vep_params) as f:
         params_cfg = yaml.safe_load(f)
     bcftools_cmd = params_cfg.get("bcftools_cmd", "bcftools")
-    if bcftools_cmd.startswith("${VCFSTASH_ROOT}"):
-        root = get_vcfstash_root()
-        bcftools_cmd = bcftools_cmd.replace("${VCFSTASH_ROOT}", str(root))
+    if bcftools_cmd.startswith("${VCFCACHE_ROOT}"):
+        root = get_vcfcache_root()
+        bcftools_cmd = bcftools_cmd.replace("${VCFCACHE_ROOT}", str(root))
 
     # Verify annotations were added
     header_result = subprocess.run(
@@ -210,7 +210,7 @@ def test_blueprint_annotation_workflow(test_scenario, prebuilt_cache, test_outpu
     cache_dir = Path(test_output_dir) / "test_cache"
 
     cmd_init = [
-        "vcfstash", "stash-init",
+        "vcfcache", "blueprint-init",
         "--vcf", str(blueprint_vcf),
         "--output", str(cache_dir),
         "-y", str(TEST_PARAMS),
@@ -223,9 +223,9 @@ def test_blueprint_annotation_workflow(test_scenario, prebuilt_cache, test_outpu
     print(f"Init STDOUT:\n{result.stdout}")
     assert result.returncode == 0, f"Cache init failed: {result.stderr}"
 
-    # Step 2: Annotate the blueprint (create stash)
+    # Step 2: Annotate the blueprint (create cache)
     cmd_annotate = [
-        "vcfstash", "stash-annotate",
+        "vcfcache", "cache-build",
         "--name", "test_anno",
         "--db", str(cache_dir),
         "-a", str(TEST_ANNO_CONFIG),
@@ -235,26 +235,26 @@ def test_blueprint_annotation_workflow(test_scenario, prebuilt_cache, test_outpu
     print(f"\nAnnotating blueprint: {' '.join(cmd_annotate)}")
 
     result = subprocess.run(cmd_annotate, capture_output=True, text=True, timeout=120)
-    print(f"Stash-annotate STDOUT:\n{result.stdout}")
+    print(f"cache-build STDOUT:\n{result.stdout}")
     assert result.returncode == 0, f"Blueprint annotation failed: {result.stderr}"
 
-    # Stash location differs between packaged cache (/db/stash) and ad-hoc init ( /stash )
-    stash_base = cache_dir / "db" / "stash"
-    if not stash_base.exists():
-        stash_base = cache_dir / "stash"
-    stash_path = stash_base / "test_anno"
-    assert stash_path.exists(), "Annotation stash not created"
+    # Cache location differs between packaged cache (/db/cache) and ad-hoc init ( /cache )
+    cache_base = cache_dir / "db" / "cache"
+    if not cache_base.exists():
+        cache_base = cache_dir / "cache"
+    cache_path = cache_base / "test_anno"
+    assert cache_path.exists(), "Annotation cache not created"
 
-    annotated_cache = stash_path / "vcfstash_annotated.bcf"
+    annotated_cache = cache_path / "vcfcache_annotated.bcf"
     assert annotated_cache.exists(), "Annotated cache file not found"
 
-    # Step 3: Annotate a sample using the stash
+    # Step 3: Annotate a sample using the cache
     sample_vcf = TEST_DATA_DIR / "sample4.bcf"
     output_dir = Path(test_output_dir) / "sample_output"
 
     cmd_use_cache = [
-        "vcfstash", "annotate",
-        "-a", str(stash_path),
+        "vcfcache", "annotate",
+        "-a", str(cache_path),
         "--vcf", str(sample_vcf),
         "--output", str(output_dir),
         "-y", str(TEST_PARAMS),
@@ -296,7 +296,7 @@ def test_vanilla_annotation_workflow(test_scenario, test_output_dir):
     Path(test_output_dir).mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # In vanilla scenario, we can't use vcfstash annotate directly without a cache
+    # In vanilla scenario, we can't use vcfcache annotate directly without a cache
     # Instead, we test that the annotation config works by running it manually
     # This simulates what would happen without cache
 
@@ -304,7 +304,7 @@ def test_vanilla_annotation_workflow(test_scenario, test_output_dir):
     output_bcf = Path(test_output_dir) / "vanilla_annotated.bcf"
 
     # Run the mock annotation directly using bcftools
-    # This simulates vcfstash behavior without cache
+    # This simulates vcfcache behavior without cache
     cmd = f"""
         echo '##INFO=<ID=MOCK_ANNO,Number=1,Type=String,Description=Mock_annotation_for_testing_purposes>' > {test_output_dir}/newheader.txt
         bcftools query -f '%CHROM\\t%POS\\ttest\\n' {sample_vcf} > {test_output_dir}/mockanno.txt
@@ -359,9 +359,9 @@ def test_annotation_consistency_across_scenarios(test_scenario, test_output_dir)
 
     if test_scenario == "annotated":
         # In annotated scenario, test with cache
-        annotation_stash_path = Path("/cache/db/stash/vep_gnomad")
-        if not annotation_stash_path.exists():
-            pytest.skip("No annotation stash available in annotated scenario")
+        annotation_cache_path = Path("/cache/db/cache/vep_gnomad")
+        if not annotation_cache_path.exists():
+            pytest.skip("No annotation cache available in annotated scenario")
 
         vep_params = Path("/app/recipes/docker-annotated/params.yaml")
         if not vep_params.exists():
@@ -372,8 +372,8 @@ def test_annotation_consistency_across_scenarios(test_scenario, test_output_dir)
             shutil.rmtree(output_dir)
 
         cmd = [
-            "vcfstash", "annotate",
-            "-a", str(annotation_stash_path),
+            "vcfcache", "annotate",
+            "-a", str(annotation_cache_path),
             "--vcf", str(sample_vcf),
             "--output", str(output_dir),
             "-y", str(vep_params),
@@ -393,7 +393,7 @@ def test_annotation_consistency_across_scenarios(test_scenario, test_output_dir)
 
         # Init
         subprocess.run([
-            "vcfstash", "stash-init",
+            "vcfcache", "blueprint-init",
             "--vcf", str(blueprint_vcf),
             "--output", str(cache_dir),
             "-y", str(TEST_PARAMS)
@@ -401,7 +401,7 @@ def test_annotation_consistency_across_scenarios(test_scenario, test_output_dir)
 
         # Annotate blueprint
         subprocess.run([
-            "vcfstash", "stash-annotate",
+            "vcfcache", "cache-build",
             "--name", "consistency_anno",
             "--db", str(cache_dir),
             "-a", str(TEST_ANNO_CONFIG)
@@ -409,14 +409,14 @@ def test_annotation_consistency_across_scenarios(test_scenario, test_output_dir)
 
         # Annotate sample
         output_dir = Path(test_output_dir) / "consistency_output"
-        stash_base = cache_dir / "db" / "stash"
-        if not stash_base.exists():
-            stash_base = cache_dir / "stash"
-        stash_path = stash_base / "consistency_anno"
+        cache_base = cache_dir / "db" / "cache"
+        if not cache_base.exists():
+            cache_base = cache_dir / "cache"
+        cache_path = cache_base / "consistency_anno"
 
         subprocess.run([
-            "vcfstash", "annotate",
-            "-a", str(stash_path),
+            "vcfcache", "annotate",
+            "-a", str(cache_path),
             "--vcf", str(sample_vcf),
             "--output", str(output_dir),
             "-y", str(TEST_PARAMS)
@@ -468,23 +468,23 @@ def test_annotation_consistency_across_scenarios(test_scenario, test_output_dir)
 # ============================================================================
 
 def test_cache_hit_statistics(test_scenario, test_sample_with_hits_and_misses,
-                              annotation_stash_path, test_output_dir):
+                              annotation_cache_path, test_output_dir):
     """Test that cache hit statistics are tracked correctly."""
     if test_scenario != "annotated":
         pytest.skip("Cache hit stats only available in annotated scenario")
 
-    assert annotation_stash_path is not None, "No annotation stash available"
+    assert annotation_cache_path is not None, "No annotation cache available"
 
-    from tests.conftest import get_vcfstash_root
-    vep_params = get_vcfstash_root() / "recipes" / "docker-annotated" / "params.yaml"
+    from tests.conftest import get_vcfcache_root
+    vep_params = get_vcfcache_root() / "recipes" / "docker-annotated" / "params.yaml"
 
     output_dir = Path(test_output_dir) / "cache_stats_test"
     if output_dir.exists():
         shutil.rmtree(output_dir)
 
     cmd = [
-        "vcfstash", "annotate",
-        "-a", str(annotation_stash_path),
+        "vcfcache", "annotate",
+        "-a", str(annotation_cache_path),
         "--vcf", str(test_sample_with_hits_and_misses),
         "--output", str(output_dir),
         "-y", str(vep_params),
@@ -497,18 +497,18 @@ def test_cache_hit_statistics(test_scenario, test_sample_with_hits_and_misses,
     # Check for cache hit statistics in output
     output_text = result.stdout + result.stderr
 
-    # Look for cache hit indicators (these depend on vcfstash implementation)
-    # This is a placeholder - adjust based on actual vcfstash output
+    # Look for cache hit indicators (these depend on vcfcache implementation)
+    # This is a placeholder - adjust based on actual vcfcache output
     print(f"\n✓ Cache hit statistics test completed")
     print(f"  Check output for cache hit/miss information:")
-    print(f"  (Stats tracking to be implemented in vcfstash)")
+    print(f"  (Stats tracking to be implemented in vcfcache)")
 
 
 # ============================================================================
 # Performance Tests
 # ============================================================================
 
-def test_annotation_performance_with_cache(test_scenario, annotation_stash_path,
+def test_annotation_performance_with_cache(test_scenario, annotation_cache_path,
                                            test_sample_with_hits_and_misses, test_output_dir):
     """Test that annotation with cache is faster than without (informational only)."""
     if test_scenario != "annotated":
@@ -519,18 +519,18 @@ def test_annotation_performance_with_cache(test_scenario, annotation_stash_path,
 
     import time
 
-    assert annotation_stash_path is not None
+    assert annotation_cache_path is not None
 
-    from tests.conftest import get_vcfstash_root
-    vep_params = get_vcfstash_root() / "recipes" / "docker-annotated" / "params.yaml"
+    from tests.conftest import get_vcfcache_root
+    vep_params = get_vcfcache_root() / "recipes" / "docker-annotated" / "params.yaml"
 
     output_dir = Path(test_output_dir) / "perf_test"
     if output_dir.exists():
         shutil.rmtree(output_dir)
 
     cmd = [
-        "vcfstash", "annotate",
-        "-a", str(annotation_stash_path),
+        "vcfcache", "annotate",
+        "-a", str(annotation_cache_path),
         "--vcf", str(test_sample_with_hits_and_misses),
         "--output", str(output_dir),
         "-y", str(vep_params)

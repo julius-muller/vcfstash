@@ -1,4 +1,4 @@
-"""Validation utilities for the vcfstash package.
+"""Validation utilities for the vcfcache package.
 
 This module provides functions for validating VCF/BCF files, checking dependencies,
 computing MD5 checksums, and other validation-related tasks.
@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 import yaml
-from vcfstash import EXPECTED_BCFTOOLS_VERSION
+from vcfcache import EXPECTED_BCFTOOLS_VERSION
 
 def check_duplicate_md5(db_info: dict, new_md5: str) -> bool:
     """Check if a file with the same MD5 was already added."""
@@ -140,7 +140,7 @@ def check_bcftools_installed(params_file: Path = None, workflow_dir: Path = None
         ValueError: If version check fails
         RuntimeError: If bcftools execution fails
     """
-    logger = logging.getLogger("vcfstash")
+    logger = logging.getLogger("vcfcache")
 
     # Initialize bcftools_cmd as None
     bcftools_cmd = None
@@ -174,13 +174,13 @@ def check_bcftools_installed(params_file: Path = None, workflow_dir: Path = None
 
             if bcftools_cmd_raw:
                 # Handle environment variable expansion
-                if "${VCFSTASH_ROOT}" in bcftools_cmd_raw:
-                    vcfstash_root = os.environ.get("VCFSTASH_ROOT")
-                    if not vcfstash_root:
-                        logger.error("VCFSTASH_ROOT environment variable not set. This is required for bcftools path resolution.")
-                        raise ValueError("VCFSTASH_ROOT environment variable not set. This is required for bcftools path resolution.")
+                if "${VCFCACHE_ROOT}" in bcftools_cmd_raw:
+                    vcfcache_root = os.environ.get("VCFCACHE_ROOT")
+                    if not vcfcache_root:
+                        logger.error("VCFCACHE_ROOT environment variable not set. This is required for bcftools path resolution.")
+                        raise ValueError("VCFCACHE_ROOT environment variable not set. This is required for bcftools path resolution.")
                     else:
-                        bcftools_cmd = bcftools_cmd_raw.replace("${VCFSTASH_ROOT}", vcfstash_root)
+                        bcftools_cmd = bcftools_cmd_raw.replace("${VCFCACHE_ROOT}", vcfcache_root)
                 else:
                     bcftools_cmd = bcftools_cmd_raw
             else:
@@ -267,7 +267,7 @@ def compute_md5(file_path: Path) -> str:
         MD5 checksum as a string
 
     Example:
-        >>> compute_md5(Path('~/projects/vcfstash/tests/data/nodata/dbsnp_test.bcf'))
+        >>> compute_md5(Path('~/projects/vcfcache/tests/data/nodata/dbsnp_test.bcf'))
     """
     try:
         print(f"Computing MD5 for {file_path} ...")
@@ -317,26 +317,26 @@ def validate_vcf_format(vcf_path: Path) -> tuple[bool, str | None]:
 
 
 def generate_test_command(
-    vcfstash_path="${VCFSTASH_ROOT}/vcfstash.py",
-    vcf_path="${VCFSTASH_ROOT}/tests/data/nodata/crayz_db.bcf",
-    output_dir="/tmp/vcfstash/test_stash",
-    config_path="${VCFSTASH_ROOT}/tests/config/nextflow_test.config",
-    yaml_path="${VCFSTASH_ROOT}/tests/config/example_params.yaml",
-    annotation_config="${VCFSTASH_ROOT}/tests/config/example_annotation.config",
-    add_vcf_path="${VCFSTASH_ROOT}/tests/data/nodata/crayz_db2.bcf",
-    input_vcf_path="${VCFSTASH_ROOT}/tests/data/nodata/sample4.bcf",
+    vcfcache_path="${VCFCACHE_ROOT}/vcfcache.py",
+    vcf_path="${VCFCACHE_ROOT}/tests/data/nodata/crayz_db.bcf",
+    output_dir="/tmp/vcfcache/test_cache",
+    config_path="${VCFCACHE_ROOT}/tests/config/nextflow_test.config",
+    yaml_path="${VCFCACHE_ROOT}/tests/config/example_params.yaml",
+    annotation_config="${VCFCACHE_ROOT}/tests/config/example_annotation.config",
+    add_vcf_path="${VCFCACHE_ROOT}/tests/data/nodata/crayz_db2.bcf",
+    input_vcf_path="${VCFCACHE_ROOT}/tests/data/nodata/sample4.bcf",
     annotate_name="testor",
-    annotation_db="/tmp/vcfstash/test_stash/stash/testor",
-    annotation_output="/tmp/vcfstash/aout",
+    annotation_db="/tmp/vcfcache/test_cache/cache/testor",
+    annotation_output="/tmp/vcfcache/aout",
     force=True,
 ):
-    """Generate a nicely formatted test command string for vcfstash operations.
+    """Generate a nicely formatted test command string for vcfcache operations.
 
     Returns:
         str: A copy-pastable command string with proper formatting
     """
     cmd_init = (
-        f"{vcfstash_path} stash-init "
+        f"{vcfcache_path} blueprint-init "
         f"--vcf {vcf_path} "
         f"--output {output_dir} "
         f"-y {yaml_path} "
@@ -344,11 +344,11 @@ def generate_test_command(
     ).strip()
 
     cmd_add = (
-        f"{vcfstash_path} stash-add " f"--db {output_dir} " f"-i {add_vcf_path} "
+        f"{vcfcache_path} blueprint-extend " f"--db {output_dir} " f"-i {add_vcf_path} "
     ).strip()
 
     cmd_annotate = (
-        f"{vcfstash_path} stash-annotate "
+        f"{vcfcache_path} cache-build "
         f"--name {annotate_name} "
         f"-a {annotation_config} "
         f"--db {output_dir} "
@@ -356,7 +356,7 @@ def generate_test_command(
     ).strip()
 
     cmd_annotatevcf = (
-        f"{vcfstash_path} annotate "
+        f"{vcfcache_path} annotate "
         f"-a {annotation_db} "
         f"--vcf {input_vcf_path} "
         f"{'-f' if force else ''} "
@@ -374,7 +374,7 @@ def generate_test_command(
 # ADD
 {cmd_add}
 
-# STASH ANNOTATE
+# CACHE BUILD
 {cmd_annotate}
 
 # ANNOTATE VCF
@@ -392,28 +392,28 @@ alias stx="{full_cmd}"
 
 
 # Example usage into test dir in repo:
-# ~/projects/vcfstash/vcfstash.py stash-init --name nftest --vcf ~/projects/vcfstash/tests/data/nodata/crayz_db.bcf --output /home/j380r/tmp/test/test_out -f --test -vv
-# ~/projects/vcfstash/vcfstash.py stash-add --db ~/projects/vcfstash/tests/data/test_out/nftest -i ~/projects/vcfstash/tests/data/nodata/crayz_db2.bcf --test -vv
-# ~/projects/vcfstash/vcfstash.py stash-annotate --name testor --db ~/projects/vcfstash/tests/data/test_out/nftest --test -vv -f
+# ~/projects/vcfcache/vcfcache.py blueprint-init --name nftest --vcf ~/projects/vcfcache/tests/data/nodata/crayz_db.bcf --output /home/j380r/tmp/test/test_out -f --test -vv
+# ~/projects/vcfcache/vcfcache.py blueprint-extend --db ~/projects/vcfcache/tests/data/test_out/nftest -i ~/projects/vcfcache/tests/data/nodata/crayz_db2.bcf --test -vv
+# ~/projects/vcfcache/vcfcache.py cache-build --name testor --db ~/projects/vcfcache/tests/data/test_out/nftest --test -vv -f
 # ... or locally
-# ~/projects/vcfstash/vcfstash.py stash-init --vcf ~/projects/vcfstash/tests/data/nodata/crayz_db.bcf --output ~/tmp/vcfstash/test_stash -c ~/projects/vcfstash/tests/config/env_test.config -f
-# ~/projects/vcfstash/vcfstash.py stash-add --db /home/j380r/tmp/test/test_out -i ~/projects/vcfstash/tests/data/nodata/crayz_db2.bcf
-# ~/projects/vcfstash/vcfstash.py stash-annotate --name testor --db test_out/nftest --test -vv -f
-# ~/projects/vcfstash/vcfstash.py annotate --a ~/tmp/test/test_out/nftest/stash/testor --vcf ~/projects/vcfstash/tests/data/nodata/sample4.bcf --output ~/tmp/test/aout --test -f
+# ~/projects/vcfcache/vcfcache.py blueprint-init --vcf ~/projects/vcfcache/tests/data/nodata/crayz_db.bcf --output ~/tmp/vcfcache/test_cache -c ~/projects/vcfcache/tests/config/env_test.config -f
+# ~/projects/vcfcache/vcfcache.py blueprint-extend --db /home/j380r/tmp/test/test_out -i ~/projects/vcfcache/tests/data/nodata/crayz_db2.bcf
+# ~/projects/vcfcache/vcfcache.py cache-build --name testor --db test_out/nftest --test -vv -f
+# ~/projects/vcfcache/vcfcache.py annotate --a ~/tmp/test/test_out/nftest/cache/testor --vcf ~/projects/vcfcache/tests/data/nodata/sample4.bcf --output ~/tmp/test/aout --test -f
 
 # as one:
 cmd = """alias stx="
-~/projects/vcfstash/vcfstash.py stash-init --vcf ~/projects/vcfstash/tests/data/nodata/crayz_db.bcf --output ~/tmp/vcfstash/test_stash -y ~/projects/vcfstash/tests/config/example_params.yaml -f;
-~/projects/vcfstash/vcfstash.py stash-add --db ~/tmp/vcfstash/test_stash/ -i ~/projects/vcfstash/tests/data/nodata/crayz_db2.bcf ; 
-~/projects/vcfstash/vcfstash.py stash-annotate --name testor -a ~/projects/vcfstash/tests/config/example_annotation.config --db ~/tmp/vcfstash/test_stash -f;
-~/projects/vcfstash/vcfstash.py annotate -a ~/tmp/vcfstash/test_stash/stash/testor --vcf ~/projects/vcfstash/tests/data/nodata/sample4.bcf --output ~/tmp/vcfstash/aout -f
+~/projects/vcfcache/vcfcache.py blueprint-init --vcf ~/projects/vcfcache/tests/data/nodata/crayz_db.bcf --output ~/tmp/vcfcache/test_cache -y ~/projects/vcfcache/tests/config/example_params.yaml -f;
+~/projects/vcfcache/vcfcache.py blueprint-extend --db ~/tmp/vcfcache/test_cache/ -i ~/projects/vcfcache/tests/data/nodata/crayz_db2.bcf ; 
+~/projects/vcfcache/vcfcache.py cache-build --name testor -a ~/projects/vcfcache/tests/config/example_annotation.config --db ~/tmp/vcfcache/test_cache -f;
+~/projects/vcfcache/vcfcache.py annotate -a ~/tmp/vcfcache/test_cache/cache/testor --vcf ~/projects/vcfcache/tests/data/nodata/sample4.bcf --output ~/tmp/vcfcache/aout -f
 """
 
 
 # on gvpre
 cmd2 = """
-~/projects/vcfstash/vcfstash.py stash-init --vcf /mnt/data/resources/gnomad/vcf_gnomad_v4_hg19_exomes/gnomad.exomes.v4.1.sites.grch37.trimmed_liftover_norm_1e-1.bcf --output gnomad_1e-1  -c ~/projects/vcfstash/tests/config/nextflow_gnomadhg19.config;
-~/projects/vcfstash/vcfstash.py stash-add --db gnomad_1e-1 -i /mnt/data/resources/gnomad/vcf_gnomad_v4_hg19_genomes/gnomad.genomes.v4.1.sites.grch37.trimmed_liftover_norm_1e-1.bcf;
-~/projects/vcfstash/vcfstash.py stash-annotate --name gen_ex -a ~/projects/vcfstash/tests/config/example_annotation.config --db gnomad_1e-1;
-~/projects/vcfstash/vcfstash.py annotate -a gnomad_1e-1/stash/gen_ex --vcf /mnt/data/samples/test_mgm/mgm_WGS_32.gatkWGS_norm.bcf --output mgm_WGS_32 -p;
+~/projects/vcfcache/vcfcache.py blueprint-init --vcf /mnt/data/resources/gnomad/vcf_gnomad_v4_hg19_exomes/gnomad.exomes.v4.1.sites.grch37.trimmed_liftover_norm_1e-1.bcf --output gnomad_1e-1  -c ~/projects/vcfcache/tests/config/nextflow_gnomadhg19.config;
+~/projects/vcfcache/vcfcache.py blueprint-extend --db gnomad_1e-1 -i /mnt/data/resources/gnomad/vcf_gnomad_v4_hg19_genomes/gnomad.genomes.v4.1.sites.grch37.trimmed_liftover_norm_1e-1.bcf;
+~/projects/vcfcache/vcfcache.py cache-build --name gen_ex -a ~/projects/vcfcache/tests/config/example_annotation.config --db gnomad_1e-1;
+~/projects/vcfcache/vcfcache.py annotate -a gnomad_1e-1/cache/gen_ex --vcf /mnt/data/samples/test_mgm/mgm_WGS_32.gatkWGS_norm.bcf --output mgm_WGS_32 -p;
 """

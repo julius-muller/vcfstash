@@ -199,8 +199,8 @@ jobs:
           wget https://github.com/${{ github.repository }}/releases/download/${TAG}/${BCF_NAME}
           wget https://github.com/${{ github.repository }}/releases/download/${TAG}/${BCF_NAME}.csi
 
-          # Use with VCFstash
-          vcfstash stash-init --vcf ${BCF_NAME} --output cache -y params.yaml
+          # Use with VCFcache
+          vcfcache blueprint-init --vcf ${BCF_NAME} --output cache -y params.yaml
           ```
           EOF
 

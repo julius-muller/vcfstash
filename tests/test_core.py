@@ -1,17 +1,17 @@
-"""Test core functionality of VCFstash."""
+"""Test core functionality of VCFcache."""
 
 from pathlib import Path
 import subprocess
 import pytest
-from vcfstash.utils.paths import get_vcfstash_root
-from vcfstash.utils.validation import compute_md5
+from vcfcache.utils.paths import get_vcfcache_root
+from vcfcache.utils.validation import compute_md5
 
 # Constants
-TEST_ROOT = get_vcfstash_root() / "tests"
+TEST_ROOT = get_vcfcache_root() / "tests"
 TEST_DATA_DIR = TEST_ROOT / "data" / "nodata"
 TEST_VCF = TEST_DATA_DIR / "crayz_db.bcf"
 TEST_VCF2 = TEST_DATA_DIR / "crayz_db2.bcf"
-VCFSTASH_CMD = "vcfstash"
+VCFCACHE_CMD = "vcfcache"
 
 
 def test_error_handling(test_output_dir, params_file, test_scenario):
@@ -20,8 +20,8 @@ def test_error_handling(test_output_dir, params_file, test_scenario):
 
     # Test with non-existent input file
     init_cmd = [
-        VCFSTASH_CMD,
-        "stash-init",
+        VCFCACHE_CMD,
+        "blueprint-init",
         "-i",
         "nonexistent.bcf",
         "-o",
@@ -34,8 +34,8 @@ def test_error_handling(test_output_dir, params_file, test_scenario):
 
     # Test with invalid output location
     init_cmd = [
-        VCFSTASH_CMD,
-        "stash-init",
+        VCFCACHE_CMD,
+        "blueprint-init",
         "-i",
         str(TEST_VCF),
         "-o",
@@ -47,7 +47,7 @@ def test_error_handling(test_output_dir, params_file, test_scenario):
     assert result.returncode != 0, "Should fail with invalid yaml"
 
     # Test add without init
-    add_cmd = [VCFSTASH_CMD, "stash-add", "--db", test_output_dir, "-i", str(TEST_VCF)]
+    add_cmd = [VCFCACHE_CMD, "blueprint-extend", "--db", test_output_dir, "-i", str(TEST_VCF)]
     result = subprocess.run(add_cmd, capture_output=True, text=True)
     assert result.returncode != 0, "Should fail without initialization"
 
@@ -68,7 +68,7 @@ def test_vcf_reference_validation(test_scenario):
     """Test VCF reference validation."""
     print(f"\n=== Testing VCF reference validation (scenario: {test_scenario}) ===")
 
-    from vcfstash.database.base import VCFDatabase
+    from vcfcache.database.base import VCFDatabase
     import logging
 
     # Set up test files
@@ -97,7 +97,7 @@ def test_vcf_reference_validation(test_scenario):
 def test_show_command_outputs_annotation_tool_cmd(test_output_dir):
     """--show-command should print the frozen annotation tool command."""
 
-    annotation_dir = Path(test_output_dir) / "stash" / "vep_gnomad"
+    annotation_dir = Path(test_output_dir) / "cache" / "vep_gnomad"
     annotation_dir.mkdir(parents=True, exist_ok=True)
 
     expected_cmd = "docker run --rm -i vep:latest"
@@ -107,7 +107,7 @@ def test_show_command_outputs_annotation_tool_cmd(test_output_dir):
 
     result = subprocess.run(
         [
-            VCFSTASH_CMD,
+            VCFCACHE_CMD,
             "annotate",
             "--show-command",
             "-a",
@@ -122,26 +122,26 @@ def test_show_command_outputs_annotation_tool_cmd(test_output_dir):
 
 
 def test_list_shows_available_annotations(test_output_dir):
-    """--list should enumerate annotation directories containing vcfstash_annotated.bcf."""
+    """--list should enumerate annotation directories containing vcfcache_annotated.bcf."""
 
-    stash_dir = Path(test_output_dir) / "stash"
-    stash_dir.mkdir(parents=True, exist_ok=True)
+    cache_dir = Path(test_output_dir) / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
 
-    anno1 = stash_dir / "vep_gnomad"
+    anno1 = cache_dir / "vep_gnomad"
     anno1.mkdir()
-    (anno1 / "vcfstash_annotated.bcf").write_text("dummy")
+    (anno1 / "vcfcache_annotated.bcf").write_text("dummy")
 
-    anno2 = stash_dir / "custom"
+    anno2 = cache_dir / "custom"
     anno2.mkdir()
-    (anno2 / "vcfstash_annotated.bcf").write_text("dummy")
+    (anno2 / "vcfcache_annotated.bcf").write_text("dummy")
 
     result = subprocess.run(
         [
-            VCFSTASH_CMD,
+            VCFCACHE_CMD,
             "annotate",
             "--list",
             "-a",
-            str(stash_dir),
+            str(cache_dir),
         ],
         capture_output=True,
         text=True,

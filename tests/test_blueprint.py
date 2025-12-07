@@ -52,11 +52,11 @@ def test_blueprint_cache_file(test_scenario):
     """Test that the blueprint cache BCF file exists and is valid."""
     _skip_if_vanilla(test_scenario)
 
-    cache_bcf = Path("/cache/db/blueprint/vcfstash.bcf")
+    cache_bcf = Path("/cache/db/blueprint/vcfcache.bcf")
     assert cache_bcf.exists(), f"Blueprint cache file not found: {cache_bcf}"
 
     # Check index exists
-    cache_csi = Path("/cache/db/blueprint/vcfstash.bcf.csi")
+    cache_csi = Path("/cache/db/blueprint/vcfcache.bcf.csi")
     assert cache_csi.exists(), f"Blueprint cache index not found: {cache_csi}"
 
     # Verify it's a valid BCF file using bcftools
@@ -74,7 +74,7 @@ def test_blueprint_has_variants(test_scenario):
     """Test that the blueprint cache contains variants."""
     _skip_if_vanilla(test_scenario)
 
-    cache_bcf = Path("/cache/db/blueprint/vcfstash.bcf")
+    cache_bcf = Path("/cache/db/blueprint/vcfcache.bcf")
 
     # Get variant count
     result = subprocess.run(
@@ -140,14 +140,14 @@ def test_bcftools_version(test_scenario):
 
 
 
-def test_vcfstash_cli_available(test_scenario):
-    """Test that vcfstash CLI is available."""
+def test_vcfcache_cli_available(test_scenario):
+    """Test that vcfcache CLI is available."""
     result = subprocess.run(
-        ["vcfstash", "--version"],
+        ["vcfcache", "--version"],
         capture_output=True,
         text=True
     )
-    assert result.returncode == 0, "vcfstash CLI not available"
+    assert result.returncode == 0, "vcfcache CLI not available"
 
     # Verify version output (check for semantic version format)
     version_output = result.stdout + result.stderr
@@ -160,7 +160,7 @@ def test_cache_query_performance(test_scenario):
     """Test that we can query the cache efficiently."""
     _skip_if_vanilla(test_scenario)
 
-    cache_bcf = Path("/cache/db/blueprint/vcfstash.bcf")
+    cache_bcf = Path("/cache/db/blueprint/vcfcache.bcf")
 
     # Query a specific region (should be fast)
     result = subprocess.run(
@@ -179,7 +179,7 @@ def test_cache_contig_format(test_scenario):
     """Test that cache uses correct chromosome naming (chr prefix)."""
     _skip_if_vanilla(test_scenario)
 
-    cache_bcf = Path("/cache/db/blueprint/vcfstash.bcf")
+    cache_bcf = Path("/cache/db/blueprint/vcfcache.bcf")
 
     # Get header
     result = subprocess.run(
@@ -206,14 +206,14 @@ def test_python_environment(test_scenario):
     # Test that PYTHONPATH includes venv packages
     import sys
 
-    # Should have access to vcfstash modules
-    import vcfstash
-    import vcfstash.cli
-    import vcfstash.database
+    # Should have access to vcfcache modules
+    import vcfcache
+    import vcfcache.cli
+    import vcfcache.database
 
     # Verify installation
-    from vcfstash import EXPECTED_BCFTOOLS_VERSION
+    from vcfcache import EXPECTED_BCFTOOLS_VERSION
     assert EXPECTED_BCFTOOLS_VERSION is not None
 
-    print(f"VCFstash bcftools version: {EXPECTED_BCFTOOLS_VERSION}")
+    print(f"VCFcache bcftools version: {EXPECTED_BCFTOOLS_VERSION}")
     print(f"Python path: {sys.path}")

@@ -4,8 +4,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from vcfstash.database.base import VCFDatabase
-from vcfstash.utils.validation import compute_md5
+from vcfcache.database.base import VCFDatabase
+from vcfcache.utils.validation import compute_md5
 
 
 class DatabaseInitializer(VCFDatabase):
@@ -59,7 +59,7 @@ class DatabaseInitializer(VCFDatabase):
             bcftools_path,
         )
         self.normalize = normalize
-        self._setup_stash(force=force)
+        self._setup_cache(force=force)
         self.logger = self.connect_loggers()
 
         # self.validate_label(name)
@@ -87,7 +87,7 @@ class DatabaseInitializer(VCFDatabase):
             self.logger.info("Initializing pure Python workflow...")
         params_path = Path(params_file) if isinstance(params_file, str) else params_file
 
-        from vcfstash.database.base import create_workflow
+        from vcfcache.database.base import create_workflow
 
         self.nx_workflow = create_workflow(
             input_file=self.input_file,
@@ -102,7 +102,7 @@ class DatabaseInitializer(VCFDatabase):
 
         # Log initialization parameters
         if self.logger:
-            self.logger.info(f"Initializing database: {self.stash_name}")
+            self.logger.info(f"Initializing database: {self.cache_name}")
             self.logger.debug(f"Input file: {self.input_file}")
             self.logger.debug(f"Output directory: {self.blueprint_dir}")
             self.logger.debug(f"Config file: {self.config_file}")
@@ -136,28 +136,28 @@ class DatabaseInitializer(VCFDatabase):
             else:
                 print(f"Warning: Could not list contigs via bcftools index -s: {exc}")
 
-    def _setup_stash(self, force: bool) -> None:
+    def _setup_cache(self, force: bool) -> None:
         # Remove destination directory if it exists to ensure clean copy
-        if self.stashed_output.root_dir.exists():
+        if self.cached_output.root_dir.exists():
             if (
-                self.stashed_output.validate_structure()
+                self.cached_output.validate_structure()
             ):  # we dont want to remove a random dir....
                 if force:
                     print(
-                        f"Stash directory already exists, removing: {self.stashed_output.root_dir}"
+                        f"Cache directory already exists, removing: {self.cached_output.root_dir}"
                     )
-                    shutil.rmtree(self.stashed_output.root_dir)
+                    shutil.rmtree(self.cached_output.root_dir)
                 else:
                     raise FileExistsError(
-                        f"Output directory already exists: {self.stashed_output.root_dir}\nIf intended, use --force to overwrite."
+                        f"Output directory already exists: {self.cached_output.root_dir}\nIf intended, use --force to overwrite."
                     )
             else:
                 raise FileExistsError(
-                    f"Output directory with an invalid structure detected: {self.stashed_output.root_dir}"
+                    f"Output directory with an invalid structure detected: {self.cached_output.root_dir}"
                 )
 
-        print(f"Creating stash structure: {self.stashed_output.root_dir}")
-        self.stashed_output.create_structure()
+        print(f"Creating cache structure: {self.cached_output.root_dir}")
+        self.cached_output.create_structure()
 
     def initialize(self) -> None:
         """Initialize new VCF database
@@ -214,11 +214,11 @@ class DatabaseInitializer(VCFDatabase):
                 "Creating database from normalized and annotated variants..."
             )
 
-        self.stashed_output.validate_structure()
+        self.cached_output.validate_structure()
 
         try:
             db_info: Dict[str, Any] = {
-                "name": self.stash_name,
+                "name": self.cache_name,
                 "created": datetime.now().isoformat(),
                 "input_files": [],  # List of input file info dictionaries
             }
@@ -249,7 +249,7 @@ class DatabaseInitializer(VCFDatabase):
             # Pass the normalize parameter to the workflow
             nextflow_args = ["--normalize", str(self.normalize).lower()]
             self.nx_workflow.run(
-                db_mode="stash-init",
+                db_mode="blueprint-init",
                 nextflow_args=nextflow_args,
                 trace=True,
                 dag=True,

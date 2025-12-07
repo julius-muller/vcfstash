@@ -1,6 +1,6 @@
 # Docker Build Scripts
 
-This directory contains scripts for building and managing VCFstash Docker images.
+This directory contains scripts for building and managing VCFcache Docker images.
 
 ## Quick Start - Build Final Images
 
@@ -52,20 +52,20 @@ Options:
 The script produces these images:
 
 ### AF ≥ 0.10 (10% - recommended for most users)
-- **Blueprint**: `ghcr.io/julius-muller/vcfstash-blueprint:gnomad-grch38-joint-af010`
-- **Annotated**: `ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-joint-af010-vep115`
-- **Latest**: `ghcr.io/julius-muller/vcfstash-annotated:latest` (tagged to AF 0.10)
+- **Blueprint**: `ghcr.io/julius-muller/vcfcache-blueprint:gnomad-grch38-joint-af010`
+- **Annotated**: `ghcr.io/julius-muller/vcfcache-annotated:gnomad-grch38-joint-af010-vep115`
+- **Latest**: `ghcr.io/julius-muller/vcfcache-annotated:latest` (tagged to AF 0.10)
 
 ### AF ≥ 0.01 (1% - larger cache, higher hit rate)
-- **Blueprint**: `ghcr.io/julius-muller/vcfstash-blueprint:gnomad-grch38-joint-af001`
-- **Annotated**: `ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-joint-af001-vep115`
+- **Blueprint**: `ghcr.io/julius-muller/vcfcache-blueprint:gnomad-grch38-joint-af001`
+- **Annotated**: `ghcr.io/julius-muller/vcfcache-annotated:gnomad-grch38-joint-af001-vep115`
 
 ## Requirements
 
 - Docker installed and running
 - Access to gnomAD BCF files:
-  - `/mnt/data/vcfstash_data/gnomad/gnomad_v4.1_GRCh38_joint_af010.bcf`
-  - `/mnt/data/vcfstash_data/gnomad/gnomad_v4.1_GRCh38_joint_af001.bcf`
+  - `/mnt/data/vcfcache_data/gnomad/gnomad_v4.1_GRCh38_joint_af010.bcf`
+  - `/mnt/data/vcfcache_data/gnomad/gnomad_v4.1_GRCh38_joint_af001.bcf`
 - VEP cache directory: `/mnt/data/apps/ensembl-vep/115/cachedir`
 - Docker registry credentials configured (for push)
 
@@ -86,7 +86,7 @@ If you need more control, you can run the individual scripts:
 ### 3. Annotate with VEP
 ```bash
 ./04b-annotate-and-commit.sh \
-  --base-image ghcr.io/julius-muller/vcfstash-annotated:TAG-base \
+  --base-image ghcr.io/julius-muller/vcfcache-annotated:TAG-base \
   --vep-cache-dir /path/to/vep/cache \
   -y
 ```

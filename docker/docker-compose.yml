@@ -1,23 +1,23 @@
 version: '3'
 
 services:
-  vcfstash:
+  vcfcache:
     build:
       context: .
       dockerfile: Dockerfile
-    image: vcfstash:latest
+    image: vcfcache:latest
     volumes:
       - ${DATA_DIR:-./}:/data
       - ${CACHE_DIR:-./cache}:/cache
       - ${REFERENCE_DIR:-./references}:/references:ro
     working_dir: /data
     environment:
-      - VCFSTASH_ROOT=/app
+      - VCFCACHE_ROOT=/app
     command: --help
 
   # Service for running tests
   test:
-    image: vcfstash:latest
+    image: vcfcache:latest
     volumes:
       - .:/app
     working_dir: /app

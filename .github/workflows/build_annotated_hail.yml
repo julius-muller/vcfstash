@@ -47,7 +47,7 @@ on:
         required: true
         default: "115.2"
       annotation_name:
-        description: "Annotation stash name"
+        description: "Annotation cache name"
         required: true
         default: "vep_gnomad"
 
@@ -300,7 +300,7 @@ jobs:
             BCF_FILE=docker/gnomad-data/${{ needs.export-gnomad.outputs.bcf-name }}
             ANNOTATION_NAME=${{ steps.defaults.outputs.annotation_name }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/vcfstash-annotated:${{ steps.image-tag.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/vcfstash-annotated:latest
+            ghcr.io/${{ github.repository_owner }}/vcfcache-annotated:${{ steps.image-tag.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/vcfcache-annotated:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -15,7 +15,7 @@ WORKDIR /build
 
 # Copy necessary files for installation and testing
 COPY pyproject.toml README.md ./
-COPY vcfstash ./vcfstash/
+COPY vcfcache ./vcfcache/
 COPY tools ./tools/
 COPY resources ./resources/
 COPY tests ./tests/
@@ -46,7 +46,7 @@ WORKDIR /app
 
 # Copy only necessary files from builder
 COPY --from=builder /build/venv /app/venv
-COPY --from=builder /build/vcfstash /app/vcfstash
+COPY --from=builder /build/vcfcache /app/vcfcache
 COPY --from=builder /build/tools /app/tools
 COPY --from=builder /build/resources /app/resources
 COPY --from=builder /build/tests /app/tests
@@ -55,24 +55,24 @@ COPY --from=builder /build/pyproject.toml /app/
 # Set environment variables
 ENV PATH="/app/venv/bin:${PATH}"
 ENV PYTHONPATH="/app:${PYTHONPATH}"
-ENV VCFSTASH_ROOT="/app"
+ENV VCFCACHE_ROOT="/app"
 
-# Create a vcfstash executable link in /usr/local/bin
-RUN echo '#!/bin/bash' > /usr/local/bin/vcfstash && \
-    echo 'source /app/venv/bin/activate' >> /usr/local/bin/vcfstash && \
-    echo 'python -m vcfstash.cli "$@"' >> /usr/local/bin/vcfstash && \
-    chmod +x /usr/local/bin/vcfstash
+# Create a vcfcache executable link in /usr/local/bin
+RUN echo '#!/bin/bash' > /usr/local/bin/vcfcache && \
+    echo 'source /app/venv/bin/activate' >> /usr/local/bin/vcfcache && \
+    echo 'python -m vcfcache.cli "$@"' >> /usr/local/bin/vcfcache && \
+    chmod +x /usr/local/bin/vcfcache
 
 # Create entrypoint script
 RUN echo '#!/bin/bash' > /app/entrypoint.sh && \
     echo 'source /app/venv/bin/activate' >> /app/entrypoint.sh && \
     echo 'if [ "$1" = "test" ]; then' >> /app/entrypoint.sh && \
     echo '    shift' >> /app/entrypoint.sh && \
-    echo '    cd /app && VCFSTASH_CMD=/usr/local/bin/vcfstash python -m pytest tests "$@"' >> /app/entrypoint.sh && \
+    echo '    cd /app && VCFCACHE_CMD=/usr/local/bin/vcfcache python -m pytest tests "$@"' >> /app/entrypoint.sh && \
     echo 'elif [ "$1" = "shell" ]; then' >> /app/entrypoint.sh && \
     echo '    exec /bin/bash' >> /app/entrypoint.sh && \
     echo 'else' >> /app/entrypoint.sh && \
-    echo '    python -m vcfstash.cli "$@"' >> /app/entrypoint.sh && \
+    echo '    python -m vcfcache.cli "$@"' >> /app/entrypoint.sh && \
     echo 'fi' >> /app/entrypoint.sh && \
     chmod +x /app/entrypoint.sh
 

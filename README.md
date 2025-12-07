@@ -1,14 +1,14 @@
-# VCFstash – Accelerate Variant Annotation by 70%+
+# VCFcache – Accelerate Variant Annotation by 70%+
 
 **Cache common variants once, annotate samples instantly.**
 
-VCFstash builds a local cache of pre-annotated variants and intelligently applies them to your samples, reducing annotation time by 70%+ for typical workflows. Works with any annotation tool (VEP, ANNOVAR, SnpEff, custom scripts).
+VCFcache builds a local cache of pre-annotated variants and intelligently applies them to your samples, reducing annotation time by 70%+ for typical workflows. Works with any annotation tool (VEP, ANNOVAR, SnpEff, custom scripts).
 
 ---
 
-## What is VCFstash?
+## What is VCFcache?
 
-VCFstash solves a simple problem: **you're annotating the same common variants over and over**. Instead:
+VCFcache solves a simple problem: **you're annotating the same common variants over and over**. Instead:
 
 1. **Build a cache** from representative variants (e.g., gnomAD)
 2. **Annotate the cache once** with your preferred tool (VEP, etc.)
@@ -26,16 +26,16 @@ Full flexibility, requires manual setup.
 **Requirements**: Python 3.13+, uv (package manager)
 
 ```bash
-git clone https://github.com/julius-muller/vcfstash.git
-cd vcfstash
+git clone https://github.com/julius-muller/vcfcache.git
+cd vcfcache
 uv venv .venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
-vcfstash --help
+vcfcache --help
 ```
 
 **Note**: bcftools 1.22 is bundled with the package, no separate installation needed.
 
-**Use when**: Developing vcfstash, customizing workflows, or running tests.
+**Use when**: Developing vcfcache, customizing workflows, or running tests.
 
 **Tests**: `python -m pytest tests/ -v`
 
@@ -48,14 +48,14 @@ Lightweight image for creating custom caches.
 
 ```bash
 # Pull blueprint image
-docker pull ghcr.io/julius-muller/vcfstash-blueprint:latest
+docker pull ghcr.io/julius-muller/vcfcache-blueprint:latest
 
 # Create cache from your gnomAD subset
 docker run --rm \
   -v $(pwd)/data:/data \
   -v $(pwd)/cache:/cache \
-  ghcr.io/julius-muller/vcfstash-blueprint:latest \
-  stash-init \
+  ghcr.io/julius-muller/vcfcache-blueprint:latest \
+  blueprint-init \
     --vcf /data/gnomad_subset.bcf \
     --output /cache \
     -y /app/recipes/docker-cache/params.yaml
@@ -63,8 +63,8 @@ docker run --rm \
 # Annotate cache with bcftools (mock annotation for testing)
 docker run --rm \
   -v $(pwd)/cache:/cache \
-  ghcr.io/julius-muller/vcfstash-blueprint:latest \
-  stash-annotate \
+  ghcr.io/julius-muller/vcfcache-blueprint:latest \
+  cache-build \
     --name my_annotation \
     --db /cache \
     -a /app/recipes/docker-cache/annotation.yaml \
@@ -84,15 +84,15 @@ Pre-built cache with VEP annotations, ready to use.
 
 ```bash
 # Pull pre-built image with gnomAD cache + VEP annotations
-docker pull ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-joint-af010-vep115
+docker pull ghcr.io/julius-muller/vcfcache-annotated:gnomad-grch38-joint-af010-vep115
 
 # Annotate your sample (VEP cache hit rate: 60-90% typical)
 docker run --rm \
   -v $(pwd)/samples:/data \
   -v $(pwd)/results:/output \
-  ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-joint-af010-vep115 \
+  ghcr.io/julius-muller/vcfcache-annotated:gnomad-grch38-joint-af010-vep115 \
   annotate \
-    -a /cache/db/stash/vep_gnomad \
+    -a /cache/db/cache/vep_gnomad \
     --vcf /data/sample.vcf.gz \
     --output /output \
     -y /app/recipes/docker-annotated/params.yaml
@@ -109,7 +109,7 @@ docker run --rm \
 docker run --rm \
   -v /path/to/vep/cache:/opt/vep/.vep:ro \
   --entrypoint /bin/sh \
-  ghcr.io/julius-muller/vcfstash-annotated:latest \
+  ghcr.io/julius-muller/vcfcache-annotated:latest \
   -c 'cd /app && python3.13 -m pytest tests/ -v'
 ```
 
@@ -121,21 +121,21 @@ docker run --rm \
 
 ```bash
 # 1. Create cache from gnomAD
-vcfstash stash-init \
+vcfcache blueprint-init \
   --vcf gnomad_chr1_af0.01.bcf \
   --output ./cache \
   -y params.yaml
 
 # 2. Annotate cache with VEP
-vcfstash stash-annotate \
+vcfcache cache-build \
   --name vep_gnomad \
   --db ./cache \
   -a annotation.yaml \
   -y params.yaml
 
 # 3. Annotate your samples
-vcfstash annotate \
-  -a ./cache/stash/vep_gnomad \
+vcfcache annotate \
+  -a ./cache/cache/vep_gnomad \
   --vcf sample1.vcf.gz \
   --output ./results \
   -y params.yaml
@@ -147,9 +147,9 @@ vcfstash annotate \
 # One command - instant annotation
 docker run --rm \
   -v $(pwd):/work \
-  ghcr.io/julius-muller/vcfstash-annotated:latest \
+  ghcr.io/julius-muller/vcfcache-annotated:latest \
   annotate \
-    -a /cache/db/stash/vep_gnomad \
+    -a /cache/db/cache/vep_gnomad \
     --vcf /work/sample.vcf.gz \
     --output /work/results
 ```
@@ -158,7 +158,7 @@ docker run --rm \
 
 ## Configuration Files (YAML)
 
-VCFstash uses two YAML files for configuration:
+VCFcache uses two YAML files for configuration:
 
 ### 1. `params.yaml` - Resource Paths
 
@@ -171,7 +171,7 @@ annotation_tool_cmd: "vep"
 tool_version_command: "vep --version"
 
 # Resources
-chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
+chr_add: "${VCFCACHE_ROOT}/resources/chr_add.txt"
 temp_dir: "/tmp"
 
 # VEP settings (example)
@@ -228,7 +228,7 @@ Typical speedups with gnomAD AF ≥ 1% cache:
 | Clinical exome | 60-80% | 3-5x |
 | Rare disease | 40-60% | 2-3x |
 
-**Why**: Most samples share common variants (dbSNP, gnomAD). VCFstash caches these once and reuses them across all samples.
+**Why**: Most samples share common variants (dbSNP, gnomAD). VCFcache caches these once and reuses them across all samples.
 
 ---
 
@@ -254,7 +254,7 @@ Typical speedups with gnomAD AF ≥ 1% cache:
 
 ## Architecture
 
-VCFstash uses a **pure Python workflow system** (no Java/Nextflow dependency):
+VCFcache uses a **pure Python workflow system** (no Java/Nextflow dependency):
 
 - **Workflow Manager**: Orchestrates bcftools commands via subprocess
 - **Database**: SQLite-backed blueprint and cache management
@@ -278,9 +278,9 @@ MIT License - see [LICENSE](LICENSE) file
 
 ## Citation
 
-If you use VCFstash in your research, please cite:
+If you use VCFcache in your research, please cite:
 
 ```
-VCFstash: Fast Variant Annotation Caching
-https://github.com/julius-muller/vcfstash
+VCFcache: Fast Variant Annotation Caching
+https://github.com/julius-muller/vcfcache
 ```

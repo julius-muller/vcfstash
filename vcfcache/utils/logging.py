@@ -1,4 +1,4 @@
-"""Logging utilities for the vcfstash package.
+"""Logging utilities for the vcfcache package.
 
 This module provides functions for setting up logging with different verbosity levels
 and for logging command execution.
@@ -35,7 +35,7 @@ def setup_logging(verbosity: int, log_file: Optional[Path] = None) -> logging.Lo
     console_level = console_levels.get(min(verbosity, 2), logging.WARNING)
     file_level = file_levels.get(min(verbosity, 2), logging.INFO)
 
-    logger = logging.getLogger("vcfstash")
+    logger = logging.getLogger("vcfcache")
     logger.setLevel(logging.DEBUG)  # Allow all levels to handlers
 
     # Create formatters - different for console and file

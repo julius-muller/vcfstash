@@ -94,9 +94,9 @@ class WorkflowBase(ABC):
 
         This is the main entry point for running the workflow. Different
         db_mode values trigger different workflow logic:
-        - 'stash-init': Create initial cache blueprint
-        - 'stash-add': Add variants to existing blueprint
-        - 'stash-annotate': Annotate the blueprint
+        - 'blueprint-init': Create initial cache blueprint
+        - 'blueprint-extend': Add variants to existing blueprint
+        - 'cache-build': Annotate the blueprint
         - 'annotate': Annotate sample using cache
         - 'annotate-nocache': Annotate sample without cache
 
@@ -104,7 +104,7 @@ class WorkflowBase(ABC):
             db_mode: The workflow mode (see above)
             nextflow_args: Additional arguments (backend-specific)
             trace: Whether to generate trace file
-            db_bcf: Path to database BCF file (for stash-add, annotate modes)
+            db_bcf: Path to database BCF file (for blueprint-extend, annotate modes)
             dag: Whether to generate DAG visualization (may not be supported)
             timeline: Whether to generate timeline (may not be supported)
             report: Whether to generate report (may not be supported)

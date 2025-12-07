@@ -25,24 +25,24 @@ from pathlib import Path
 import yaml
 import requests
 
-from vcfstash import EXPECTED_BCFTOOLS_VERSION
-from vcfstash.integrations.zenodo import download_doi
-from vcfstash.manifest import find_alias, format_manifest, load_manifest
-from vcfstash.database.annotator import DatabaseAnnotator, VCFAnnotator
-from vcfstash.database.initializer import DatabaseInitializer
-from vcfstash.database.updater import DatabaseUpdater
-from vcfstash.utils.logging import log_command, setup_logging
-from vcfstash.utils.archive import extract_cache, tar_cache
-from vcfstash.utils.validation import check_bcftools_installed
+from vcfcache import EXPECTED_BCFTOOLS_VERSION
+from vcfcache.integrations.zenodo import download_doi
+from vcfcache.manifest import find_alias, format_manifest, load_manifest
+from vcfcache.database.annotator import DatabaseAnnotator, VCFAnnotator
+from vcfcache.database.initializer import DatabaseInitializer
+from vcfcache.database.updater import DatabaseUpdater
+from vcfcache.utils.logging import log_command, setup_logging
+from vcfcache.utils.archive import extract_cache, tar_cache
+from vcfcache.utils.validation import check_bcftools_installed
 
 MANIFEST_DEFAULT = Path(__file__).resolve().parent.parent / "public_caches.yaml"
 
 
 def _print_annotation_command(annotation_dir: Path) -> None:
-    """Print the stored annotation_tool_cmd from an annotation stash.
+    """Print the stored annotation_tool_cmd from an annotation cache.
 
     Args:
-        annotation_dir: Path to the stash/<annotation_name> directory.
+        annotation_dir: Path to the cache/<annotation_name> directory.
     """
 
     params_file = annotation_dir / "annotation.yaml"
@@ -63,45 +63,45 @@ def _print_annotation_command(annotation_dir: Path) -> None:
     print(command)
 
 
-def _find_stash_dir(path_hint: Path) -> Path:
-    """Resolve various user inputs to the stash directory.
+def _find_cache_dir(path_hint: Path) -> Path:
+    """Resolve various user inputs to the cache directory.
 
-    Accepts either the stash root, the stash directory itself, or a specific
-    annotation directory (e.g., /cache/db/stash/vep_gnomad). Returns the path to
-    the stash directory that contains annotation subfolders.
+    Accepts either the cache root, the cache directory itself, or a specific
+    annotation directory (e.g., /cache/db/cache/vep_gnomad). Returns the path to
+    the cache directory that contains annotation subfolders.
     """
 
-    if (path_hint / "stash").exists():
-        return path_hint / "stash"
+    if (path_hint / "cache").exists():
+        return path_hint / "cache"
 
-    if path_hint.name == "stash" and path_hint.exists():
+    if path_hint.name == "cache" and path_hint.exists():
         return path_hint
 
     annotation_dir = path_hint
-    if (annotation_dir / "vcfstash_annotated.bcf").exists():
+    if (annotation_dir / "vcfcache_annotated.bcf").exists():
         return annotation_dir.parent
 
     raise FileNotFoundError(
-        "Could not locate a stash directory. Provide -a pointing to a stash root, "
-        "stash directory, or an annotation directory containing vcfstash_annotated.bcf."
+        "Could not locate a cache directory. Provide -a pointing to a cache root, "
+        "cache directory, or an annotation directory containing vcfcache_annotated.bcf."
     )
 
 
 def _list_annotation_caches(path_hint: Path) -> list[str]:
     """Return sorted annotation cache names under the given path hint."""
 
-    stash_dir = _find_stash_dir(path_hint)
+    cache_dir = _find_cache_dir(path_hint)
     names = []
-    for child in stash_dir.iterdir():
+    for child in cache_dir.iterdir():
         if not child.is_dir():
             continue
-        if (child / "vcfstash_annotated.bcf").exists():
+        if (child / "vcfcache_annotated.bcf").exists():
             names.append(child.name)
     return sorted(names)
 
 
 def main() -> None:
-    """Main entry point for the vcfstash command-line interface.
+    """Main entry point for the vcfcache command-line interface.
 
     Parses command-line arguments and executes the appropriate command.
     """
@@ -113,7 +113,7 @@ def main() -> None:
         "-v",
         "--version",
         action="version",
-        version=pkg_version("vcfstash"),
+        version=pkg_version("vcfcache"),
         help="Show version and exit",
     )
 
@@ -160,7 +160,7 @@ def main() -> None:
 
     # init command
     init_parser = subparsers.add_parser(
-        "stash-init", help="Initialize VCF stash blueprint", parents=[parent_parser]
+        "blueprint-init", help="Initialize VCF cache blueprint", parents=[parent_parser]
     )
     init_parser.add_argument(
         "-i", "--vcf", dest="i", required=True, help="CSI-indexed BCF file"
@@ -191,7 +191,7 @@ def main() -> None:
 
     # add command
     add_parser = subparsers.add_parser(
-        "stash-add", help="Add new VCF to the blueprint", parents=[parent_parser]
+        "blueprint-extend", help="Add new VCF to the blueprint", parents=[parent_parser]
     )
     add_parser.add_argument(
         "-d", "--db", required=True, help="Path to the existing database directory"
@@ -210,8 +210,8 @@ def main() -> None:
 
     # annotate command
     annotate_parser = subparsers.add_parser(
-        "stash-annotate",
-        help="Run annotation workflow on blueprint and instantiate a stash",
+        "cache-build",
+        help="Run annotation workflow on blueprint and instantiate a cache",
         parents=[parent_parser],
     )
     annotate_parser.add_argument(
@@ -219,7 +219,7 @@ def main() -> None:
         "--name",
         dest="name",
         required=True,
-        help="Name of the stash instance, will be the directory name",
+        help="Name of the cache instance, will be the directory name",
     )
     annotate_parser.add_argument(
         "-d", "--db", required=True, help="Path to the existing database directory"
@@ -229,7 +229,7 @@ def main() -> None:
         "--force",
         dest="force",
         action="store_true",
-        help="Force overwrite of existing stash directory",
+        help="Force overwrite of existing cache directory",
         default=False,
     )
     annotate_parser.add_argument(
@@ -288,8 +288,8 @@ def main() -> None:
         "--list",
         action="store_true",
         help=(
-            "List available cached annotation names. Provide -a pointing to a stash root, "
-            "a stash directory, or an annotation directory."
+            "List available cached annotation names. Provide -a pointing to a cache root, "
+            "a cache directory, or an annotation directory."
         ),
     )
 
@@ -351,14 +351,14 @@ def main() -> None:
             )
 
     # Check if required args exists based on command
-    if args.command == "stash-init" and not args.params:
-        parser.error("stash-init command requires -y/--yaml parameter")
+    if args.command == "blueprint-init" and not args.params:
+        parser.error("blueprint-init command requires -y/--yaml parameter")
 
     # Setup logging with verbosity
     logger = setup_logging(args.verbose)
     log_command(logger)
 
-    # Check bcftools if params file is provided (required for stash-init)
+    # Check bcftools if params file is provided (required for blueprint-init)
     # For other commands, we'll use params from the database or fall back to init.yaml
     bcftools_path = None
     if not (show_command_only or list_only or args.command in ["pull", "list", "push"]):
@@ -368,10 +368,10 @@ def main() -> None:
                 f"Checking bcftools installation using params file: {args.params}"
             )
             bcftools_path = check_bcftools_installed(Path(args.params))
-        elif args.command in ["stash-add", "stash-annotate", "annotate"]:
+        elif args.command in ["blueprint-extend", "cache-build", "annotate"]:
             # For these commands, try to get bcftools path from the workflow directory
             workflow_dir = None
-            if args.command == "stash-add" or args.command == "stash-annotate":
+            if args.command == "blueprint-extend" or args.command == "cache-build":
                 workflow_dir = Path(args.db) / "workflow"
             elif args.command == "annotate":
                 workflow_dir = Path(args.a).parent.parent / "workflow"
@@ -386,8 +386,8 @@ def main() -> None:
                 bcftools_path = check_bcftools_installed()
 
     try:
-        if args.command == "stash-init":
-            logger.debug(f"Initializing database: {Path(args.output).parent}")
+        if args.command == "blueprint-init":
+            logger.debug(f"Initializing blueprint: {Path(args.output).parent}")
 
             initializer = DatabaseInitializer(
                 input_file=Path(args.i),
@@ -402,8 +402,8 @@ def main() -> None:
             )
             initializer.initialize()
 
-        elif args.command == "stash-add":
-            logger.debug(f"Adding to database: {args.db}")
+        elif args.command == "blueprint-extend":
+            logger.debug(f"Adding to blueprint: {args.db}")
             updater = DatabaseUpdater(
                 db_path=args.db,
                 input_file=args.i,
@@ -416,8 +416,8 @@ def main() -> None:
             )
             updater.add()
 
-        elif args.command == "stash-annotate":
-            logger.debug(f"Running annotation workflow on database: {args.db}")
+        elif args.command == "cache-build":
+            logger.debug(f"Running annotation workflow on blueprint: {args.db}")
 
             annotator = DatabaseAnnotator(
                 annotation_name=args.name,
@@ -443,7 +443,7 @@ def main() -> None:
                     raise FileNotFoundError(
                         f"Annotation cache alias '{args.a}' not found and path does not exist"
                     )
-                cache_store = Path.home() / ".cache/vcfstash/caches"
+                cache_store = Path.home() / ".cache/vcfcache/caches"
                 cache_store.mkdir(parents=True, exist_ok=True)
                 tar_dest = cache_store / f"{entry.alias}.tar.gz"
                 print(
@@ -451,7 +451,7 @@ def main() -> None:
                 )
                 download_doi(entry.doi, tar_dest)
                 cache_dir = extract_cache(tar_dest, cache_store)
-                alias_or_path = cache_dir / "stash" / entry.alias
+                alias_or_path = cache_dir / "cache" / entry.alias
                 args.a = str(alias_or_path)
 
             if args.show_command:
@@ -502,8 +502,8 @@ def main() -> None:
             print(format_manifest(manifest_entries))
 
         elif args.command == "push":
-            from vcfstash.integrations import zenodo
-            from vcfstash.utils.archive import file_md5
+            from vcfcache.integrations import zenodo
+            from vcfcache.utils.archive import file_md5
             import json
 
             token = os.environ.get("ZENODO_TOKEN")

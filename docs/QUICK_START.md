@@ -1,16 +1,16 @@
-# VCFstash Quick Start with Pre-built Cache
+# VCFcache Quick Start with Pre-built Cache
 
-Get started with VCFstash in minutes using our pre-built cache images.
+Get started with VCFcache in minutes using our pre-built cache images.
 
 ## Option 1: Download Pre-built Cache Image
 
 ### Pull the Cache Image
 ```bash
 # Pull the latest GRCh38 cache with VEP 115.2 (1% AF threshold)
-docker pull ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.01-vep115.2
+docker pull ghcr.io/julius-muller/vcfcache-cache:GRCh38-af0.01-vep115.2
 
 # Or pull a smaller cache with higher AF threshold (10% AF)
-docker pull ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.2
+docker pull ghcr.io/julius-muller/vcfcache-cache:GRCh38-af0.10-vep115.2
 ```
 
 ### Annotate Your Samples Immediately
@@ -22,9 +22,9 @@ mkdir -p results
 docker run --rm \
   -v $(pwd)/your_sample.vcf.gz:/data/input.vcf.gz \
   -v $(pwd)/results:/results \
-  ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.01-vep115.2 \
+  ghcr.io/julius-muller/vcfcache-cache:GRCh38-af0.01-vep115.2 \
   annotate \
-  -a /cache/stash/vep_gnomad \
+  -a /cache/cache/vep_gnomad \
   --vcf /data/input.vcf.gz \
   --output /results \
   -y /cache/params.yaml
@@ -65,17 +65,17 @@ cd ..
 
 ### Build Cache
 ```bash
-# Clone VCFstash
-git clone https://github.com/julius-muller/vcfstash.git
-cd vcfstash
+# Clone VCFcache
+git clone https://github.com/julius-muller/vcfcache.git
+cd vcfcache
 
 # Use the production recipe
-vcfstash stash-init \
+vcfcache blueprint-init \
   --vcf ../data/vcfs/gnomad.exomes.v4.1.sites.chr1.vcf.bgz \
   --output ../data/cache \
   -y recipes/hg38_vep115_complete/params.yaml
 
-vcfstash stash-annotate \
+vcfcache cache-build \
   --name vep_gnomad \
   --db ../data/cache \
   -a recipes/hg38_vep115_complete/annotation.config
@@ -96,7 +96,7 @@ Each pre-built cache includes:
 - ✅ **gnomAD population frequencies**
 - ✅ **GRCh38 reference genome**
 - ✅ **Ready-to-use configuration**
-- ✅ **Complete VCFstash CLI**
+- ✅ **Complete VCFcache CLI**
 
 ## Performance
 

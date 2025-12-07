@@ -6,7 +6,7 @@
 **Target Users**: Immediate usage, no setup
 
 **Storage Locations:**
-- **Docker Registry**: `ghcr.io/julius-muller/vcfstash-cache:*`
+- **Docker Registry**: `ghcr.io/julius-muller/vcfcache-cache:*`
 - **Local Docker**: `~/.docker/` (Docker images)
 - **Runtime Cache**: `/cache/` (inside container)
 - **User Data**: Mounted volumes (your choice)
@@ -14,7 +14,7 @@
 **What's Stored:**
 ```
 Container /cache/
-├── stash/vep_gnomad/          # Pre-built annotated cache
+├── cache/vep_gnomad/          # Pre-built annotated cache
 ├── params.yaml                # Configuration used
 └── reference/                 # Reference genome files
 ```
@@ -25,7 +25,7 @@ Container /cache/
 **Storage Locations:**
 - **VEP Cache**: `/data/vep_cache/115/` (3-5 GB)
 - **Reference**: `/data/references/Homo_sapiens.GRCh38.dna.primary_assembly.fa*` (3 GB)
-- **VCFstash Cache**: `/data/vcfstash_cache/` (varies by input data)
+- **VCFcache Cache**: `/data/vcfcache_cache/` (varies by input data)
 - **Input Data**: `/data/vcfs/` (gnomAD, etc.)
 
 **Directory Structure:**
@@ -36,9 +36,9 @@ Container /cache/
 │   └── Homo_sapiens.GRCh38.dna.primary_assembly.fa*
 ├── vcfs/                      # Input VCF files (varies)
 │   └── gnomad.*.vcf.gz
-└── vcfstash_cache/            # VCFstash cache output
+└── vcfcache_cache/            # VCFcache cache output
     ├── blueprint/             # Normalized variants
-    └── stash/                 # Annotated variants
+    └── cache/                 # Annotated variants
         └── vep_gnomad/
 ```
 
@@ -46,9 +46,9 @@ Container /cache/
 **Target Users**: Developers, testing, custom environments
 
 **Storage Locations:**
-- **Code**: `~/vcfstash/` (Git repo)
-- **Virtual Env**: `~/vcfstash/.venv/`
-- **Test Data**: `~/vcfstash/tests/data/`
+- **Code**: `~/vcfcache/` (Git repo)
+- **Virtual Env**: `~/vcfcache/.venv/`
+- **Test Data**: `~/vcfcache/tests/data/`
 - **Local Cache**: User-defined locations
 
 ---
@@ -109,7 +109,7 @@ Container /cache/
 | **VEP Cache** | 3-5 GB | Monthly updates | Download once, reuse |
 | **Reference Genome** | 3 GB | Rare updates | GRCh38 stable |
 | **gnomAD Data** | 100GB-1TB | Quarterly | Optional, user choice |
-| **VCFstash Cache** | 1-50 GB | Per project | Depends on input data |
+| **VCFcache Cache** | 1-50 GB | Per project | Depends on input data |
 
 ---
 

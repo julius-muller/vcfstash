@@ -1,6 +1,6 @@
-# VCFstash Wiki
+# VCFcache Wiki
 
-Comprehensive guide to VCFstash configuration, deployment, and best practices.
+Comprehensive guide to VCFcache configuration, deployment, and best practices.
 
 ---
 
@@ -25,13 +25,13 @@ Comprehensive guide to VCFstash configuration, deployment, and best practices.
 
 ```bash
 # Pull image and annotate
-docker pull ghcr.io/julius-muller/vcfstash-annotated:latest
+docker pull ghcr.io/julius-muller/vcfcache-annotated:latest
 docker run --rm \
   -v $(pwd)/samples:/data \
   -v $(pwd)/results:/output \
-  ghcr.io/julius-muller/vcfstash-annotated:latest \
+  ghcr.io/julius-muller/vcfcache-annotated:latest \
   annotate \
-    -a /cache/db/stash/vep_gnomad \
+    -a /cache/db/cache/vep_gnomad \
     --vcf /data/sample.vcf.gz \
     --output /output
 ```
@@ -40,8 +40,8 @@ docker run --rm \
 
 ```bash
 # Clone and install
-git clone https://github.com/julius-muller/vcfstash.git
-cd vcfstash
+git clone https://github.com/julius-muller/vcfcache.git
+cd vcfcache
 uv venv .venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
 
@@ -57,23 +57,23 @@ See [Building Caches](#building-caches) section below.
 
 ## Cache Structure
 
-VCFstash organizes caches in a standardized directory structure:
+VCFcache organizes caches in a standardized directory structure:
 
 ```
 cache_dir/
 ├── blueprint/                    # Normalized variant blueprint
-│   ├── vcfstash.bcf             # All variants from input VCFs (normalized, deduplicated)
-│   ├── vcfstash.bcf.csi         # Index
+│   ├── vcfcache.bcf             # All variants from input VCFs (normalized, deduplicated)
+│   ├── vcfcache.bcf.csi         # Index
 │   └── sources.info             # Tracking file (MD5 hashes of input VCFs)
-├── stash/                        # Annotation caches
+├── cache/                        # Annotation caches
 │   └── <annotation_name>/       # Named annotation (e.g., "vep_gnomad")
-│       ├── vcfstash_annotated.bcf     # Annotated blueprint (THE CACHE)
-│       ├── vcfstash_annotated.bcf.csi # Index
+│       ├── vcfcache_annotated.bcf     # Annotated blueprint (THE CACHE)
+│       ├── vcfcache_annotated.bcf.csi # Index
 │       ├── annotation.yaml            # Annotation command used
 │       ├── params.snapshot.yaml       # Params at annotation time
 │       └── auxiliary/                 # Optional tool outputs (logs, etc.)
 ├── db/                           # Database metadata (SQLite)
-│   ├── stash.db                 # Cache metadata, version tracking
+│   ├── cache.db                 # Cache metadata, version tracking
 │   └── workflow/                # Workflow files (copied during init)
 └── work/                         # Temporary workflow files (can be deleted)
 ```
@@ -81,14 +81,14 @@ cache_dir/
 ### Key Concepts
 
 - **Blueprint**: The normalized, deduplicated variant set used as the basis for all annotations
-- **Stash**: A named annotation of the blueprint (can have multiple stashes per blueprint)
+- **Cache**: A named annotation of the blueprint (can have multiple cachees per blueprint)
 - **Sources tracking**: MD5 hashes prevent re-adding duplicate input VCFs
 
 ---
 
 ## Configuration Files
 
-VCFstash uses **two YAML files** for configuration (no Groovy, no Java required):
+VCFcache uses **two YAML files** for configuration (no Groovy, no Java required):
 
 ### 1. `params.yaml` - Resource Paths and Settings
 
@@ -101,7 +101,7 @@ VCFstash uses **two YAML files** for configuration (no Groovy, no Java required)
 bcftools_cmd: "bcftools"                    # Path to bcftools binary
 annotation_tool_cmd: "vep"                  # Path to annotation tool
 tool_version_command: "vep --version"       # Command to get tool version
-chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"  # Chromosome renaming file
+chr_add: "${VCFCACHE_ROOT}/resources/chr_add.txt"  # Chromosome renaming file
 temp_dir: "/tmp"                            # Temporary directory
 
 ## Optional Resources (can be referenced in annotation.yaml as ${params.KEY})
@@ -116,12 +116,12 @@ optional_checks:
 ```
 
 **Variable Substitution**:
-- `${VCFSTASH_ROOT}`: Package installation directory
+- `${VCFCACHE_ROOT}`: Package installation directory
 - Environment variables: `${HOME}`, `${USER}`, etc.
 
 ### 2. `annotation.yaml` - Annotation Command
 
-**Purpose**: Define the exact command used to annotate variants. This file is **locked** after `stash-annotate` and stored with the cache to ensure reproducibility.
+**Purpose**: Define the exact command used to annotate variants. This file is **locked** after `cache-build` and stored with the cache to ensure reproducibility.
 
 **Structure**:
 
@@ -169,8 +169,8 @@ optional_checks:
 
 **Setup**:
 ```bash
-git clone https://github.com/julius-muller/vcfstash.git
-cd vcfstash
+git clone https://github.com/julius-muller/vcfcache.git
+cd vcfcache
 uv venv .venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
 ```
@@ -194,7 +194,7 @@ python -m pytest tests/ -v
 
 **Pull Image**:
 ```bash
-docker pull ghcr.io/julius-muller/vcfstash-blueprint:latest
+docker pull ghcr.io/julius-muller/vcfcache-blueprint:latest
 ```
 
 **Create Cache**:
@@ -202,8 +202,8 @@ docker pull ghcr.io/julius-muller/vcfstash-blueprint:latest
 docker run --rm \
   -v $(pwd)/data:/data \
   -v $(pwd)/cache:/cache \
-  ghcr.io/julius-muller/vcfstash-blueprint:latest \
-  stash-init \
+  ghcr.io/julius-muller/vcfcache-blueprint:latest \
+  blueprint-init \
     --vcf /data/gnomad_subset.bcf \
     --output /cache \
     -y /app/recipes/docker-cache/params.yaml
@@ -213,8 +213,8 @@ docker run --rm \
 ```bash
 docker run --rm \
   -v $(pwd)/cache:/cache \
-  ghcr.io/julius-muller/vcfstash-blueprint:latest \
-  stash-annotate \
+  ghcr.io/julius-muller/vcfcache-blueprint:latest \
+  cache-build \
     --name my_annotation \
     --db /cache \
     -a /app/recipes/docker-cache/annotation.yaml \
@@ -225,7 +225,7 @@ docker run --rm \
 ```bash
 docker run --rm \
   --entrypoint /bin/sh \
-  ghcr.io/julius-muller/vcfstash-blueprint:latest \
+  ghcr.io/julius-muller/vcfcache-blueprint:latest \
   -c 'cd /app && python3.13 -m pytest tests/ -v'
 ```
 
@@ -237,7 +237,7 @@ docker run --rm \
 
 **Pull Image**:
 ```bash
-docker pull ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-joint-af010-vep115
+docker pull ghcr.io/julius-muller/vcfcache-annotated:gnomad-grch38-joint-af010-vep115
 ```
 
 **Annotate Samples**:
@@ -245,9 +245,9 @@ docker pull ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-joint-af010-v
 docker run --rm \
   -v $(pwd)/samples:/data \
   -v $(pwd)/results:/output \
-  ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-joint-af010-vep115 \
+  ghcr.io/julius-muller/vcfcache-annotated:gnomad-grch38-joint-af010-vep115 \
   annotate \
-    -a /cache/db/stash/vep_gnomad \
+    -a /cache/db/cache/vep_gnomad \
     --vcf /data/sample.vcf.gz \
     --output /output \
     -y /app/recipes/docker-annotated/params.yaml
@@ -264,7 +264,7 @@ docker run --rm \
 docker run --rm \
   -v /path/to/vep/cache:/opt/vep/.vep:ro \
   --entrypoint /bin/sh \
-  ghcr.io/julius-muller/vcfstash-annotated:latest \
+  ghcr.io/julius-muller/vcfcache-annotated:latest \
   -c 'cd /app && python3.13 -m pytest tests/ -v'
 ```
 
@@ -290,22 +290,22 @@ bcftools view -i 'AF>=0.01' \
 
 ```bash
 # 1. Initialize blueprint
-vcfstash stash-init \
+vcfcache blueprint-init \
   --vcf gnomad_chr1_af0.01.bcf \
   --output ./my_cache \
   --normalize \
   -y params.yaml
 
 # 2. Annotate blueprint
-vcfstash stash-annotate \
+vcfcache cache-build \
   --name vep_gnomad \
   --db ./my_cache \
   -a annotation.yaml \
   -y params.yaml
 
 # 3. Verify cache
-ls -lh ./my_cache/stash/vep_gnomad/
-bcftools stats ./my_cache/stash/vep_gnomad/vcfstash_annotated.bcf | grep "number of records"
+ls -lh ./my_cache/cache/vep_gnomad/
+bcftools stats ./my_cache/cache/vep_gnomad/vcfcache_annotated.bcf | grep "number of records"
 ```
 
 ### Creating a Cache (Docker)
@@ -473,7 +473,7 @@ python -m pytest tests/ -v
 python -m pytest tests/test_annotate.py -xvs
 
 # Run with coverage
-python -m pytest tests/ --cov=vcfstash --cov-report=html
+python -m pytest tests/ --cov=vcfcache --cov-report=html
 ```
 
 ### Docker Tests
@@ -482,7 +482,7 @@ python -m pytest tests/ --cov=vcfstash --cov-report=html
 ```bash
 docker run --rm \
   --entrypoint /bin/sh \
-  ghcr.io/julius-muller/vcfstash-blueprint:latest \
+  ghcr.io/julius-muller/vcfcache-blueprint:latest \
   -c 'cd /app && python3.13 -m pytest tests/ -v'
 ```
 
@@ -491,7 +491,7 @@ docker run --rm \
 docker run --rm \
   -v /path/to/vep/cache:/opt/vep/.vep:ro \
   --entrypoint /bin/sh \
-  ghcr.io/julius-muller/vcfstash-annotated:latest \
+  ghcr.io/julius-muller/vcfcache-annotated:latest \
   -c 'cd /app && python3.13 -m pytest tests/ -v'
 ```
 
@@ -563,7 +563,7 @@ docker run --rm \
 **Cause**: Different chromosome naming (chr1 vs. 1) or different genome build
 
 **Solution**:
-- Use `--normalize` flag during `stash-init` to standardize chromosome names
+- Use `--normalize` flag during `blueprint-init` to standardize chromosome names
 - Verify genome build matches between cache and sample
 
 ---
@@ -577,7 +577,7 @@ docker run --rm \
 docker run --rm \
   -v /absolute/path/to/data:/data \
   -v /absolute/path/to/results:/output \
-  vcfstash-image ...
+  vcfcache-image ...
 
 # Avoid relative paths (can be ambiguous)
 ```
@@ -589,14 +589,14 @@ docker run --rm \
 docker run --rm \
   --memory=16g \
   --cpus=8 \
-  vcfstash-image ...
+  vcfcache-image ...
 ```
 
 ### Image Tags
 
 ```bash
 # Use specific tags for reproducibility
-docker pull ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-joint-af010-vep115
+docker pull ghcr.io/julius-muller/vcfcache-annotated:gnomad-grch38-joint-af010-vep115
 
 # Avoid :latest in production
 ```
@@ -625,9 +625,9 @@ docker system prune -a
 for sample in samples/*.vcf.gz; do
   docker run --rm \
     -v $(pwd):/work \
-    vcfstash-annotated:latest \
+    vcfcache-annotated:latest \
     annotate \
-      -a /cache/db/stash/vep_gnomad \
+      -a /cache/db/cache/vep_gnomad \
       --vcf /work/$sample \
       --output /work/results &
 done
@@ -664,7 +664,7 @@ These are validated during annotation to prevent version mismatches.
 
 ## Getting Help
 
-- **GitHub Issues**: https://github.com/julius-muller/vcfstash/issues
+- **GitHub Issues**: https://github.com/julius-muller/vcfcache/issues
 - **Documentation**: See [README.md](README.md) and [CLAUDE.md](CLAUDE.md)
 - **Tests**: Run `python -m pytest tests/ -v` to see example workflows
 

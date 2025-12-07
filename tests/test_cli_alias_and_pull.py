@@ -5,21 +5,21 @@ from unittest import mock
 
 import sys
 
-import vcfstash.cli as cli
-from vcfstash.utils.archive import tar_cache
+import vcfcache.cli as cli
+from vcfcache.utils.archive import tar_cache
 
 
 def make_dummy_cache(tmp_path: Path, alias: str) -> Path:
     cache_root = tmp_path / f"cache_{alias}"
-    stash_dir = cache_root / "stash" / alias
+    cache_dir = cache_root / "cache" / alias
     workflow_dir = cache_root / "workflow"
-    stash_dir.mkdir(parents=True, exist_ok=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
     workflow_dir.mkdir(parents=True, exist_ok=True)
 
     # Minimal required files
-    (stash_dir / "vcfstash_annotated.bcf").write_bytes(b"dummy")
+    (cache_dir / "vcfcache_annotated.bcf").write_bytes(b"dummy")
     (workflow_dir / "init.yaml").write_text("bcftools_cmd: echo\n")
-    (stash_dir / "annotation.yaml").write_text("annotation_tool_cmd: echo annotate\n")
+    (cache_dir / "annotation.yaml").write_text("annotation_tool_cmd: echo annotate\n")
     return cache_root
 
 
@@ -45,12 +45,12 @@ def test_cli_pull_downloads_and_extracts(tmp_path, monkeypatch, capsys):
     ]
 
     monkeypatch.setattr(cli, "sys", sys)
-    monkeypatch.setattr(sys, "argv", ["vcfstash"] + args)
+    monkeypatch.setattr(sys, "argv", ["vcfcache"] + args)
     cli.main()
 
     extracted = tmp_path / "out" / cache_root.name
     assert extracted.exists()
-    assert (extracted / "stash" / alias / "vcfstash_annotated.bcf").exists()
+    assert (extracted / "cache" / alias / "vcfcache_annotated.bcf").exists()
 
 
 def test_cli_annotate_alias_resolves_and_prints_command(tmp_path, monkeypatch, capsys):
@@ -75,7 +75,7 @@ def test_cli_annotate_alias_resolves_and_prints_command(tmp_path, monkeypatch, c
                     "genome": "GRCh38",
                     "af": "0.10",
                     "tool": "vep115.2",
-                    "image_tag": "vcfstash:vep115.2_basic",
+                    "image_tag": "vcfcache:vep115.2_basic",
                     "updated_at": "2025-01-01",
                 }
             ]
@@ -97,7 +97,7 @@ def test_cli_annotate_alias_resolves_and_prints_command(tmp_path, monkeypatch, c
 
     monkeypatch.setattr(cli.Path, "home", lambda: tmp_path)
     monkeypatch.setattr(cli, "sys", sys)
-    monkeypatch.setattr(sys, "argv", ["vcfstash"] + args)
+    monkeypatch.setattr(sys, "argv", ["vcfcache"] + args)
     cli.main()
 
     captured = capsys.readouterr()
@@ -113,14 +113,14 @@ def test_cli_list_manifest(tmp_path, monkeypatch, capsys):
   genome: GRCh38
   af: "0.10"
   tool: vep115.2
-  image_tag: vcfstash:vep115.2_basic
+  image_tag: vcfcache:vep115.2_basic
   updated_at: 2025-01-01
 """
     )
 
     args = ["list", "--public-caches", "--manifest", str(manifest)]
     monkeypatch.setattr(cli, "sys", sys)
-    monkeypatch.setattr(sys, "argv", ["vcfstash"] + args)
+    monkeypatch.setattr(sys, "argv", ["vcfcache"] + args)
     cli.main()
     captured = capsys.readouterr()
     assert "alias" in captured.out

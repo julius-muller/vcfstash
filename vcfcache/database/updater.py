@@ -5,8 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from vcfstash.database.base import VCFDatabase
-from vcfstash.utils.validation import check_duplicate_md5, compute_md5, get_bcf_stats
+from vcfcache.database.base import VCFDatabase
+from vcfcache.utils.validation import check_duplicate_md5, compute_md5, get_bcf_stats
 
 
 class DatabaseUpdater(VCFDatabase):
@@ -42,7 +42,7 @@ class DatabaseUpdater(VCFDatabase):
         normalize: bool = False,
     ):
         super().__init__(Path(db_path), verbosity, debug, bcftools_path)
-        self.stashed_output.validate_structure()
+        self.cached_output.validate_structure()
         self.logger = self.connect_loggers()
         self.normalize = normalize
         self.input_file = Path(input_file).expanduser().resolve()
@@ -70,7 +70,7 @@ class DatabaseUpdater(VCFDatabase):
             self.params_file = wfini if wfini.exists() else None
 
         # Initialize workflow backend (pure Python)
-        from vcfstash.database.base import create_workflow
+        from vcfcache.database.base import create_workflow
         self.nx_workflow = create_workflow(
             input_file=self.input_file,
             output_dir=self.blueprint_dir,
@@ -106,8 +106,8 @@ class DatabaseUpdater(VCFDatabase):
     def add(self) -> None:
         """Add new variants to existing database
 
-        self = DatabaseUpdater(db_path=Path('~/projects/vcfstash/tests/data/test_out/nftest'),
-        input_file=Path('~/projects/vcfstash/tests/data/nodata/dbsnp_test.bcf'),
+        self = DatabaseUpdater(db_path=Path('~/projects/vcfcache/tests/data/test_out/nftest'),
+        input_file=Path('~/projects/vcfcache/tests/data/nodata/dbsnp_test.bcf'),
         verbosity=2)
         profile='test'
         """
@@ -174,7 +174,7 @@ class DatabaseUpdater(VCFDatabase):
             # Pass the normalize parameter to the workflow
             nextflow_args = ["--normalize", str(self.normalize).lower()]
             self.nx_workflow.run(
-                db_mode="stash-add",
+                db_mode="blueprint-extend",
                 nextflow_args=nextflow_args,
                 trace=True,
                 dag=True,

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from vcfstash.manifest import find_alias, load_manifest
+from vcfcache.manifest import find_alias, load_manifest
 
 
 def test_manifest_load_and_find_alias(tmp_path):
@@ -12,7 +12,7 @@ def test_manifest_load_and_find_alias(tmp_path):
   genome: GRCh38
   af: "0.10"
   tool: vep115.2
-  image_tag: vcfstash:vep115.2_basic
+  image_tag: vcfcache:vep115.2_basic
   updated_at: 2025-01-01
   md5: abc
 """

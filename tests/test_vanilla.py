@@ -1,4 +1,4 @@
-"""Tests for vanilla vcfstash package (no cache, no external tools).
+"""Tests for vanilla vcfcache package (no cache, no external tools).
 
 These tests should pass in a plain Python environment without any
 cache files, Nextflow, or annotation tools.
@@ -13,48 +13,48 @@ from pathlib import Path
 def test_module_imports(test_scenario):
     """Test that all core modules can be imported."""
     # Core modules
-    import vcfstash
-    import vcfstash.cli
-    import vcfstash.database
-    import vcfstash.utils
+    import vcfcache
+    import vcfcache.cli
+    import vcfcache.database
+    import vcfcache.utils
 
     # Utils
-    import vcfstash.utils.paths
-    import vcfstash.utils.validation
-    import vcfstash.utils.logging
+    import vcfcache.utils.paths
+    import vcfcache.utils.validation
+    import vcfcache.utils.logging
 
     # Database classes
-    from vcfstash.database.base import VCFDatabase
-    from vcfstash.database.initializer import DatabaseInitializer
-    from vcfstash.database.updater import DatabaseUpdater
-    from vcfstash.database.annotator import DatabaseAnnotator, VCFAnnotator
+    from vcfcache.database.base import VCFDatabase
+    from vcfcache.database.initializer import DatabaseInitializer
+    from vcfcache.database.updater import DatabaseUpdater
+    from vcfcache.database.annotator import DatabaseAnnotator, VCFAnnotator
 
     # Verify constants are set
-    assert hasattr(vcfstash, 'EXPECTED_BCFTOOLS_VERSION')
-    assert isinstance(vcfstash.EXPECTED_BCFTOOLS_VERSION, str)
+    assert hasattr(vcfcache, 'EXPECTED_BCFTOOLS_VERSION')
+    assert isinstance(vcfcache.EXPECTED_BCFTOOLS_VERSION, str)
 
 
 def test_cli_help(test_scenario):
     """Test that CLI help command works."""
     result = subprocess.run(
-        ["vcfstash", "--help"],
+        ["vcfcache", "--help"],
         capture_output=True,
         text=True
     )
     assert result.returncode == 0
     # Check for key content in help text (case-insensitive)
     stdout_lower = result.stdout.lower()
-    assert "vcf annotation" in stdout_lower or "stash-init" in stdout_lower
-    assert "stash-init" in result.stdout
-    assert "stash-add" in result.stdout
-    assert "stash-annotate" in result.stdout
+    assert "vcf annotation" in stdout_lower or "blueprint-init" in stdout_lower
+    assert "blueprint-init" in result.stdout
+    assert "blueprint-extend" in result.stdout
+    assert "cache-build" in result.stdout
     assert "annotate" in result.stdout
 
 
 def test_cli_version(test_scenario):
     """Test that CLI version command works."""
     result = subprocess.run(
-        ["vcfstash", "--version"],
+        ["vcfcache", "--version"],
         capture_output=True,
         text=True
     )
@@ -66,15 +66,15 @@ def test_cli_version(test_scenario):
     assert re.search(r'\d+\.\d+\.\d+', version_output), f"No version found in: {version_output}"
 
 
-def test_stash_init_help(test_scenario):
-    """Test stash-init help command."""
+def test_blueprint_init_help(test_scenario):
+    """Test blueprint-init help command."""
     result = subprocess.run(
-        ["vcfstash", "stash-init", "--help"],
+        ["vcfcache", "blueprint-init", "--help"],
         capture_output=True,
         text=True
     )
     assert result.returncode == 0
-    assert "stash-init" in result.stdout
+    assert "blueprint-init" in result.stdout
     assert "--vcf" in result.stdout or "-i" in result.stdout
     assert "--output" in result.stdout or "-o" in result.stdout
 
@@ -82,7 +82,7 @@ def test_stash_init_help(test_scenario):
 def test_error_handling_missing_vcf(test_scenario):
     """Test error handling for missing VCF file."""
     result = subprocess.run(
-        ["vcfstash", "stash-init",
+        ["vcfcache", "blueprint-init",
          "--vcf", "nonexistent.bcf",
          "--output", "/tmp/test",
          "-y", "nonexistent.yaml"],
@@ -97,7 +97,7 @@ def test_error_handling_missing_params(test_scenario):
     """Test error handling for missing params file."""
     # Create a temporary VCF path (doesn't need to exist for this test)
     result = subprocess.run(
-        ["vcfstash", "stash-init",
+        ["vcfcache", "blueprint-init",
          "--vcf", "test.bcf",
          "--output", "/tmp/test",
          "-y", "definitely_nonexistent_file.yaml"],
@@ -110,7 +110,7 @@ def test_error_handling_missing_params(test_scenario):
 
 def test_check_duplicate_md5(test_scenario):
     """Test duplicate MD5 checking logic."""
-    from vcfstash.utils.validation import check_duplicate_md5
+    from vcfcache.utils.validation import check_duplicate_md5
 
     # Test with empty info
     db_info = {"input_files": []}
@@ -136,7 +136,7 @@ def test_md5_computation(test_scenario):
         temp_file = Path(f.name)
 
     try:
-        from vcfstash.utils.validation import compute_md5
+        from vcfcache.utils.validation import compute_md5
 
         # Compute MD5
         md5_hash = compute_md5(temp_file)
@@ -154,22 +154,22 @@ def test_md5_computation(test_scenario):
 
 
 def test_path_resolution(test_scenario):
-    """Test VCFSTASH_ROOT path resolution."""
-    from vcfstash.utils.paths import get_vcfstash_root, get_resource_path
+    """Test VCFCACHE_ROOT path resolution."""
+    from vcfcache.utils.paths import get_vcfcache_root, get_resource_path
 
     # Get root path
-    root = get_vcfstash_root()
+    root = get_vcfcache_root()
     assert root.exists()
     assert root.is_dir()
 
     # Verify it contains expected directories based on environment
-    # In development: root/vcfstash, root/resources, root/tools
-    # In Docker: root/resources, root/tools (vcfstash is in venv)
-    has_dev_structure = (root / "vcfstash").exists()
+    # In development: root/vcfcache, root/resources, root/tools
+    # In Docker: root/resources, root/tools (vcfcache is in venv)
+    has_dev_structure = (root / "vcfcache").exists()
     has_docker_structure = (root / "resources").exists() and (root / "tools").exists()
 
     assert has_dev_structure or has_docker_structure, \
-        f"Expected either dev structure (vcfstash/) or Docker structure (resources/, tools/) in {root}"
+        f"Expected either dev structure (vcfcache/) or Docker structure (resources/, tools/) in {root}"
 
     # Test resource path resolution
     resource_path = get_resource_path(Path("resources/chr_add.txt"))
@@ -179,7 +179,7 @@ def test_path_resolution(test_scenario):
 
 def test_bcftools_expected_version(test_scenario):
     """Test that expected bcftools version is defined."""
-    from vcfstash import EXPECTED_BCFTOOLS_VERSION
+    from vcfcache import EXPECTED_BCFTOOLS_VERSION
 
     assert isinstance(EXPECTED_BCFTOOLS_VERSION, str)
     assert len(EXPECTED_BCFTOOLS_VERSION) > 0

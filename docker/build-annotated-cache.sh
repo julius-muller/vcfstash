@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- argument parser -------------------------------------------------------
 AF="0.10"
-CACHE_DIR="/opt/vcfstash-cache"
+CACHE_DIR="/opt/vcfcache-cache"
 THREADS="12"
 CNAME="vep_gnomad"
 GENOME="GRCh38"
@@ -63,7 +63,7 @@ if [[ ! -d "${VEP_CACHE}" ]]; then
 fi
 
 echo "========================================="
-echo "Building Annotated VCFstash Cache"
+echo "Building Annotated VCFcache Cache"
 echo "========================================="
 echo "Configuration:"
 echo "  - BCF Source: ${BCF_FILE}"
@@ -78,14 +78,14 @@ echo "  - Threads: ${THREADS}"
 echo "========================================="
 
 # --------------------------------------------------------------------------
-# Step 1: Build blueprint with stash-init
+# Step 1: Build blueprint with blueprint-init
 
 DB_DIR="${CACHE_DIR}/db"
 rm -rf "${DB_DIR}"
 
 echo ""
-echo "Step 1: Initializing VCFstash blueprint..."
-vcfstash stash-init --force \
+echo "Step 1: Initializing VCFcache blueprint..."
+vcfcache blueprint-init --force \
     --vcf "${BCF_FILE}" \
     --output "${DB_DIR}" \
     -y "${PARAMS_FILE}"
@@ -93,13 +93,13 @@ vcfstash stash-init --force \
 echo "✓ Blueprint created"
 
 # --------------------------------------------------------------------------
-# Step 2: Annotate blueprint with VEP (stash-annotate)
+# Step 2: Annotate blueprint with VEP (cache-build)
 
 echo ""
 echo "Step 2: Annotating blueprint with VEP..."
 echo "This may take 30-60 minutes for full genome data..."
 
-vcfstash stash-annotate \
+vcfcache cache-build \
     --db "${DB_DIR}" \
     --name "${ANNOTATION_NAME}" \
     -a "${ANNOTATION_CONFIG}" \
@@ -110,7 +110,7 @@ echo "✓ Annotation complete"
 # --------------------------------------------------------------------------
 # Verify the annotated cache
 
-ANNOTATED_BCF="${DB_DIR}/stash/${ANNOTATION_NAME}/vcfstash_annotated.bcf"
+ANNOTATED_BCF="${DB_DIR}/cache/${ANNOTATION_NAME}/vcfcache_annotated.bcf"
 if [[ ! -f "${ANNOTATED_BCF}" ]]; then
     echo "ERROR: Annotated BCF not found at ${ANNOTATED_BCF}"
     exit 1
@@ -122,7 +122,7 @@ echo "✓ Annotated cache build complete!"
 echo "========================================="
 echo "Cache location:"
 echo "  - Blueprint: ${DB_DIR}/blueprint/"
-echo "  - Annotated: ${DB_DIR}/stash/${ANNOTATION_NAME}/"
+echo "  - Annotated: ${DB_DIR}/cache/${ANNOTATION_NAME}/"
 echo "========================================="
 
 # Show some stats

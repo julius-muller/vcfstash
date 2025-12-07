@@ -28,7 +28,7 @@ def download_doi(doi: str, dest: Path) -> Path:
     """Download the first file of a Zenodo record given a DOI.
 
     Note: For simplicity we pick the first attached file. Records intended for
-    vcfstash caches should contain a single tarball.
+    vcfcache caches should contain a single tarball.
     """
 
     rec_id = doi.split(".")[-1] if "zenodo" in doi else doi

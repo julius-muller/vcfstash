@@ -8,7 +8,7 @@ tool_version_command: "vep | grep -oP \"ensembl-vep\\s+:\\s+\\K\\d+\\.\\d+\""
 # Use bcftools 1.22 from /opt/bcftools (VEP image has 1.13 which lacks --write-index)
 bcftools_cmd: "/opt/bcftools/bin/bcftools"
 reference: "/tmp/dummy.fa"  # Placeholder - not used during cache init from BCF
-chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
+chr_add: "${VCFCACHE_ROOT}/resources/chr_add.txt"
 temp_dir: "/tmp"
 
 ## * VEP CONFIGURATION *

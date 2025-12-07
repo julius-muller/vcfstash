@@ -31,7 +31,7 @@ shift
 
 # Default configuration
 AF_THRESHOLDS="0.01 0.05 0.10"
-OUTPUT_DIR="/mnt/data/vcfstash_data/gnomad"
+OUTPUT_DIR="/mnt/data/vcfcache_data/gnomad"
 THREADS=4
 
 # Parse arguments

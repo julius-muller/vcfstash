@@ -1,39 +1,39 @@
-"""Test annotate functionality of VCFstash."""
+"""Test annotate functionality of VCFcache."""
 
 import os
 from pathlib import Path
 import subprocess
 import shutil
 import pytest
-from vcfstash.utils.paths import get_vcfstash_root, get_resource_path
+from vcfcache.utils.paths import get_vcfcache_root, get_resource_path
 
 # Constants
-TEST_ROOT = get_vcfstash_root() / "tests"
+TEST_ROOT = get_vcfcache_root() / "tests"
 TEST_DATA_DIR = TEST_ROOT / "data" / "nodata"
 TEST_VCF = TEST_DATA_DIR / "crayz_db.bcf"
 TEST_VCF2 = TEST_DATA_DIR / "crayz_db2.bcf"
 TEST_SAMPLE = TEST_DATA_DIR / "sample4.bcf"
 TEST_PARAMS = TEST_ROOT / "config" / "test_params.yaml"
 TEST_ANNO_CONFIG = TEST_ROOT / "config" / "test_annotation.yaml"
-VCFSTASH_CMD = "vcfstash"
-VCFSTASH_ROOT = get_vcfstash_root()
+VCFCACHE_CMD = "vcfcache"
+VCFCACHE_ROOT = get_vcfcache_root()
 
 
 def _env():
     env = os.environ.copy()
-    env["VCFSTASH_ROOT"] = str(VCFSTASH_ROOT)
+    env["VCFCACHE_ROOT"] = str(VCFCACHE_ROOT)
     return env
 
 
-def run_stash_init(input_vcf, output_dir, force=False, normalize=False):
-    """Run the stash-init command and return the process result."""
+def run_blueprint_init(input_vcf, output_dir, force=False, normalize=False):
+    """Run the blueprint-init command and return the process result."""
     # Make sure the directory doesn't exist (clean start)
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
 
     cmd = [
-        str(VCFSTASH_CMD),
-        "stash-init",
+        str(VCFCACHE_CMD),
+        "blueprint-init",
         "--vcf", str(input_vcf),
         "--output", str(output_dir),
         "-y", TEST_PARAMS
@@ -55,11 +55,11 @@ def run_stash_init(input_vcf, output_dir, force=False, normalize=False):
     return result
 
 
-def run_stash_add(db_dir, input_vcf, normalize=False):
-    """Run the stash-add command and return the process result."""
+def run_blueprint_extend(db_dir, input_vcf, normalize=False):
+    """Run the blueprint-extend command and return the process result."""
     cmd = [
-        str(VCFSTASH_CMD),
-        "stash-add",
+        str(VCFCACHE_CMD),
+        "blueprint-extend",
         "--db", str(db_dir),
         "-i", str(input_vcf)
     ]
@@ -77,12 +77,12 @@ def run_stash_add(db_dir, input_vcf, normalize=False):
     return result
 
 
-def run_stash_annotate(db_dir, name, force=False):
-    """Run the stash-annotate command and return the process result."""
+def run_cache_build(db_dir, name, force=False):
+    """Run the cache-build command and return the process result."""
 
     cmd = [
-        str(VCFSTASH_CMD),
-        "stash-annotate",
+        str(VCFCACHE_CMD),
+        "cache-build",
         "--name", name,
         "-a", str(TEST_ANNO_CONFIG),
         "--db", str(db_dir),
@@ -104,7 +104,7 @@ def run_stash_annotate(db_dir, name, force=False):
         return result
 
     except Exception as e:
-        print(f"Error running stash-annotate: {e}\nRuuning commands: {cmd}")
+        print(f"Error running cache-build: {e}\nRuuning commands: {cmd}")
         raise e
 
 
@@ -112,7 +112,7 @@ def run_annotate(annotation_db, input_vcf, output_dir, force=False):
     """Run the annotate command and return the process result."""
 
     cmd = [
-        str(VCFSTASH_CMD),
+        str(VCFCACHE_CMD),
         "annotate",
         "-a", str(annotation_db),
         "--vcf", str(input_vcf),
@@ -175,39 +175,39 @@ def test_sample_file_validity(test_output_dir, test_scenario):
 
 
 def test_full_annotation_workflow(test_output_dir, test_scenario, prebuilt_cache):
-    """Test the full annotation workflow from stash-init to annotate.
+    """Test the full annotation workflow from blueprint-init to annotate.
 
     Adapts based on scenario:
     - vanilla: Create cache from scratch
-    - blueprint: Use prebuilt cache + create test stash
-    - annotated: Use prebuilt cache + create test stash
+    - blueprint: Use prebuilt cache + create test cache
+    - annotated: Use prebuilt cache + create test cache
     """
     print(f"\n=== Testing full annotation workflow (scenario: {test_scenario}) ===")
 
     # Determine which cache to use
     if test_scenario == "vanilla":
-        # Step 1: Run stash-init to create cache from scratch
-        print("Running stash-init (creating cache from test data)...")
-        init_result = run_stash_init(TEST_VCF, test_output_dir, force=True)
-        assert init_result.returncode == 0, f"stash-init failed: {init_result.stderr}"
+        # Step 1: Run blueprint-init to create cache from scratch
+        print("Running blueprint-init (creating cache from test data)...")
+        init_result = run_blueprint_init(TEST_VCF, test_output_dir, force=True)
+        assert init_result.returncode == 0, f"blueprint-init failed: {init_result.stderr}"
 
-        # Step 2: Run stash-add
-        print("Running stash-add...")
-        add_result = run_stash_add(test_output_dir, TEST_VCF2)
-        assert add_result.returncode == 0, f"stash-add failed: {add_result.stderr}"
+        # Step 2: Run blueprint-extend
+        print("Running blueprint-extend...")
+        add_result = run_blueprint_extend(test_output_dir, TEST_VCF2)
+        assert add_result.returncode == 0, f"blueprint-extend failed: {add_result.stderr}"
 
         db_dir = test_output_dir
     else:
-        # Blueprint/Annotated: Use prebuilt cache, create a test stash
+        # Blueprint/Annotated: Use prebuilt cache, create a test cache
         print(f"Using prebuilt cache at {prebuilt_cache}")
         print("Creating test cache from test data for annotation testing...")
 
         # Create a test cache in test_output_dir for annotation testing
-        init_result = run_stash_init(TEST_VCF, test_output_dir, force=True)
-        assert init_result.returncode == 0, f"stash-init failed: {init_result.stderr}"
+        init_result = run_blueprint_init(TEST_VCF, test_output_dir, force=True)
+        assert init_result.returncode == 0, f"blueprint-init failed: {init_result.stderr}"
 
-        add_result = run_stash_add(test_output_dir, TEST_VCF2)
-        assert add_result.returncode == 0, f"stash-add failed: {add_result.stderr}"
+        add_result = run_blueprint_extend(test_output_dir, TEST_VCF2)
+        assert add_result.returncode == 0, f"blueprint-extend failed: {add_result.stderr}"
 
         db_dir = test_output_dir
 
@@ -217,16 +217,16 @@ def test_full_annotation_workflow(test_output_dir, test_scenario, prebuilt_cache
     if workflow_dir.exists():
         print(f"Workflow directory contents: {list(workflow_dir.iterdir())}")
 
-    # Step 3: Run stash-annotate
-    print("Running stash-annotate...")
+    # Step 3: Run cache-build
+    print("Running cache-build...")
     annotate_name = "test_annotation"
-    annotate_result = run_stash_annotate(test_output_dir, annotate_name, force=True)
+    annotate_result = run_cache_build(test_output_dir, annotate_name, force=True)
     if annotate_result.returncode != 0:
         print(f"Command output: {annotate_result.stdout}")
         print(f"Command error: {annotate_result.stderr}")
         print(f"Working directory contents: {list(Path(test_output_dir).iterdir())}")
         print(f"Workflow directory contents: {list(workflow_dir.iterdir())}")
-    assert annotate_result.returncode == 0, f"stash-annotate failed: {annotate_result.stderr}"
+    assert annotate_result.returncode == 0, f"cache-build failed: {annotate_result.stderr}"
 
     # Use bcftools from PATH (respects setup_test_environment fixture)
     # In annotated images, this will be /opt/bcftools/bin/bcftools (compiled 1.22)
@@ -234,8 +234,8 @@ def test_full_annotation_workflow(test_output_dir, test_scenario, prebuilt_cache
     bcftools_path = 'bcftools'
 
     # Step 4: Verify the annotation directory was created
-    stash_dir = Path(test_output_dir) / "stash"
-    annotation_dir = stash_dir / annotate_name
+    cache_dir = Path(test_output_dir) / "cache"
+    annotation_dir = cache_dir / annotate_name
     assert annotation_dir.exists(), f"Annotation directory not found: {annotation_dir}"
     print(f"Annotation directory created: {annotation_dir}")
 
@@ -322,24 +322,24 @@ def test_cached_vs_uncached_annotation(test_output_dir, params_file, test_scenar
 
     # Step 1: Create a database
     print("Creating database...")
-    init_cmd = [VCFSTASH_CMD, "stash-init", "-i", str(TEST_VCF),
+    init_cmd = [VCFCACHE_CMD, "blueprint-init", "-i", str(TEST_VCF),
                 "-o", str(test_output_dir), "-y", str(params_file), "-f"]
     init_result = subprocess.run(init_cmd, capture_output=True, text=True)
-    assert init_result.returncode == 0, f"stash-init failed: {init_result.stderr}"
+    assert init_result.returncode == 0, f"blueprint-init failed: {init_result.stderr}"
 
-    # Step 2: Run stash-annotate to create the annotation cache
+    # Step 2: Run cache-build to create the annotation cache
     print("Creating annotation cache...")
     annotate_name = "test_annotation"
-    stash_annotate_cmd = [VCFSTASH_CMD, "stash-annotate", "--name", annotate_name,
+    cache_build_cmd = [VCFCACHE_CMD, "cache-build", "--name", annotate_name,
                           "--db", str(test_output_dir), "-a", str(TEST_ANNO_CONFIG),
                           "-y", str(params_file), "-f"]
-    stash_annotate_result = subprocess.run(stash_annotate_cmd, capture_output=True, text=True)
-    assert stash_annotate_result.returncode == 0, f"stash-annotate failed: {stash_annotate_result.stderr}"
+    cache_build_result = subprocess.run(cache_build_cmd, capture_output=True, text=True)
+    assert cache_build_result.returncode == 0, f"cache-build failed: {cache_build_result.stderr}"
 
     # Step 3: Run annotation with caching
     print("Running cached annotation...")
     cached_output = Path(test_output_dir) / "cached_output"
-    cached_cmd = [VCFSTASH_CMD, "annotate", "-a", str(Path(test_output_dir) / "stash" / annotate_name),
+    cached_cmd = [VCFCACHE_CMD, "annotate", "-a", str(Path(test_output_dir) / "cache" / annotate_name),
                   "-i", str(TEST_SAMPLE), "-o", str(cached_output),
                   "-y", str(params_file), "-f"]
     cached_result = subprocess.run(cached_cmd, capture_output=True, text=True)
@@ -348,7 +348,7 @@ def test_cached_vs_uncached_annotation(test_output_dir, params_file, test_scenar
     # Step 4: Run annotation without caching
     print("Running uncached annotation...")
     uncached_output = Path(test_output_dir) / "uncached_output"
-    uncached_cmd = [VCFSTASH_CMD, "annotate", "-a", str(Path(test_output_dir) / "stash" / annotate_name),
+    uncached_cmd = [VCFCACHE_CMD, "annotate", "-a", str(Path(test_output_dir) / "cache" / annotate_name),
                     "-i", str(TEST_SAMPLE), "-o", str(uncached_output),
                     "-y", str(params_file), "--uncached", "-f"]
     uncached_result = subprocess.run(uncached_cmd, capture_output=True, text=True)
@@ -401,19 +401,19 @@ def test_input_not_modified_during_annotation(test_output_dir, params_file, test
 
     # Step 1: Create a database
     print("Creating database...")
-    init_cmd = [VCFSTASH_CMD, "stash-init", "-i", str(TEST_VCF),
+    init_cmd = [VCFCACHE_CMD, "blueprint-init", "-i", str(TEST_VCF),
                 "-o", str(test_output_dir), "-y", str(params_file), "-f"]
     init_result = subprocess.run(init_cmd, capture_output=True, text=True)
-    assert init_result.returncode == 0, f"stash-init failed: {init_result.stderr}"
+    assert init_result.returncode == 0, f"blueprint-init failed: {init_result.stderr}"
 
-    # Step 2: Run stash-annotate to create the annotation cache
+    # Step 2: Run cache-build to create the annotation cache
     print("Creating annotation cache...")
     annotate_name = "test_annotation"
-    stash_annotate_cmd = [VCFSTASH_CMD, "stash-annotate", "--name", annotate_name,
+    cache_build_cmd = [VCFCACHE_CMD, "cache-build", "--name", annotate_name,
                           "--db", str(test_output_dir), "-a", str(TEST_ANNO_CONFIG),
                           "-y", str(params_file), "-f"]
-    stash_annotate_result = subprocess.run(stash_annotate_cmd, capture_output=True, text=True)
-    assert stash_annotate_result.returncode == 0, f"stash-annotate failed: {stash_annotate_result.stderr}"
+    cache_build_result = subprocess.run(cache_build_cmd, capture_output=True, text=True)
+    assert cache_build_result.returncode == 0, f"cache-build failed: {cache_build_result.stderr}"
 
     # Step 3: Make a copy of the input file to compare later
     print("Creating a copy of the input file...")
@@ -435,7 +435,7 @@ def test_input_not_modified_during_annotation(test_output_dir, params_file, test
     # Step 4: Run annotation with caching
     print("Running annotation...")
     output_dir = Path(test_output_dir) / "annotation_output"
-    annotate_cmd = [VCFSTASH_CMD, "annotate", "-a", str(Path(test_output_dir) / "stash" / annotate_name),
+    annotate_cmd = [VCFCACHE_CMD, "annotate", "-a", str(Path(test_output_dir) / "cache" / annotate_name),
                   "-i", str(TEST_SAMPLE), "-o", str(output_dir),
                   "-y", str(params_file), "-f"]
     annotate_result = subprocess.run(annotate_cmd, capture_output=True, text=True)
@@ -490,17 +490,17 @@ def test_normalization_flag(test_output_dir, params_file, test_scenario):
     """Test that the normalization flag works correctly."""
     print(f"\n=== Testing normalization flag functionality (scenario: {test_scenario}) ===")
 
-    # Step 1: Run stash-init with normalization
-    print("Running stash-init with normalization...")
+    # Step 1: Run blueprint-init with normalization
+    print("Running blueprint-init with normalization...")
     norm_dir = Path(test_output_dir) / "normalized"
-    norm_result = run_stash_init(TEST_VCF, norm_dir, force=True, normalize=True)
-    assert norm_result.returncode == 0, f"stash-init with normalization failed: {norm_result.stderr}"
+    norm_result = run_blueprint_init(TEST_VCF, norm_dir, force=True, normalize=True)
+    assert norm_result.returncode == 0, f"blueprint-init with normalization failed: {norm_result.stderr}"
 
-    # Step 2: Run stash-init without normalization
-    print("Running stash-init without normalization...")
+    # Step 2: Run blueprint-init without normalization
+    print("Running blueprint-init without normalization...")
     no_norm_dir = Path(test_output_dir) / "not_normalized"
-    no_norm_result = run_stash_init(TEST_VCF, no_norm_dir, force=True, normalize=False)
-    assert no_norm_result.returncode == 0, f"stash-init without normalization failed: {no_norm_result.stderr}"
+    no_norm_result = run_blueprint_init(TEST_VCF, no_norm_dir, force=True, normalize=False)
+    assert no_norm_result.returncode == 0, f"blueprint-init without normalization failed: {no_norm_result.stderr}"
 
     # Step 3: Compare the output files
     print("Comparing output files...")
@@ -510,53 +510,53 @@ def test_normalization_flag(test_output_dir, params_file, test_scenario):
 
     # Compare the headers of the normalized and non-normalized files
     norm_header = subprocess.run(
-        [str(bcftools_path), "view", "-h", str(norm_dir / "blueprint" / "vcfstash.bcf")],
+        [str(bcftools_path), "view", "-h", str(norm_dir / "blueprint" / "vcfcache.bcf")],
         capture_output=True, text=True
     )
     no_norm_header = subprocess.run(
-        [str(bcftools_path), "view", "-h", str(no_norm_dir / "blueprint" / "vcfstash.bcf")],
+        [str(bcftools_path), "view", "-h", str(no_norm_dir / "blueprint" / "vcfcache.bcf")],
         capture_output=True, text=True
     )
 
     # The headers should be different if normalization was applied
     assert norm_header.stdout != no_norm_header.stdout, "Normalization did not produce different headers"
 
-    # Step 4: Run stash-add with normalization
-    print("Running stash-add with normalization...")
-    add_norm_result = run_stash_add(norm_dir, TEST_VCF2, normalize=True)
-    assert add_norm_result.returncode == 0, f"stash-add with normalization failed: {add_norm_result.stderr}"
+    # Step 4: Run blueprint-extend with normalization
+    print("Running blueprint-extend with normalization...")
+    add_norm_result = run_blueprint_extend(norm_dir, TEST_VCF2, normalize=True)
+    assert add_norm_result.returncode == 0, f"blueprint-extend with normalization failed: {add_norm_result.stderr}"
 
-    # Step 5: Run stash-add without normalization
-    print("Running stash-add without normalization...")
-    add_no_norm_result = run_stash_add(no_norm_dir, TEST_VCF2, normalize=False)
-    assert add_no_norm_result.returncode == 0, f"stash-add without normalization failed: {add_no_norm_result.stderr}"
+    # Step 5: Run blueprint-extend without normalization
+    print("Running blueprint-extend without normalization...")
+    add_no_norm_result = run_blueprint_extend(no_norm_dir, TEST_VCF2, normalize=False)
+    assert add_no_norm_result.returncode == 0, f"blueprint-extend without normalization failed: {add_no_norm_result.stderr}"
 
-    # Step 6: Compare the output files after stash-add
-    print("Comparing output files after stash-add...")
+    # Step 6: Compare the output files after blueprint-extend
+    print("Comparing output files after blueprint-extend...")
 
-    # Compare the headers after stash-add
+    # Compare the headers after blueprint-extend
     norm_header_after = subprocess.run(
-        [str(bcftools_path), "view", "-h", str(norm_dir / "blueprint" / "vcfstash.bcf")],
+        [str(bcftools_path), "view", "-h", str(norm_dir / "blueprint" / "vcfcache.bcf")],
         capture_output=True, text=True
     )
     no_norm_header_after = subprocess.run(
-        [str(bcftools_path), "view", "-h", str(no_norm_dir / "blueprint" / "vcfstash.bcf")],
+        [str(bcftools_path), "view", "-h", str(no_norm_dir / "blueprint" / "vcfcache.bcf")],
         capture_output=True, text=True
     )
 
-    # The headers should still be different after stash-add
-    assert norm_header_after.stdout != no_norm_header_after.stdout, "Normalization did not produce different headers after stash-add"
+    # The headers should still be different after blueprint-extend
+    assert norm_header_after.stdout != no_norm_header_after.stdout, "Normalization did not produce different headers after blueprint-extend"
 
     # Step 7: Compare the actual content of the files to verify normalization was applied
     print("Comparing file content to verify normalization...")
 
     # Get the content of the normalized and non-normalized files
     norm_content = subprocess.run(
-        [str(bcftools_path), "view", str(norm_dir / "blueprint" / "vcfstash.bcf")],
+        [str(bcftools_path), "view", str(norm_dir / "blueprint" / "vcfcache.bcf")],
         capture_output=True, text=True
     )
     no_norm_content = subprocess.run(
-        [str(bcftools_path), "view", str(no_norm_dir / "blueprint" / "vcfstash.bcf")],
+        [str(bcftools_path), "view", str(no_norm_dir / "blueprint" / "vcfcache.bcf")],
         capture_output=True, text=True
     )
 

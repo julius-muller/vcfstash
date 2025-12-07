@@ -72,8 +72,8 @@ if [ -z "${OUTPUT_TAG}" ]; then
   # Add 'latest' tag too
   LATEST_TAG="${OUTPUT_TAG%:*}:latest"
 else
-  OUTPUT_TAG="${REGISTRY}/vcfstash-annotated:${OUTPUT_TAG}"
-  LATEST_TAG="${REGISTRY}/vcfstash-annotated:latest"
+  OUTPUT_TAG="${REGISTRY}/vcfcache-annotated:${OUTPUT_TAG}"
+  LATEST_TAG="${REGISTRY}/vcfcache-annotated:latest"
 fi
 
 echo "==============================================================================="
@@ -102,7 +102,7 @@ fi
 
 # Clean up any leftover containers
 echo "🧹 Cleaning up old annotation containers..."
-docker rm -f vcfstash-annotate-temp 2>/dev/null || true
+docker rm -f vcfcache-annotate-temp 2>/dev/null || true
 
 echo ""
 echo "🧬 Running VEP annotation with mounted cache..."
@@ -115,12 +115,12 @@ START_TIME=$(date +%s)
 # Run container with VEP cache mounted and execute annotation script
 # Run as root so we can write to /cache directory
 docker run \
-  --name vcfstash-annotate-temp \
+  --name vcfcache-annotate-temp \
   --user root \
   -v "${VEP_CACHE_DIR}:/opt/vep/.vep:ro" \
   --entrypoint /bin/bash \
   "${BASE_IMAGE}" \
-  -c "export VCFSTASH_ROOT=/app && \
+  -c "export VCFCACHE_ROOT=/app && \
       export PATH=/usr/local/bin:/opt/vep/ensembl-vep:\$PATH && \
       bash /tmp/build-annotated-cache.sh \
         --bcf-file /tmp/gnomad.bcf \
@@ -140,10 +140,10 @@ if [ $? -ne 0 ]; then
   echo "❌ ERROR: Annotation failed!"
   echo ""
   echo "To debug, check container logs:"
-  echo "  docker logs vcfstash-annotate-temp"
+  echo "  docker logs vcfcache-annotate-temp"
   echo ""
   echo "Container kept for debugging. To remove:"
-  echo "  docker rm vcfstash-annotate-temp"
+  echo "  docker rm vcfcache-annotate-temp"
   exit 1
 fi
 
@@ -153,12 +153,12 @@ echo ""
 echo "📦 Committing container to final image..."
 
 # Commit the container with annotation results to final image
-docker commit vcfstash-annotate-temp "${OUTPUT_TAG}"
+docker commit vcfcache-annotate-temp "${OUTPUT_TAG}"
 docker tag "${OUTPUT_TAG}" "${LATEST_TAG}"
 
 # Clean up temporary container
 echo "🧹 Cleaning up temporary container..."
-docker rm vcfstash-annotate-temp
+docker rm vcfcache-annotate-temp
 
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
@@ -188,7 +188,7 @@ docker run --rm --entrypoint vep "${OUTPUT_TAG}" --help | head -5
 
 # Verify cache exists
 echo "🧪 Verifying annotated cache..."
-docker run --rm --entrypoint ls "${OUTPUT_TAG}" -la /cache/db/stash/vep_gnomad/ 2>/dev/null || \
+docker run --rm --entrypoint ls "${OUTPUT_TAG}" -la /cache/db/cache/vep_gnomad/ 2>/dev/null || \
   echo "Note: Cache verification requires running annotation first"
 
 echo ""
@@ -221,7 +221,7 @@ echo "    -v /path/to/sample.vcf:/data/sample.vcf \\"
 echo "    -v /path/to/output:/output \\"
 echo "    ${OUTPUT_TAG} \\"
 echo "    annotate \\"
-echo "      -a /cache/db/stash/vep_gnomad \\"
+echo "      -a /cache/db/cache/vep_gnomad \\"
 echo "      --vcf /data/sample.vcf \\"
 echo "      --output /output \\"
 echo "      -y /app/recipes/docker-annotated/params.yaml"

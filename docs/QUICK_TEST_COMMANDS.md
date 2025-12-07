@@ -1,12 +1,12 @@
 # Quick Test Commands for Each Tier 🚀
 
 ## **Tier 1: Pre-built Cache Images** ⚡
-*Fastest way to test VCFstash (30 seconds)*
+*Fastest way to test VCFcache (30 seconds)*
 
 ### Test with minimal sample data:
 ```bash
 # 1. Pull the image (one-time, ~500MB)
-docker pull ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.2
+docker pull ghcr.io/julius-muller/vcfcache-cache:GRCh38-af0.10-vep115.2
 
 # 2. Create test VCF
 mkdir -p test-data
@@ -26,9 +26,9 @@ tabix -p vcf test-data/sample.vcf.gz
 docker run --rm \
   -v $(pwd)/test-data:/data \
   -v $(pwd)/results:/results \
-  ghcr.io/julius-muller/vcfstash-cache:GRCh38-af0.10-vep115.2 \
+  ghcr.io/julius-muller/vcfcache-cache:GRCh38-af0.10-vep115.2 \
   annotate \
-  -a /cache/stash/vep_gnomad \
+  -a /cache/cache/vep_gnomad \
   --vcf /data/sample.vcf.gz \
   --output /results
 
@@ -78,24 +78,24 @@ EOF
 bgzip test_pop.vcf && tabix -p vcf test_pop.vcf.gz
 cd ../..
 
-# 6. Clone VCFstash
-git clone https://github.com/julius-muller/vcfstash.git
-cd vcfstash
+# 6. Clone VCFcache
+git clone https://github.com/julius-muller/vcfcache.git
+cd vcfcache
 
 # 7. Build cache (5-10 min)
-vcfstash stash-init \
+vcfcache blueprint-init \
   --vcf ../data/vcfs/test_pop.vcf.gz \
-  --output ../data/vcfstash_cache \
+  --output ../data/vcfcache_cache \
   -y recipes/hg38_vep115_complete/params.yaml
 
-vcfstash stash-annotate \
+vcfcache cache-build \
   --name vep_test \
-  --db ../data/vcfstash_cache \
+  --db ../data/vcfcache_cache \
   -a recipes/hg38_vep115_complete/annotation.config
 
 # 8. Test annotation
-vcfstash annotate \
-  -a ../data/vcfstash_cache/stash/vep_test \
+vcfcache annotate \
+  -a ../data/vcfcache_cache/cache/vep_test \
   --vcf ../data/vcfs/test_pop.vcf.gz \
   --output ../results \
   -y recipes/hg38_vep115_complete/params.yaml
@@ -115,30 +115,30 @@ zcat ../results/test_pop_vst.vcf.gz | grep "^1" | head -5
 ### Local installation test:
 ```bash
 # 1. Clone and setup
-git clone https://github.com/julius-muller/vcfstash.git
-cd vcfstash
+git clone https://github.com/julius-muller/vcfcache.git
+cd vcfcache
 
 # 2. Create virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 
-# 3. Install VCFstash
+# 3. Install VCFcache
 pip install -e .
 
 # 4. Quick test with built-in test data
-vcfstash stash-init \
+vcfcache blueprint-init \
   --vcf tests/data/nodata/gnomad_test.bcf \
   --output /tmp/test_cache \
   -y tests/config/test_params.yaml
 
-vcfstash stash-annotate \
+vcfcache cache-build \
   --name test_anno \
   --db /tmp/test_cache \
   -a tests/config/test_annotation.config
 
 # 5. Test annotation
-vcfstash annotate \
-  -a /tmp/test_cache/stash/test_anno \
+vcfcache annotate \
+  -a /tmp/test_cache/cache/test_anno \
   --vcf tests/data/nodata/gnomad_test.bcf \
   --output /tmp/results \
   -y tests/config/test_params.yaml

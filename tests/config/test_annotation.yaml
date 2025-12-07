@@ -30,5 +30,5 @@ must_contain_info_tag: MOCK_ANNO
 required_tool_version: "1.22+htslib-1.22"
 
 # optional_checks: Optional parameters to verify cache and input use same annotation settings
-# These values are locked after stash-annotate and must match exactly
+# These values are locked after cache-build and must match exactly
 optional_checks: {}

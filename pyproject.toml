@@ -4,7 +4,7 @@ requires = ["hatchling>=1.26", "editables>=0.3"]
 build-backend = "hatchling.build"
 
 [project]
-name = "vcfstash"
+name = "vcfcache"
 version = "0.2.0"
 description = "Cache-based VCF annotation accelerator"
 requires-python = ">=3.11"
@@ -27,13 +27,13 @@ dev = [
     "pandas>=2.2.0",
     "pyarrow>=18.0.0",
     "pytest>=8.3.0", # python -m pytest -xvs
-    "ruff>=0.11.9", # ruff check --fix vcfstash
-    "black>=25.1.0", # black vcfstash
-    "mypy>=1.15.0" # mypy vcfstash
+    "ruff>=0.11.9", # ruff check --fix vcfcache
+    "black>=25.1.0", # black vcfcache
+    "mypy>=1.15.0" # mypy vcfcache
 ]
 
 [project.scripts]
-vcfstash = "vcfstash.cli:main"
+vcfcache = "vcfcache.cli:main"
 
 [tool.pytest.ini_options]
 pythonpath = [
@@ -53,11 +53,11 @@ markers = [
 
 [tool.hatch.build]
 include = [
-  "vcfstash/**"
+  "vcfcache/**"
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["vcfstash"]
+packages = ["vcfcache"]
 
 [tool.ruff]
 # Same as Black.

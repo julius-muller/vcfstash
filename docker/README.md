@@ -1,15 +1,15 @@
-# VCFstash Docker Images
+# VCFcache Docker Images
 
-VCFstash provides two types of Docker images to suit different workflows:
+VCFcache provides two types of Docker images to suit different workflows:
 
 ## Image Types
 
-### 🔷 Blueprint (Lean) - `vcfstash-blueprint`
+### 🔷 Blueprint (Lean) - `vcfcache-blueprint`
 **Data-only image for power users**
 
 Contains:
 - Pre-built variant cache (blueprint) from gnomAD
-- vcfstash CLI tool
+- vcfcache CLI tool
 - Minimal dependencies (no VEP, no annotation tools)
 
 Use when:
@@ -20,21 +20,21 @@ Use when:
 
 **Image naming:**
 ```
-ghcr.io/USER/vcfstash-blueprint:<source>-<genome>-<type>-<chr>-af<threshold>
+ghcr.io/USER/vcfcache-blueprint:<source>-<genome>-<type>-<chr>-af<threshold>
 
 Examples:
-ghcr.io/julius-muller/vcfstash-blueprint:gnomad-grch38-joint-af010           # Full genome
-ghcr.io/julius-muller/vcfstash-blueprint:gnomad-grch38-joint-chry-af010     # chrY test
+ghcr.io/julius-muller/vcfcache-blueprint:gnomad-grch38-joint-af010           # Full genome
+ghcr.io/julius-muller/vcfcache-blueprint:gnomad-grch38-joint-chry-af010     # chrY test
 ```
 
-### 🔶 Annotated (Fat) - `vcfstash-annotated`
+### 🔶 Annotated (Fat) - `vcfcache-annotated`
 **All-in-one image with VEP pipeline**
 
 Contains:
 - Pre-built AND pre-annotated cache with VEP
 - Full VEP installation (ensembl-vep:release_115.2)
 - VEP cache (Homo sapiens GRCh38)
-- vcfstash CLI tool
+- vcfcache CLI tool
 - Ready to annotate samples immediately
 
 Use when:
@@ -45,11 +45,11 @@ Use when:
 
 **Image naming:**
 ```
-ghcr.io/USER/vcfstash-annotated:<source>-<genome>-vep<version>
+ghcr.io/USER/vcfcache-annotated:<source>-<genome>-vep<version>
 
 Examples:
-ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-vep115              # Full genome
-ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-chry-vep115         # chrY test
+ghcr.io/julius-muller/vcfcache-annotated:gnomad-grch38-vep115              # Full genome
+ghcr.io/julius-muller/vcfcache-annotated:gnomad-grch38-chry-vep115         # chrY test
 ```
 
 ---
@@ -74,7 +74,7 @@ docker build \
   --build-arg GENOME=GRCh38 \
   --build-arg CACHE_NAME=gnomad_grch38_joint_af010 \
   --build-arg BCF_FILE=path/to/gnomad.bcf \
-  -t vcfstash-blueprint:custom \
+  -t vcfcache-blueprint:custom \
   .
 ```
 
@@ -99,7 +99,7 @@ docker build \
   --build-arg CACHE_NAME=gnomad_grch38_joint_af010 \
   --build-arg BCF_FILE=path/to/gnomad.bcf \
   --build-arg ANNOTATION_NAME=vep_gnomad \
-  -t vcfstash-annotated:custom \
+  -t vcfcache-annotated:custom \
   .
 ```
 
@@ -111,25 +111,25 @@ docker build \
 
 ```bash
 # Pull the image
-docker pull ghcr.io/julius-muller/vcfstash-blueprint:gnomad-grch38-joint-af010
+docker pull ghcr.io/julius-muller/vcfcache-blueprint:gnomad-grch38-joint-af010
 
 # Run tests
 docker run --rm --entrypoint /bin/sh \
-  ghcr.io/julius-muller/vcfstash-blueprint:gnomad-grch38-joint-af010 \
+  ghcr.io/julius-muller/vcfcache-blueprint:gnomad-grch38-joint-af010 \
   -c 'cd /app && export PYTHONPATH=/app/venv/lib/python3.13/site-packages:$PYTHONPATH && python3 -m pytest -m blueprint tests/ -v'
 
 # Inspect the cache
 docker run --rm \
-  ghcr.io/julius-muller/vcfstash-blueprint:gnomad-grch38-joint-af010 \
-  stash-init --help
+  ghcr.io/julius-muller/vcfcache-blueprint:gnomad-grch38-joint-af010 \
+  blueprint-init --help
 
 # Use with your own annotation pipeline
 docker run --rm \
   -v /path/to/sample.vcf:/data/sample.vcf \
   -v /path/to/output:/output \
-  ghcr.io/julius-muller/vcfstash-blueprint:gnomad-grch38-joint-af010 \
+  ghcr.io/julius-muller/vcfcache-blueprint:gnomad-grch38-joint-af010 \
   annotate \
-    -a /cache/db/stash/YOUR_ANNOTATION \
+    -a /cache/db/cache/YOUR_ANNOTATION \
     --vcf /data/sample.vcf \
     --output /output \
     -y /app/recipes/docker-cache/params.yaml
@@ -139,18 +139,18 @@ docker run --rm \
 
 ```bash
 # Pull the image
-docker pull ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-vep115
+docker pull ghcr.io/julius-muller/vcfcache-annotated:gnomad-grch38-vep115
 
 # Check version
-docker run --rm ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-vep115 -v
+docker run --rm ghcr.io/julius-muller/vcfcache-annotated:gnomad-grch38-vep115 -v
 
 # Annotate a sample VCF (uses pre-annotated cache)
 docker run --rm \
   -v /path/to/sample.vcf:/data/sample.vcf \
   -v /path/to/output:/output \
-  ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-vep115 \
+  ghcr.io/julius-muller/vcfcache-annotated:gnomad-grch38-vep115 \
   annotate \
-    -a /cache/db/stash/vep_gnomad \
+    -a /cache/db/cache/vep_gnomad \
     --vcf /data/sample.vcf \
     --output /output \
     -y /app/recipes/docker-annotated/params.yaml
@@ -237,7 +237,7 @@ Runs all tests including full integration tests with VEP.
 - **Solution:** Blueprint is data-only. Use annotated image for full pipeline.
 
 **Issue:** "Cannot run annotation"
-- **Solution:** Blueprint requires you to run `stash-annotate` separately with your tools.
+- **Solution:** Blueprint requires you to run `cache-build` separately with your tools.
 
 ### Annotated Image
 

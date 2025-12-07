@@ -21,7 +21,7 @@ on:
         required: true
         default: "GRCh38"
       cache_name:
-        description: "Cache name (sub-dir in /cache/stash)"
+        description: "Cache name (sub-dir in /cache/cache)"
         required: true
         default: "vep_gnomad"
 
@@ -70,6 +70,6 @@ jobs:
             CACHE_NAME=${{ steps.defaults.outputs.cache_name }}
             GNOMAD_URL=https://gnomad-public-us-east-1.s3.amazonaws.com/release/4.1/vcf/genomes/gnomad.genomes.v4.1.sites.chr1.vcf.bgz
           tags: |
-            ghcr.io/${{ github.repository_owner }}/vcfstash-cache:${{ steps.defaults.outputs.genome }}-af${{ steps.defaults.outputs.af }}-vep${{ steps.defaults.outputs.tool_version }}
+            ghcr.io/${{ github.repository_owner }}/vcfcache-cache:${{ steps.defaults.outputs.genome }}-af${{ steps.defaults.outputs.af }}-vep${{ steps.defaults.outputs.tool_version }}
           cache-from: type=gha
           cache-to:   type=gha,mode=max

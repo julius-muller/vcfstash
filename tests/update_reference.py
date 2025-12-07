@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-update_reference_data.py - Utility script for generating reference (golden) datasets for vcfstash tests.
+update_reference_data.py - Utility script for generating reference (golden) datasets for vcfcache tests.
 
-This script was originally intended to create a golden dataset for regression testing, but was later deprecated for automated test validation due to issues with versioning and reproducibility. However, it remains useful for generating output from the current test files, which can be used to manually compare results across different vcfstash versions or environments.
+This script was originally intended to create a golden dataset for regression testing, but was later deprecated for automated test validation due to issues with versioning and reproducibility. However, it remains useful for generating output from the current test files, which can be used to manually compare results across different vcfcache versions or environments.
 
-The script runs the full vcfstash pipeline (stash-init, stash-add, stash-annotate, annotate) using test data, normalizes timestamps for reproducibility, and writes results to a designated output directory. This allows developers to inspect and compare outputs for debugging or validation purposes.
+The script runs the full vcfcache pipeline (blueprint-init, blueprint-extend, cache-build, annotate) using test data, normalizes timestamps for reproducibility, and writes results to a designated output directory. This allows developers to inspect and compare outputs for debugging or validation purposes.
 """
 
 import re
@@ -13,11 +13,11 @@ import os
 import shutil
 import subprocess
 import tempfile
-from vcfstash.utils.paths import get_vcfstash_root, get_resource_path
+from vcfcache.utils.paths import get_vcfcache_root, get_resource_path
 
 # Use Path for better path handling
 TEST_ROOT = Path(os.path.dirname(os.path.abspath(__file__)))
-VCFSTASH_CMD = "vcfstash"
+VCFCACHE_CMD = "vcfcache"
 TEST_DATA_DIR = TEST_ROOT / "data" / "nodata"
 TEST_PARAMS = TEST_ROOT / "config" / "example_params.yaml"
 TEST_VCF = TEST_DATA_DIR / "crayz_db.bcf"
@@ -126,7 +126,7 @@ def normalize_text_file_timestamps(file_path):
 def update_golden_reference_dataset(force=True):
     """Update the golden reference dataset using test data.
 
-    This function runs all the commands (stash-init, stash-add, stash-annotate, annotate)
+    This function runs all the commands (blueprint-init, blueprint-extend, cache-build, annotate)
     in sequence and uses two output directories for the data. It uses relative paths to
     make it work in any environment.
 
@@ -139,11 +139,11 @@ def update_golden_reference_dataset(force=True):
     print("=== Updating golden reference dataset ===")
 
     # Use subdirectories in the expected output directory
-    stash_dir = os.path.join(EXPECTED_OUTPUT_DIR, "stash_result")
+    cache_dir = os.path.join(EXPECTED_OUTPUT_DIR, "cache_result")
     annotate_dir = os.path.join(EXPECTED_OUTPUT_DIR, "annotate_result")
 
     # Ensure the directories don't exist
-    for dir_path in [stash_dir, annotate_dir]:
+    for dir_path in [cache_dir, annotate_dir]:
         if os.path.exists(dir_path):
             if force:
                 print(f"Removing existing directory: {dir_path}")
@@ -155,8 +155,8 @@ def update_golden_reference_dataset(force=True):
     # Create a temporary params file with the correct paths
     temp_params_file = None
     try:
-        # Get the VCFSTASH_ROOT directory
-        vcfstash_root = str(get_vcfstash_root())
+        # Get the VCFCACHE_ROOT directory
+        vcfcache_root = str(get_vcfcache_root())
 
         # Create a temporary params file with the correct paths
         with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_file:
@@ -166,8 +166,8 @@ def update_golden_reference_dataset(force=True):
             with open(TEST_PARAMS, 'r') as f:
                 params_content = f.read()
 
-            # Replace ${VCFSTASH_ROOT} with the actual value
-            params_content = params_content.replace('${VCFSTASH_ROOT}', vcfstash_root)
+            # Replace ${VCFCACHE_ROOT} with the actual value
+            params_content = params_content.replace('${VCFCACHE_ROOT}', vcfcache_root)
 
             # Write the modified content to the temporary file
             temp_file.write(params_content)
@@ -180,13 +180,13 @@ def update_golden_reference_dataset(force=True):
         # Define the annotation name
         annotate_name = "testor"
 
-        # 1. Run stash-init
-        print("Running stash-init...")
+        # 1. Run blueprint-init
+        print("Running blueprint-init...")
         init_cmd = [
-            VCFSTASH_CMD,
-            "stash-init",
+            VCFCACHE_CMD,
+            "blueprint-init",
             "--vcf", test_vcf,
-            "--output", stash_dir,
+            "--output", cache_dir,
             "-y", temp_params_file,
             "-f"
         ]
@@ -199,15 +199,15 @@ def update_golden_reference_dataset(force=True):
         )
 
         if init_result.returncode != 0:
-            print(f"stash-init failed: {init_result.stderr}")
+            print(f"blueprint-init failed: {init_result.stderr}")
             return False
 
-        # 2. Run stash-add
-        print("Running stash-add...")
+        # 2. Run blueprint-extend
+        print("Running blueprint-extend...")
         add_cmd = [
-            VCFSTASH_CMD,
-            "stash-add",
-            "--db", stash_dir,
+            VCFCACHE_CMD,
+            "blueprint-extend",
+            "--db", cache_dir,
             "-i", test_vcf2
         ]
 
@@ -219,17 +219,17 @@ def update_golden_reference_dataset(force=True):
         )
 
         if add_result.returncode != 0:
-            print(f"stash-add failed: {add_result.stderr}")
+            print(f"blueprint-extend failed: {add_result.stderr}")
             return False
 
-        # 3. Run stash-annotate
-        print("Running stash-annotate...")
+        # 3. Run cache-build
+        print("Running cache-build...")
         annotate_cmd = [
-            VCFSTASH_CMD,
-            "stash-annotate",
+            VCFCACHE_CMD,
+            "cache-build",
             "--name", annotate_name,
             "-a", TEST_ANNO_CONFIG,
-            "--db", stash_dir,
+            "--db", cache_dir,
             "-y", temp_params_file,
             "-f"
         ]
@@ -242,16 +242,16 @@ def update_golden_reference_dataset(force=True):
         )
 
         if annotate_result.returncode != 0:
-            print(f"stash-annotate failed: {annotate_result.stderr}")
+            print(f"cache-build failed: {annotate_result.stderr}")
             return False
 
         # 4. Run annotate
         print("Running annotate...")
         # Use the annotation directory path
-        annotation_db = os.path.join(stash_dir, "stash", annotate_name)
+        annotation_db = os.path.join(cache_dir, "cache", annotate_name)
 
         annotate_vcf_cmd = [
-            VCFSTASH_CMD,
+            VCFCACHE_CMD,
             "annotate",
             "-a", annotation_db,
             "--vcf", test_sample,
@@ -273,13 +273,13 @@ def update_golden_reference_dataset(force=True):
 
         # Print the commands that were run (similar to the ones in the issue description)
         print("\nCommands that were run:")
-        print(f"{VCFSTASH_CMD} stash-init --vcf {test_vcf} --output {stash_dir} -y {temp_params_file} -f")
-        print(f"{VCFSTASH_CMD} stash-add --db {stash_dir} -i {test_vcf2}")
-        print(f"{VCFSTASH_CMD} stash-annotate --name {annotate_name} -a {TEST_ANNO_CONFIG} --db {stash_dir} -y {temp_params_file} -f")
-        print(f"{VCFSTASH_CMD} annotate -a {annotation_db} --vcf {test_sample} --output {annotate_dir} -y {temp_params_file} -f")
+        print(f"{VCFCACHE_CMD} blueprint-init --vcf {test_vcf} --output {cache_dir} -y {temp_params_file} -f")
+        print(f"{VCFCACHE_CMD} blueprint-extend --db {cache_dir} -i {test_vcf2}")
+        print(f"{VCFCACHE_CMD} cache-build --name {annotate_name} -a {TEST_ANNO_CONFIG} --db {cache_dir} -y {temp_params_file} -f")
+        print(f"{VCFCACHE_CMD} annotate -a {annotation_db} --vcf {test_sample} --output {annotate_dir} -y {temp_params_file} -f")
 
         print("\nOutput directories:")
-        print(f"Stash directory: {stash_dir}")
+        print(f"Cache directory: {cache_dir}")
         print(f"Annotate directory: {annotate_dir}")
 
         return True
@@ -300,7 +300,7 @@ def update_golden_reference_dataset(force=True):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Update reference data for vcfstash tests")
+    parser = argparse.ArgumentParser(description="Update reference data for vcfcache tests")
     parser.add_argument('--force', action='store_true', help='Force overwrite of existing reference data')
     parser.add_argument('--golden', action='store_true', help='Update golden reference dataset')
 

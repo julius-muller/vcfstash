@@ -1,4 +1,4 @@
-"""Archiving helpers for VCFstash caches.
+"""Archiving helpers for VCFcache caches.
 
 This module bundles cache directories into tarballs and extracts them back.
 It's intentionally light-weight (tarfile + hashlib) so it works in both
@@ -17,7 +17,7 @@ def tar_cache(cache_dir: Path, tar_path: Path, compression: str = "gz") -> Path:
     """Create a tar archive of a cache directory.
 
     Args:
-        cache_dir: Path to the cache directory containing blueprint/stash.
+        cache_dir: Path to the cache directory containing blueprint/cache.
         tar_path: Output tar path (".tar.gz" recommended).
         compression: tarfile mode suffix ("gz", "bz2", "xz", or "").
 

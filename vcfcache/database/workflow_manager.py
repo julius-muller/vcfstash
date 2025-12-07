@@ -1,4 +1,4 @@
-"""Pure Python workflow manager for VCFstash operations.
+"""Pure Python workflow manager for VCFcache operations.
 
 This module implements a pure Python alternative to the Nextflow-based workflow
 system. It executes the same bcftools commands directly via subprocess, eliminating
@@ -16,8 +16,8 @@ from typing import Dict, List, Optional, Union
 
 import yaml
 
-from vcfstash.database.workflow_base import WorkflowBase
-from vcfstash.utils.logging import setup_logging
+from vcfcache.database.workflow_base import WorkflowBase
+from vcfcache.utils.logging import setup_logging
 
 
 class BcftoolsCommand:
@@ -91,7 +91,7 @@ class BcftoolsCommand:
 
 
 class WorkflowManager(WorkflowBase):
-    """Pure Python workflow manager for VCFstash operations.
+    """Pure Python workflow manager for VCFcache operations.
 
     This class implements the same workflow logic as Nextflow but using
     pure Python subprocess calls. It eliminates the Java/Nextflow dependency
@@ -193,10 +193,10 @@ class WorkflowManager(WorkflowBase):
         """Execute the workflow using pure Python.
 
         Args:
-            db_mode: Workflow mode ('stash-init', 'stash-add', 'stash-annotate', 'annotate')
+            db_mode: Workflow mode ('blueprint-init', 'blueprint-extend', 'cache-build', 'annotate')
             nextflow_args: Additional arguments (repurposed for normalize flag)
             trace: Whether to generate trace file
-            db_bcf: Path to database BCF file (required for stash-add and annotate)
+            db_bcf: Path to database BCF file (required for blueprint-extend and annotate)
             dag: Ignored (not supported in pure Python mode)
             timeline: Ignored (not supported in pure Python mode)
             report: Ignored (not supported in pure Python mode)
@@ -230,16 +230,16 @@ class WorkflowManager(WorkflowBase):
 
         try:
             # Route to appropriate workflow method
-            if db_mode == "stash-init":
-                result = self._run_stash_init(normalize)
-            elif db_mode == "stash-add":
+            if db_mode == "blueprint-init":
+                result = self._run_blueprint_init(normalize)
+            elif db_mode == "blueprint-extend":
                 if not db_bcf:
-                    raise ValueError("db_bcf is required for stash-add mode")
-                result = self._run_stash_add(db_bcf, normalize)
-            elif db_mode == "stash-annotate":
+                    raise ValueError("db_bcf is required for blueprint-extend mode")
+                result = self._run_blueprint_extend(db_bcf, normalize)
+            elif db_mode == "cache-build":
                 if not db_bcf:
-                    raise ValueError("db_bcf is required for stash-annotate mode")
-                result = self._run_stash_annotate(db_bcf)
+                    raise ValueError("db_bcf is required for cache-build mode")
+                result = self._run_cache_build(db_bcf)
             elif db_mode == "annotate":
                 if not db_bcf:
                     raise ValueError("db_bcf is required for annotate mode")
@@ -249,7 +249,7 @@ class WorkflowManager(WorkflowBase):
             else:
                 raise ValueError(
                     f"Invalid db_mode: {db_mode}. Must be one of: "
-                    "stash-init, stash-add, stash-annotate, annotate, annotate-nocache"
+                    "blueprint-init, blueprint-extend, cache-build, annotate, annotate-nocache"
                 )
 
             end_time = datetime.datetime.now()
@@ -273,7 +273,7 @@ class WorkflowManager(WorkflowBase):
             self.logger.error(f"Unexpected error: {e}")
             raise
 
-    def _run_stash_init(self, normalize: bool) -> subprocess.CompletedProcess:
+    def _run_blueprint_init(self, normalize: bool) -> subprocess.CompletedProcess:
         """Initialize database blueprint.
 
         Args:
@@ -284,11 +284,11 @@ class WorkflowManager(WorkflowBase):
         """
         self.logger.info("Initializing database blueprint")
 
-        work_task = self.work_dir / "stash-init"
+        work_task = self.work_dir / "blueprint-init"
         work_task.mkdir(parents=True, exist_ok=True)
 
         input_bcf = self.input_file
-        output_bcf = self.output_dir / "vcfstash.bcf"
+        output_bcf = self.output_dir / "vcfcache.bcf"
         bcftools = self.params_file_content["bcftools_cmd"]
 
         if normalize:
@@ -311,7 +311,7 @@ class WorkflowManager(WorkflowBase):
 
         return BcftoolsCommand(cmd, self.logger, work_task).run()
 
-    def _run_stash_add(
+    def _run_blueprint_extend(
         self, db_bcf: Path, normalize: bool
     ) -> subprocess.CompletedProcess:
         """Add variants to existing blueprint.
@@ -325,12 +325,12 @@ class WorkflowManager(WorkflowBase):
         """
         self.logger.info("Adding variants to existing blueprint")
 
-        work_task = self.work_dir / "stash-add"
+        work_task = self.work_dir / "blueprint-extend"
         work_task.mkdir(parents=True, exist_ok=True)
 
         bcftools = self.params_file_content["bcftools_cmd"]
 
-        # Step 1: Normalize/filter new input (same as stash-init)
+        # Step 1: Normalize/filter new input (same as blueprint-init)
         normalized = work_task / "normalized.bcf"
         input_bcf = self.input_file
 
@@ -353,7 +353,7 @@ class WorkflowManager(WorkflowBase):
         BcftoolsCommand(norm_cmd, self.logger, work_task).run()
 
         # Step 2: Merge with existing blueprint
-        output_bcf = self.output_dir / "vcfstash.bcf"
+        output_bcf = self.output_dir / "vcfcache.bcf"
         self.logger.info(f"Merging with existing blueprint: {db_bcf}")
 
         merge_cmd = (
@@ -362,7 +362,7 @@ class WorkflowManager(WorkflowBase):
 
         return BcftoolsCommand(merge_cmd, self.logger, work_task).run()
 
-    def _run_stash_annotate(self, db_bcf: Path) -> subprocess.CompletedProcess:
+    def _run_cache_build(self, db_bcf: Path) -> subprocess.CompletedProcess:
         """Run annotation on blueprint to create cache.
 
         Args:
@@ -373,14 +373,14 @@ class WorkflowManager(WorkflowBase):
         """
         self.logger.info("Annotating blueprint to create cache")
 
-        work_task = self.work_dir / "stash-annotate"
+        work_task = self.work_dir / "cache-build"
         work_task.mkdir(parents=True, exist_ok=True)
 
         # Prepare auxiliary directory
         aux_dir = self.output_dir / "auxiliary"
         aux_dir.mkdir(exist_ok=True)
 
-        output_bcf = self.output_dir / "vcfstash_annotated.bcf"
+        output_bcf = self.output_dir / "vcfcache_annotated.bcf"
 
         # Substitute variables in annotation command
         anno_cmd = self._substitute_variables(
@@ -408,12 +408,12 @@ class WorkflowManager(WorkflowBase):
     def _run_annotate(self, db_bcf: Path) -> subprocess.CompletedProcess:
         """Annotate sample using cache - 4-step caching process.
 
-        This is the key performance feature that makes VCFstash fast.
+        This is the key performance feature that makes VCFcache fast.
         It uses pre-annotated common variants from the cache and only
         annotates novel variants.
 
         Args:
-            db_bcf: Path to cache BCF (vcfstash_annotated.bcf)
+            db_bcf: Path to cache BCF (vcfcache_annotated.bcf)
 
         Returns:
             subprocess.CompletedProcess with results
@@ -537,7 +537,7 @@ class WorkflowManager(WorkflowBase):
         """Replace variables in command strings.
 
         Order of substitution:
-        1. Environment variables (${VCFSTASH_ROOT})
+        1. Environment variables (${VCFCACHE_ROOT})
         2. Params file variables (${params.vep_cache})
         3. Special workflow variables (${INPUT_BCF}, ${OUTPUT_BCF}, ${AUXILIARY_DIR})
 

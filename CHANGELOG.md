@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - AF (allele frequency) threshold calculation in Docker build scripts - fixed octal interpretation bug where `af010` was incorrectly parsed as octal (8) instead of decimal (10)
 - AF threshold display now correctly shows 0.01 for `af001` (1%) and 0.10 for `af010` (10%)
-- Blueprint test path expectations - tests now correctly expect `cache_dir/stash/annotation_name` structure instead of incorrectly assuming `cache_dir/db/stash/annotation_name` (the `/db` layer only exists in Docker images, not in directly created caches)
+- Blueprint test path expectations - tests now correctly expect `cache_dir/cache/annotation_name` structure instead of incorrectly assuming `cache_dir/db/cache/annotation_name` (the `/db` layer only exists in Docker images, not in directly created caches)
 
 ### Security
 - None

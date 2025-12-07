@@ -5,7 +5,7 @@ set -euo pipefail
 ZENODO_SANDBOX=${ZENODO_SANDBOX:-0}
 
 ALIAS="GRCh38-af010-vep115.2_basic"
-work=/tmp/vcfstash_dummy_upload
+work=/tmp/vcfcache_dummy_upload
 rm -rf "$work"
 mkdir -p "$work"
 
@@ -31,7 +31,7 @@ echo "[2/6] Tar cache"
 python - "$CACHE_DIR" "$TAR_PATH" <<'PY'
 import sys
 from pathlib import Path
-from vcfstash.utils.archive import tar_cache
+from vcfcache.utils.archive import tar_cache
 tar_cache(Path(sys.argv[1]), Path(sys.argv[2]))
 PY
 
@@ -39,7 +39,7 @@ echo "[3/6] Upload to Zenodo (prod)"
 DOI=$(python - "$ZENODO_TOKEN" "$ZENODO_SANDBOX" "$TAR_PATH" "$ALIAS" <<'PY'
 import os, sys, requests
 from pathlib import Path
-from vcfstash.integrations import zenodo
+from vcfcache.integrations import zenodo
 
 token = sys.argv[1]
 sandbox = sys.argv[2] == "1"
@@ -47,10 +47,10 @@ tar_path = Path(sys.argv[3])
 alias = sys.argv[4]
 
 metadata = {
-    "title": f"VCFstash dummy cache {alias}",
+    "title": f"VCFcache dummy cache {alias}",
     "upload_type": "dataset",
-    "description": "Dummy cache generated for automated testing of VCFstash Zenodo upload pipeline.",
-    "creators": [{"name": "VCFstash Bot"}],
+    "description": "Dummy cache generated for automated testing of VCFcache Zenodo upload pipeline.",
+    "creators": [{"name": "VCFcache Bot"}],
 }
 
 api_base = zenodo.ZENODO_SANDBOX_API if sandbox else zenodo.ZENODO_API
@@ -73,7 +73,7 @@ echo "DOI: $DOI"
 md5=$(python - "$TAR_PATH" <<'PY'
 import sys
 from pathlib import Path
-from vcfstash.utils.archive import file_md5
+from vcfcache.utils.archive import file_md5
 print(file_md5(Path(sys.argv[1])))
 PY
 )
@@ -83,8 +83,8 @@ mkdir -p "$DL_DIR"
 python - "$DOI" "$DL_DIR" <<'PY'
 import sys
 from pathlib import Path
-from vcfstash.integrations.zenodo import download_doi
-from vcfstash.utils.archive import extract_cache
+from vcfcache.integrations.zenodo import download_doi
+from vcfcache.utils.archive import extract_cache
 
 doi = sys.argv[1]
 dest_dir = Path(sys.argv[2])
@@ -101,7 +101,7 @@ cat <<EOF
   genome: GRCh38
   af: "0.10"
   tool: vep115.2
-  image_tag: vcfstash:vep115.2_basic
+  image_tag: vcfcache:vep115.2_basic
   updated_at: $(date +%Y-%m-%d)
   md5: $md5
   annotation_yaml_md5: placeholder

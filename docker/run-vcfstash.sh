@@ -17,4 +17,4 @@ export CACHE_DIR
 docker run --rm \
   -v ${DATA_DIR}:/data \
   -v ${CACHE_DIR}:/cache \
-  vcfstash:latest "$@"
+  vcfcache:latest "$@"

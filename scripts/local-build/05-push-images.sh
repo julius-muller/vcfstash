@@ -77,7 +77,7 @@ push_image() {
 # Function to list and push images
 push_images_by_type() {
   local img_type=$1
-  local img_name="${REGISTRY}/vcfstash-${img_type}"
+  local img_name="${REGISTRY}/vcfcache-${img_type}"
 
   echo "───────────────────────────────────────────────────────────────────────────"
   echo "Processing ${img_type} images"
@@ -145,5 +145,5 @@ if [ "${DRY_RUN}" = true ]; then
 fi
 
 echo "View your images at:"
-echo "  https://github.com/users/julius-muller/packages?repo_name=vcfstash"
+echo "  https://github.com/users/julius-muller/packages?repo_name=vcfcache"
 echo ""

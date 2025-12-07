@@ -11,8 +11,8 @@ set -euo pipefail
 # Requirements on host:
 #   - bcftools, tabix, shuf
 #   - docker with access to:
-#       ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-joint-af010-vep115
-#       ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-joint-af001-vep115
+#       ghcr.io/julius-muller/vcfcache-annotated:gnomad-grch38-joint-af010-vep115
+#       ghcr.io/julius-muller/vcfcache-annotated:gnomad-grch38-joint-af001-vep115
 #   - VEP cache directory (set VEP_CACHE_DIR)
 #
 # Usage:
@@ -65,8 +65,8 @@ fi
 
 SCALES=("PANEL:5000" "WES:100000" "WGS:FULL")
 IMAGES=(
-  "ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-joint-af010-vep115"
-  "ghcr.io/julius-muller/vcfstash-annotated:gnomad-grch38-joint-af001-vep115"
+  "ghcr.io/julius-muller/vcfcache-annotated:gnomad-grch38-joint-af010-vep115"
+  "ghcr.io/julius-muller/vcfcache-annotated:gnomad-grch38-joint-af001-vep115"
 )
 
 LOG_DIR="$(pwd)/tests/benchmarks"
@@ -148,7 +148,7 @@ run_bench() {
   fi
 
   # If we get here, we're running the benchmark
-  # ensure fresh run dir on host (vcfstash will create it)
+  # ensure fresh run dir on host (vcfcache will create it)
   rm -rf "${run_dir_host}"
   local start=$(date -u +%s)
   set +e
@@ -163,16 +163,16 @@ run_bench() {
     -v "$VEP_CACHE_DIR":/opt/vep/.vep:ro \
     -v "$outdir":/out \
     -v "$TEMP_DIR":/tmp \
-    -v "${project_root}/vcfstash":/app/venv/lib/python3.13/site-packages/vcfstash:ro \
+    -v "${project_root}/vcfcache":/app/venv/lib/python3.13/site-packages/vcfcache:ro \
     -w /app \
     --user "$(id -u):$(id -g)" \
     --entrypoint /bin/bash \
     "$image" \
     -lc "NXF_HOME=${run_dir_cont}/.nxf NXF_WORK=${run_dir_cont}/work \
-         VCFSTASH_LOGLEVEL=ERROR VCFSTASH_FILE_LOGLEVEL=ERROR NXF_ANSI_LOG=false \
-         vcfstash annotate ${mode} \
+         VCFCACHE_LOGLEVEL=ERROR VCFCACHE_FILE_LOGLEVEL=ERROR NXF_ANSI_LOG=false \
+         vcfcache annotate ${mode} \
          --force \
-         -a /cache/db/stash/vep_gnomad \
+         -a /cache/db/cache/vep_gnomad \
          --vcf /work/input.bcf \
          --output ${run_dir_cont} \
          -y /app/recipes/docker-annotated/params.yaml"
@@ -194,7 +194,7 @@ run_bench() {
 
 main() {
   # Pre-flight summary
-  echo "=== VCFstash Benchmark Plan ==="
+  echo "=== VCFcache Benchmark Plan ==="
   echo "Source: $SOURCE_BCF"
   echo "Temp directory: $TEMP_DIR"
   echo ""

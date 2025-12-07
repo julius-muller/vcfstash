@@ -1,4 +1,4 @@
-"""Database annotation module for the vcfstash package.
+"""Database annotation module for the vcfcache package.
 
 This module provides classes for annotating the variant database and for annotating
 user VCF files using the annotated database.
@@ -16,9 +16,9 @@ from typing import Optional, Union
 
 import pysam
 
-from vcfstash.database.base import VCFDatabase
-from vcfstash.database.outputs import AnnotatedStashOutput, AnnotatedUserOutput
-from vcfstash.utils.logging import setup_logging
+from vcfcache.database.base import VCFDatabase
+from vcfcache.database.outputs import AnnotatedCacheOutput, AnnotatedUserOutput
+from vcfcache.utils.logging import setup_logging
 
 
 class DatabaseAnnotator(VCFDatabase):
@@ -31,7 +31,7 @@ class DatabaseAnnotator(VCFDatabase):
 
     Attributes:
         annotation_name (str): Name of the annotation operation.
-        stashed_annotations (AnnotatedStashOutput): Object managing annotation stashed data.
+        cached_annotations (AnnotatedCacheOutput): Object managing annotation cached data.
         logger (Logger): Logging utility for the annotator.
         output_dir (Path): Output directory for annotation-related files.
         config_file (Optional[Path]): Path to the processed configuration file (if provided/available).
@@ -48,8 +48,8 @@ class DatabaseAnnotator(VCFDatabase):
             Validates the presence and structure of input files, annotation YAML parameters,
             and other critical resources.
 
-        _setup_annotation_stash(force: bool) -> None
-            Ensures the stashed directory structure is properly set up for the annotation
+        _setup_annotation_cache(force: bool) -> None
+            Ensures the cached directory structure is properly set up for the annotation
             process. Deletes existing directories if `force` is set.
     """
 
@@ -67,8 +67,8 @@ class DatabaseAnnotator(VCFDatabase):
     ):
         """Initialize database annotator.
 
-        self = DatabaseAnnotator(annotation_name="testor", anno_config_file=Path('~/projects/vcfstash/tests/config/example_annotation.config'),
-         db_path=Path('~/tmp/vcfstash/test_stash'),force=True)
+        self = DatabaseAnnotator(annotation_name="testor", anno_config_file=Path('~/projects/vcfcache/tests/config/example_annotation.config'),
+         db_path=Path('~/tmp/vcfcache/test_cache'),force=True)
 
         Args:
             db_path: Path to the database
@@ -80,14 +80,14 @@ class DatabaseAnnotator(VCFDatabase):
             Path(db_path) if isinstance(db_path, str) else db_path, verbosity, debug, bcftools_path
         )
 
-        self.stashed_annotations = AnnotatedStashOutput(
-            str(self.stash_dir / annotation_name)
+        self.cached_annotations = AnnotatedCacheOutput(
+            str(self.cache_dir / annotation_name)
         )
-        self.stashed_annotations.validate_label(annotation_name)
+        self.cached_annotations.validate_label(annotation_name)
         self.annotation_name = annotation_name
         self.logger: Logger = self.connect_loggers()
-        self._setup_annotation_stash(force)
-        self.output_dir = self.stashed_annotations.annotation_dir
+        self._setup_annotation_cache(force)
+        self.output_dir = self.cached_annotations.annotation_dir
 
         self.config_file = None
         if config_file:
@@ -120,7 +120,7 @@ class DatabaseAnnotator(VCFDatabase):
             ), f"Workflow params file not found: {self.params_file}"
 
         # Initialize workflow backend (pure Python)
-        from vcfstash.database.base import create_workflow
+        from vcfcache.database.base import create_workflow
         self.nx_workflow = create_workflow(
             input_file=self.blueprint_bcf,
             output_dir=self.output_dir,
@@ -142,7 +142,7 @@ class DatabaseAnnotator(VCFDatabase):
     def _preprocess_annotation_config(self, user_config: Path) -> Path:
         """Preprocess example_annotation.config to fix variable substitution issues.
         Replaces problematic variable references with their escaped versions.
-        This only has to be done once, as the config is copied to the output directory and used for all subsequent vcfstash annotate runs
+        This only has to be done once, as the config is copied to the output directory and used for all subsequent vcfcache annotate runs
 
         Args:
             anno_config_file (Path): Original annotation config file
@@ -182,30 +182,30 @@ class DatabaseAnnotator(VCFDatabase):
         if self.logger:
             self.logger.debug("Input validation successful")
 
-    def _setup_annotation_stash(self, force: bool) -> None:
+    def _setup_annotation_cache(self, force: bool) -> None:
         # Remove destination directory if it exists to ensure clean copy
-        if self.stashed_annotations.annotation_dir.exists():
+        if self.cached_annotations.annotation_dir.exists():
             if (
-                self.stashed_output.validate_structure()
+                self.cached_output.validate_structure()
             ):  # we dont want to remove a random dir....
                 if force:
                     print(
-                        f"Stash directory already exists, removing: {self.stashed_output.root_dir}"
+                        f"Cache directory already exists, removing: {self.cached_output.root_dir}"
                     )
-                    shutil.rmtree(self.stashed_annotations.annotation_dir)
+                    shutil.rmtree(self.cached_annotations.annotation_dir)
                 else:
                     raise FileExistsError(
-                        f"Output directory already exists: {self.stashed_annotations.annotation_dir}\nIf intended, use --force to overwrite."
+                        f"Output directory already exists: {self.cached_annotations.annotation_dir}\nIf intended, use --force to overwrite."
                     )
             else:
                 if not force:
                     raise FileNotFoundError(
-                        f"Output directory must not exist if --force is not set and a valid stash directory: {self.stashed_annotations.annotation_dir}"
+                        f"Output directory must not exist if --force is not set and a valid cache directory: {self.cached_annotations.annotation_dir}"
                     )
 
         if self.logger:
-            self.logger.debug(f"Creating stash structure: {self.stashed_annotations.annotation_dir}")
-        self.stashed_annotations.create_structure()
+            self.logger.debug(f"Creating cache structure: {self.cached_annotations.annotation_dir}")
+        self.cached_annotations.create_structure()
 
     def annotate(self, extra_files: bool = True) -> None:
         """Run annotation workflow on database"""
@@ -218,7 +218,7 @@ class DatabaseAnnotator(VCFDatabase):
 
             start_time = datetime.now()
             self.nx_workflow.run(
-                db_mode="stash-annotate",
+                db_mode="cache-build",
                 db_bcf=self.blueprint_bcf,
                 trace=extra_files,
                 dag=extra_files,
@@ -326,15 +326,15 @@ class VCFAnnotator(VCFDatabase):
         if not self.input_vcf.exists():
             raise FileNotFoundError(f"Input VCF file not found: {self.input_vcf}")
 
-        self.stashed_annotations = AnnotatedStashOutput(str(annotation_db))
-        if not self.stashed_annotations.validate_structure():
+        self.cached_annotations = AnnotatedCacheOutput(str(annotation_db))
+        if not self.cached_annotations.validate_structure():
             raise FileNotFoundError(
-                f"Annotation database annotation_db not valid: {self.stashed_annotations.annotation_dir}"
+                f"Annotation database annotation_db not valid: {self.cached_annotations.annotation_dir}"
             )
-        self.annotation_db_path = self.stashed_annotations.annotation_dir
-        self.annotation_name = self.stashed_annotations.name
+        self.annotation_db_path = self.cached_annotations.annotation_dir
+        self.annotation_name = self.cached_annotations.name
         super().__init__(
-            self.stashed_annotations.stash_output.root_dir, verbosity, debug, bcftools_path
+            self.cached_annotations.cache_output.root_dir, verbosity, debug, bcftools_path
         )
 
         self.output_annotations = AnnotatedUserOutput(str(output_dir))
@@ -394,12 +394,12 @@ class VCFAnnotator(VCFDatabase):
             self.params_file.exists()
         ), f"Workflow params file not found: {self.params_file}"
 
-        self.stash_file = self.annotation_db_path / "vcfstash_annotated.bcf"
-        if not self.stash_file.exists():
-            raise FileNotFoundError(f"Stash file not found: {self.stash_file}")
+        self.cache_file = self.annotation_db_path / "vcfcache_annotated.bcf"
+        if not self.cache_file.exists():
+            raise FileNotFoundError(f"Cache file not found: {self.cache_file}")
 
         # Initialize workflow backend (pure Python)
-        from vcfstash.database.base import create_workflow
+        from vcfcache.database.base import create_workflow
         self.nx_workflow = create_workflow(
             input_file=self.input_vcf,
             output_dir=self.output_dir,
@@ -415,7 +415,7 @@ class VCFAnnotator(VCFDatabase):
         # Log initialization parameters
         if self.logger:
             self.logger.info(f"Initializing annotation of {self.input_vcf.name}")
-            self.logger.debug(f"Cache file: {self.stash_file}")
+            self.logger.debug(f"Cache file: {self.cache_file}")
             self.logger.debug(f"Config file: {self.config_file}")
 
     def _validate_inputs(self) -> None:
@@ -665,8 +665,8 @@ class VCFAnnotator(VCFDatabase):
 
         Returns:
             Path to output file (BCF or Parquet)
-            self = VCFAnnotator(input_vcf="~/projects/vcfstash/tests/data/nodata/sample4.bcf",
-             annotation_db = "~/tmp/test/test_out/stash/testor", output_dir="~/tmp/test/aout" ,force=True)
+            self = VCFAnnotator(input_vcf="~/projects/vcfcache/tests/data/nodata/sample4.bcf",
+             annotation_db = "~/tmp/test/test_out/cache/testor", output_dir="~/tmp/test/aout" ,force=True)
 
         """
         start_time = time.time()
@@ -678,7 +678,7 @@ class VCFAnnotator(VCFDatabase):
             # Run the workflow in database mode
             self.nx_workflow.run(
                 db_mode="annotate" if not uncached else "annotate-nocache",
-                db_bcf=self.stash_file,
+                db_bcf=self.cache_file,
                 trace=True,
                 dag=True,
                 report=True,

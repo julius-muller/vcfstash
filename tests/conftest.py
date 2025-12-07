@@ -1,18 +1,18 @@
-"""Shared pytest fixtures for VCFstash tests."""
+"""Shared pytest fixtures for VCFcache tests."""
 
 import os
 import tempfile
 import pytest
 import subprocess
 from pathlib import Path
-from vcfstash.utils.paths import get_vcfstash_root
+from vcfcache.utils.paths import get_vcfcache_root
 import shutil
 
-# Ensure VCFSTASH_ROOT is set for CLI subprocesses
-os.environ.setdefault("VCFSTASH_ROOT", str(get_vcfstash_root()))
+# Ensure VCFCACHE_ROOT is set for CLI subprocesses
+os.environ.setdefault("VCFCACHE_ROOT", str(get_vcfcache_root()))
 
 # Constants
-TEST_ROOT = get_vcfstash_root() / "tests"
+TEST_ROOT = get_vcfcache_root() / "tests"
 TEST_DATA_DIR = TEST_ROOT / "data" / "nodata"
 TEST_PARAMS = TEST_ROOT / "config" / "test_params.yaml"
 TEST_ANNO_CONFIG = TEST_ROOT / "config" / "test_annotation.yaml"
@@ -34,8 +34,8 @@ def setup_test_environment():
     from /opt/bcftools/bin (which supports --write-index and matches GLIBC).
     Otherwise, use the bundled bcftools from tools/ directory.
     """
-    vcfstash_root = get_vcfstash_root()
-    tools_dir = vcfstash_root / "tools"
+    vcfcache_root = get_vcfcache_root()
+    tools_dir = vcfcache_root / "tools"
     current_path = os.environ.get("PATH", "")
 
     # Check if we're in annotated scenario with compiled bcftools 1.22
@@ -150,7 +150,7 @@ def mini_cache_dir(test_output_dir, test_scenario, prebuilt_cache):
     mini_cache_path.mkdir(parents=True, exist_ok=True)
 
     # Extract top 10 variants from blueprint cache
-    blueprint_bcf = prebuilt_cache / "db" / "blueprint" / "vcfstash.bcf"
+    blueprint_bcf = prebuilt_cache / "db" / "blueprint" / "vcfcache.bcf"
     mini_bcf = mini_cache_path / "mini_test.bcf"
 
     # Use bcftools to extract first 10 variants (header + 10 variant lines)
@@ -181,11 +181,11 @@ def mini_cache_dir(test_output_dir, test_scenario, prebuilt_cache):
 @pytest.fixture
 def params_file():
     """Creates a temporary params file with correct paths."""
-    vcfstash_root = str(get_vcfstash_root())
+    vcfcache_root = str(get_vcfcache_root())
     temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False)
 
     with open(TEST_PARAMS, 'r') as f:
-        content = f.read().replace('${VCFSTASH_ROOT}', vcfstash_root)
+        content = f.read().replace('${VCFCACHE_ROOT}', vcfcache_root)
         temp_file.write(content)
     temp_file.close()
 
@@ -210,9 +210,9 @@ def test_output_dir(request):
     """Provides a path for a directory that doesn't exist yet.
     If the test fails, the directory is NOT removed and a big warning is printed.
     """
-    temp_dir = Path(tempfile.mkdtemp(prefix="vcfstash_test_"))
+    temp_dir = Path(tempfile.mkdtemp(prefix="vcfcache_test_"))
 
-    # Remove the directory immediately - vcfstash will create it
+    # Remove the directory immediately - vcfcache will create it
     temp_dir.rmdir()
 
     yield str(temp_dir)

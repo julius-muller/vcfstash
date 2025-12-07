@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Build and (optionally) push the two code-only images:
-#  - ghcr.io/julius-muller/vcfstash:latest          (lean CLI + bcftools)
-#  - ghcr.io/julius-muller/vcfstash:vep115.2_basic  (CLI + bcftools + VEP + fixed recipe)
+#  - ghcr.io/julius-muller/vcfcache:latest          (lean CLI + bcftools)
+#  - ghcr.io/julius-muller/vcfcache:vep115.2_basic  (CLI + bcftools + VEP + fixed recipe)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -45,19 +45,19 @@ test_image() {
 smoke_image() {
   local tag=$1
   log "Smoke testing $tag"
-  docker run --rm "$tag" vcfstash --version
+  docker run --rm "$tag" vcfcache --version
 }
 
 push_image() { log "Pushing $1"; docker push "$1"; }
 
 # Build lean image
-LEAN_TAG="ghcr.io/julius-muller/vcfstash:latest"
-build_image docker/Dockerfile.vcfstash "$LEAN_TAG"
+LEAN_TAG="ghcr.io/julius-muller/vcfcache:latest"
+build_image docker/Dockerfile.vcfcache "$LEAN_TAG"
 if ! $SKIP_TESTS; then test_image "$LEAN_TAG"; fi
 if ! $SKIP_PUSH;  then push_image "$LEAN_TAG"; fi
 
 # Build preset
-PRESET_TAG="ghcr.io/julius-muller/vcfstash:vep115.2_basic"
+PRESET_TAG="ghcr.io/julius-muller/vcfcache:vep115.2_basic"
 build_image docker/Dockerfile.vep115.2_basic "$PRESET_TAG"
 if ! $SKIP_TESTS; then smoke_image "$PRESET_TAG"; fi
 if ! $SKIP_PUSH;  then push_image "$PRESET_TAG"; fi

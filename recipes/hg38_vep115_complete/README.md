@@ -31,23 +31,23 @@ docker run --rm -v /data:/data ensemblorg/ensembl-vep:release_115.2 \
   INSTALL.pl -a cf -s homo_sapiens -y GRCh38 -c /data/vep_cache/115
 ```
 
-### 4. Use with VCFstash
+### 4. Use with VCFcache
 ```bash
 # Initialize cache with gnomAD data
-vcfstash stash-init \
+vcfcache blueprint-init \
   --vcf gnomad.exomes.vcf.gz \
-  --output /data/vcfstash_cache \
+  --output /data/vcfcache_cache \
   -y params.yaml
 
 # Annotate the cache
-vcfstash stash-annotate \
+vcfcache cache-build \
   --name vep_gnomad \
-  --db /data/vcfstash_cache \
+  --db /data/vcfcache_cache \
   -a annotation.config
 
 # Annotate your samples
-vcfstash annotate \
-  -a /data/vcfstash_cache/stash/vep_gnomad \
+vcfcache annotate \
+  -a /data/vcfcache_cache/cache/vep_gnomad \
   --vcf your_sample.vcf.gz \
   --output results \
   -y params.yaml

@@ -1,4 +1,4 @@
-# VCFstash Test Suite
+# VCFcache Test Suite
 
 ## Philosophy: One Suite, Three Scenarios
 
@@ -10,9 +10,9 @@ The test suite is **scenario‑aware**: the same tests adapt to what’s availab
 **What it is:** Plain Python environment with no pre-built cache
 
 **What's available:**
-- ✅ Python package with vcfstash installed
+- ✅ Python package with vcfcache installed
 - ✅ bcftools (bundled in `tools/bcftools`)
-- ✅ Nextflow (bundled in `vcfstash/workflow/.nextflow/`)
+- ✅ Nextflow (bundled in `vcfcache/workflow/.nextflow/`)
 - ✅ Test data files (`tests/data/`)
 - ❌ NO pre-built cache at `/cache`
 - ❌ NO VEP
@@ -20,7 +20,7 @@ The test suite is **scenario‑aware**: the same tests adapt to what’s availab
 **How tests adapt:**
 - Create cache from scratch using test data
 - Use mock annotation (bcftools annotate)
-- Full workflow testing from stash-init through annotate
+- Full workflow testing from blueprint-init through annotate
 - Cache validation tests are skipped (no `/cache`)
 
 **Run (host):**
@@ -51,7 +51,7 @@ python -m pytest tests/ -vv --color=yes --disable-warnings -rA
 ```bash
 docker run --rm -t \
   --entrypoint /bin/bash \
-  ghcr.io/julius-muller/vcfstash-blueprint:TAG \
+  ghcr.io/julius-muller/vcfcache-blueprint:TAG \
   -lc 'cd /app && PYTEST_ADDOPTS="--color=yes --disable-warnings -rA --durations=10 -vv --maxfail=1" \
        python3 -m pytest tests'
 ```
@@ -79,9 +79,9 @@ docker run --rm -t \
 docker run --rm -t \
   --entrypoint /bin/bash \
   -v /path/to/vep/cache:/opt/vep/.vep:ro \
-  ghcr.io/julius-muller/vcfstash-annotated:TAG \
+  ghcr.io/julius-muller/vcfcache-annotated:TAG \
   -lc 'cd /app && PYTEST_ADDOPTS="--color=yes --disable-warnings -rA --durations=10 -vv --maxfail=1" \
-       VCFSTASH_LOGLEVEL=INFO VCFSTASH_FILE_LOGLEVEL=ERROR \
+       VCFCACHE_LOGLEVEL=INFO VCFCACHE_FILE_LOGLEVEL=ERROR \
        python3 -m pytest tests'
 ```
 Tip: add `-s` inside `PYTEST_ADDOPTS` if you want to see live print output.
@@ -115,7 +115,7 @@ def test_full_annotation_workflow(test_scenario, prebuilt_cache):
     """Adapts based on scenario."""
     if test_scenario == "vanilla":
         # Create cache from scratch
-        run_stash_init(TEST_VCF, output_dir)
+        run_blueprint_init(TEST_VCF, output_dir)
     else:
         # Use prebuilt cache
         print(f"Using cache at {prebuilt_cache}")
@@ -159,7 +159,7 @@ Tests that validate cache structure (skip in vanilla scenario):
 - `test_annotation.py::test_cache_hit_statistics`
 - `test_annotation.py::test_annotation_performance_with_cache`
 Tests that run full annotation workflows:
-- stash-init, stash-add, stash-annotate, annotate
+- blueprint-init, blueprint-extend, cache-build, annotate
 - Cached vs uncached annotation comparison
 - Input file preservation
 - Normalization flag
@@ -182,13 +182,13 @@ Tests that run full annotation workflows:
 pytest tests/ -v
 
 # In blueprint Docker
-docker run --rm ghcr.io/julius-muller/vcfstash-blueprint:latest \
+docker run --rm ghcr.io/julius-muller/vcfcache-blueprint:latest \
   --entrypoint /bin/sh -c \
   'cd /app && export PYTHONPATH=/app/venv/lib/python3.13/site-packages && \
    python3 -m pytest tests/ -v'
 
 # In annotated Docker
-docker run --rm ghcr.io/julius-muller/vcfstash-annotated:latest \
+docker run --rm ghcr.io/julius-muller/vcfcache-annotated:latest \
   --entrypoint /bin/sh -c \
   'cd /app && export PYTHONPATH=/app/venv/lib/python3.13/site-packages && \
    python3 -m pytest tests/ -v'
@@ -196,7 +196,7 @@ docker run --rm ghcr.io/julius-muller/vcfstash-annotated:latest \
 
 ### Run with coverage
 ```bash
-pytest tests/ --cov=vcfstash --cov-report=html -v
+pytest tests/ --cov=vcfcache --cov-report=html -v
 ```
 
 ### Run specific test file
@@ -300,12 +300,12 @@ def test_cache_feature(test_scenario):
 
 ### All tests fail immediately
 - Check Python environment: `python3 -m pytest --version`
-- Verify installation: `pip show vcfstash`
+- Verify installation: `pip show vcfcache`
 - Check PYTHONPATH in Docker: `export PYTHONPATH=/app/venv/lib/python3.13/site-packages`
 
 ### "bcftools not found" errors
 - Bundled bcftools should be at `tools/bcftools`
-- Check `VCFSTASH_ROOT` environment variable
+- Check `VCFCACHE_ROOT` environment variable
 - In Docker: verify `/app/tools/bcftools` exists and is executable
 
 ### Tests hang or timeout
@@ -342,7 +342,7 @@ jobs:
     steps:
       - name: Test blueprint image
         run: |
-          docker run --rm ghcr.io/julius-muller/vcfstash-blueprint:latest \
+          docker run --rm ghcr.io/julius-muller/vcfcache-blueprint:latest \
             --entrypoint /bin/sh -c \
             'cd /app && export PYTHONPATH=/app/venv/lib/python3.13/site-packages && \
              python3 -m pytest tests/ -v'
@@ -352,7 +352,7 @@ jobs:
     steps:
       - name: Test annotated image
         run: |
-          docker run --rm ghcr.io/julius-muller/vcfstash-annotated:latest \
+          docker run --rm ghcr.io/julius-muller/vcfcache-annotated:latest \
             --entrypoint /bin/sh -c \
             'cd /app && export PYTHONPATH=/app/venv/lib/python3.13/site-packages && \
              python3 -m pytest tests/ -v'

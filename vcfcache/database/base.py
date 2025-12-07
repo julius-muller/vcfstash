@@ -12,17 +12,17 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import pysam
 import yaml
 
-from vcfstash.database.outputs import StashOutput
-from vcfstash.database.workflow_base import WorkflowBase
-from vcfstash.utils.logging import setup_logging
-from vcfstash.utils.validation import validate_bcf_header
+from vcfcache.database.outputs import CacheOutput
+from vcfcache.database.workflow_base import WorkflowBase
+from vcfcache.utils.logging import setup_logging
+from vcfcache.utils.validation import validate_bcf_header
 
 
 def create_workflow(**kwargs) -> WorkflowBase:
     """Factory function to create workflow backend.
 
     This function creates a WorkflowManager (pure Python) instance for running
-    vcfstash workflows. The pure Python backend replaces the legacy Nextflow
+    vcfcache workflows. The pure Python backend replaces the legacy Nextflow
     system and provides a simpler, faster workflow execution.
 
     Args:
@@ -49,7 +49,7 @@ def create_workflow(**kwargs) -> WorkflowBase:
         ...     verbosity=1
         ... )
     """
-    from vcfstash.database.workflow_manager import WorkflowManager
+    from vcfcache.database.workflow_manager import WorkflowManager
 
     # Ensure a placeholder workflow path exists for compatibility
     if "workflow" not in kwargs or kwargs.get("workflow") is None:
@@ -90,14 +90,14 @@ class VCFDatabase:
 
     def __init__(self, db_path: Path, verbosity: int, debug: bool, bcftools_path: Path):
         self.debug = debug
-        self.stashed_output = StashOutput(str(db_path))
-        self.stash_path = self.stashed_output.root_dir
-        self.stash_name = self.stash_path.name
-        self.blueprint_dir = self.stash_path / "blueprint"
-        self.workflow_dir = self.stash_path / "workflow"
-        self.stash_dir = self.stash_path / "stash"
-        self.workflow_dir_src = self.stashed_output.workflow_src_dir
-        self.blueprint_bcf = self.blueprint_dir / "vcfstash.bcf"
+        self.cached_output = CacheOutput(str(db_path))
+        self.cache_path = self.cached_output.root_dir
+        self.cache_name = self.cache_path.name
+        self.blueprint_dir = self.cache_path / "blueprint"
+        self.workflow_dir = self.cache_path / "workflow"
+        self.cache_dir = self.cache_path / "cache"
+        self.workflow_dir_src = self.cached_output.workflow_src_dir
+        self.blueprint_bcf = self.blueprint_dir / "vcfcache.bcf"
         self.info_file = self.blueprint_dir / "sources.info"
         self.verbosity = verbosity if not debug else 2
         self.bcftools_path = bcftools_path
@@ -111,7 +111,7 @@ class VCFDatabase:
 
     def connect_loggers(self, logger_name: str = "vcfdb") -> Logger:
         # Set up central logging
-        log_file = self.stash_path / f"{logger_name}.log"
+        log_file = self.cache_path / f"{logger_name}.log"
         return setup_logging(verbosity=self.verbosity, log_file=log_file)
 
     def setup_config(self, config_file: Path | str, config_name: str) -> Path:

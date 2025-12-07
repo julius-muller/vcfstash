@@ -2,7 +2,7 @@
 
 ## Tiered Storage Approach
 
-VCFstash uses a **hybrid storage strategy** to optimize for cost, speed, and convenience.
+VCFcache uses a **hybrid storage strategy** to optimize for cost, speed, and convenience.
 
 ### Storage Tiers
 
@@ -64,7 +64,7 @@ Files are automatically uploaded by the workflow:
 
 ```bash
 # Download from releases
-wget https://github.com/YOUR_USER/vcfstash/releases/download/TAG/file.bcf
+wget https://github.com/YOUR_USER/vcfcache/releases/download/TAG/file.bcf
 ```
 
 ### Limits
@@ -87,13 +87,13 @@ curl https://sdk.cloud.google.com | bash
 gcloud auth login
 
 # Create bucket
-gsutil mb -p your-project-id -l us-central1 gs://vcfstash-bcf-public
+gsutil mb -p your-project-id -l us-central1 gs://vcfcache-bcf-public
 
 # Make bucket public
-gsutil iam ch allUsers:objectViewer gs://vcfstash-bcf-public
+gsutil iam ch allUsers:objectViewer gs://vcfcache-bcf-public
 
 # Enable uniform access
-gsutil uniformbucketlevelaccess set on gs://vcfstash-bcf-public
+gsutil uniformbucketlevelaccess set on gs://vcfcache-bcf-public
 ```
 
 #### 2. Upload BCF Files
@@ -102,29 +102,29 @@ gsutil uniformbucketlevelaccess set on gs://vcfstash-bcf-public
 # Upload with public-read ACL
 gsutil -h "Cache-Control:public, max-age=86400" \
   cp gnomad_v4.1_GRCh38_af0.10.bcf \
-  gs://vcfstash-bcf-public/v4.1/
+  gs://vcfcache-bcf-public/v4.1/
 ```
 
 #### 3. Access Files
 
 ```bash
 # Direct HTTPS access (no auth needed!)
-wget https://storage.googleapis.com/vcfstash-bcf-public/v4.1/gnomad_v4.1_GRCh38_af0.10.bcf
+wget https://storage.googleapis.com/vcfcache-bcf-public/v4.1/gnomad_v4.1_GRCh38_af0.10.bcf
 ```
 
 ### AWS S3 (Alternative)
 
 ```bash
 # Create public bucket
-aws s3 mb s3://vcfstash-bcf-public --region us-east-1
+aws s3 mb s3://vcfcache-bcf-public --region us-east-1
 
 # Upload with public-read ACL
 aws s3 cp gnomad_v4.1_GRCh38_af0.10.bcf \
-  s3://vcfstash-bcf-public/v4.1/ \
+  s3://vcfcache-bcf-public/v4.1/ \
   --acl public-read
 
 # Access at:
-# https://vcfstash-bcf-public.s3.amazonaws.com/v4.1/gnomad_v4.1_GRCh38_af0.10.bcf
+# https://vcfcache-bcf-public.s3.amazonaws.com/v4.1/gnomad_v4.1_GRCh38_af0.10.bcf
 ```
 
 ## Workflow Integration
@@ -139,8 +139,8 @@ aws s3 cp gnomad_v4.1_GRCh38_af0.10.bcf \
     if wget --spider "https://github.com/${{ github.repository }}/releases/download/${TAG}/${BCF}"; then
       wget "https://github.com/${{ github.repository }}/releases/download/${TAG}/${BCF}"
     # Fall back to cloud storage
-    elif wget --spider "https://storage.googleapis.com/vcfstash-bcf-public/v4.1/${BCF}"; then
-      wget "https://storage.googleapis.com/vcfstash-bcf-public/v4.1/${BCF}"
+    elif wget --spider "https://storage.googleapis.com/vcfcache-bcf-public/v4.1/${BCF}"; then
+      wget "https://storage.googleapis.com/vcfcache-bcf-public/v4.1/${BCF}"
     # Generate on-demand
     else
       python scripts/export_gnomad_hail.py --output "${BCF}" ...
@@ -207,7 +207,7 @@ GitHub Releases:
 │   ├── gnomad_v4.1_GRCh38_chr1_af0.10.bcf
 │   └── gnomad_v4.1_GRCh38_chr1_af0.10.bcf.csi
 
-Cloud Storage (gs://vcfstash-bcf-public/):
+Cloud Storage (gs://vcfcache-bcf-public/):
 ├── v4.1/
 │   ├── gnomad_v4.1_GRCh38_af0.10.bcf
 │   ├── gnomad_v4.1_GRCh38_af0.05.bcf
@@ -227,14 +227,14 @@ Cloud Storage (gs://vcfstash-bcf-public/):
 gh release list | tail -n +4 | awk '{print $1}' | xargs -I {} gh release delete {}
 
 # Delete old cloud storage files
-gsutil -m rm gs://vcfstash-bcf-public/v3.*/\*
+gsutil -m rm gs://vcfcache-bcf-public/v3.*/\*
 ```
 
 ### Monitoring
 
 ```bash
 # Check storage usage
-gsutil du -sh gs://vcfstash-bcf-public
+gsutil du -sh gs://vcfcache-bcf-public
 
 # Check bandwidth
 gcloud logging read "resource.type=gcs_bucket" --limit 100
@@ -251,7 +251,7 @@ for tag in $(gh release list | awk '{print $1}'); do
 done
 
 # 2. Upload to cloud storage
-gsutil -m cp -r /tmp/bcf-files/* gs://vcfstash-bcf-public/
+gsutil -m cp -r /tmp/bcf-files/* gs://vcfcache-bcf-public/
 
 # 3. Update workflows to use new URLs
 # (see Workflow Integration section above)
@@ -279,5 +279,5 @@ gsutil -m cp -r /tmp/bcf-files/* gs://vcfstash-bcf-public/
 ```bash
 # GCS with signed URLs (expires after 1 hour)
 gsutil signurl -d 1h service-account-key.json \
-  gs://vcfstash-bcf-private/file.bcf
+  gs://vcfcache-bcf-private/file.bcf
 ```

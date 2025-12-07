@@ -78,12 +78,12 @@ fi
 DB_DIR="${CACHE_DIR}/db"
 rm -rf "${DB_DIR}"
 
-vcfstash stash-init   --force \
+vcfcache blueprint-init   --force \
         --vcf "${G_SRC}" \
         --output "${DB_DIR}" \
         -y "${PARAMS_FILE}"
 
-vcfstash stash-annotate \
+vcfcache cache-build \
         --db   "${DB_DIR}" \
         --name "${CNAME}" \
         -a     "${CONFIG_FILE}"

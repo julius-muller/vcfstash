@@ -22,9 +22,9 @@ class BaseOutput(ABC):
         # define the base directory of the module
         # Use importlib.resources instead of environment variable
         try:
-            self.module_src_dir = Path(str(importlib.resources.files("vcfstash")))
+            self.module_src_dir = Path(str(importlib.resources.files("vcfcache")))
         except ModuleNotFoundError:
-            self.module_src_dir = Path(os.getenv("VCFSTASH_ROOT", Path(".").resolve()))
+            self.module_src_dir = Path(os.getenv("VCFCACHE_ROOT", Path(".").resolve()))
 
     @abstractmethod
     def required_paths(self) -> dict:
@@ -93,35 +93,35 @@ class BaseOutput(ABC):
                     ) from e
 
 
-class StashOutput(BaseOutput):
-    """Encapsulates the structure for stash-init / stash-add:
+class CacheOutput(BaseOutput):
+    """Encapsulates the structure for blueprint-init / blueprint-extend:
 
-      <stash_root_dir>/
+      <cache_root_dir>/
       ├── blueprint/
-      ├── stash/
+      ├── cache/
       └── workflow/
-          ├── ... parse from vcfstash
+          ├── ... parse from vcfcache
           ├── modules/
-          │   ├── ... parse from vcfstash
+          │   ├── ... parse from vcfcache
 
 
-    self = StashOutput(stash_root_dir='.')
+    self = CacheOutput(cache_root_dir='.')
     """
 
-    def __init__(self, stash_root_dir: str):
-        super().__init__(stash_root_dir)
-        self.stash_root_dir = self.root_dir
-        self.workflow_dir = self.stash_root_dir / "workflow"
+    def __init__(self, cache_root_dir: str):
+        super().__init__(cache_root_dir)
+        self.cache_root_dir = self.root_dir
+        self.workflow_dir = self.cache_root_dir / "workflow"
         self.workflow_src_dir = self.module_src_dir / "workflow"
 
         # Note: workflow_src_dir may be empty (pure Python, no Nextflow files)
         # We keep the workflow_dir for storing config snapshots
 
     def required_paths(self) -> dict:
-        """Returns a dictionary with the required paths for the stash output structure."""
+        """Returns a dictionary with the required paths for the cache output structure."""
         return {
-            "blueprint": self.stash_root_dir / "blueprint",
-            "stash": self.stash_root_dir / "stash",
+            "blueprint": self.cache_root_dir / "blueprint",
+            "cache": self.cache_root_dir / "cache",
             "workflow": self.workflow_dir,
             "workflow_src": self.workflow_src_dir,
             "modules": self.workflow_dir / "modules",
@@ -149,11 +149,11 @@ class StashOutput(BaseOutput):
         return True
 
 
-class AnnotatedStashOutput(BaseOutput):
-    """Encapsulates the structure for annotation stash from stash-annotate. Example:
+class AnnotatedCacheOutput(BaseOutput):
+    """Encapsulates the structure for annotation cache from cache-build. Example:
 
-    <stash_root_dir>/
-    ├── stash/
+    <cache_root_dir>/
+    ├── cache/
     │   └── <any subfolders, e.g. 'test'>  <- annotation_dir
 
     """
@@ -161,26 +161,26 @@ class AnnotatedStashOutput(BaseOutput):
     def __init__(self, annotation_dir: str):
         super().__init__(annotation_dir)
         self.annotation_dir = self.root_dir
-        self.stash_dir = self.root_dir.parent
-        self.stash_root_dir = self.root_dir.parent.parent
-        self.stash_output = StashOutput(str(self.stash_root_dir))
+        self.cache_dir = self.root_dir.parent
+        self.cache_root_dir = self.root_dir.parent.parent
+        self.cache_output = CacheOutput(str(self.cache_root_dir))
         self.name = self.annotation_dir.name
 
     def required_paths(self) -> dict:
-        """Returns a dictionary with the required paths for the stash output structure.
-        These come on top of self.stash_ouptput.required_paths()
+        """Returns a dictionary with the required paths for the cache output structure.
+        These come on top of self.cache_ouptput.required_paths()
         """
         return {  # we don't really need blueprint at this stage anymore
             "annotation": self.annotation_dir,
-            "initial_config": self.stash_output.workflow_dir / "init.yaml",
+            "initial_config": self.cache_output.workflow_dir / "init.yaml",
         }
 
     def create_structure(self) -> None:
         self.create_directories({"annotation": self.annotation_dir})
 
     def validate_structure(self) -> bool:
-        # this is valid if it sits inside stash of a valid stash output
-        valid_structure = self.stash_output.validate_structure()
+        # this is valid if it sits inside cache of a valid cache output
+        valid_structure = self.cache_output.validate_structure()
         required_paths = self.required_paths()
         for pname, path in required_paths.items():
             if not path.exists():
@@ -200,8 +200,8 @@ class AnnotatedStashOutput(BaseOutput):
 class AnnotatedUserOutput(BaseOutput):
     """Encapsulates the structure for annotation workflows. Example:
 
-    <stash_root_dir>/
-    ├── stash/
+    <cache_root_dir>/
+    ├── cache/
     │   └── <any subfolders, e.g. 'testor'>
 
     """
@@ -212,7 +212,7 @@ class AnnotatedUserOutput(BaseOutput):
         # Dynamically locate the workflow directory in the installed package
         try:
             self.workflow_src_dir = (
-                Path(str(importlib.resources.files("vcfstash"))) / "workflow"
+                Path(str(importlib.resources.files("vcfcache"))) / "workflow"
             )
 
         except ModuleNotFoundError:
@@ -222,7 +222,7 @@ class AnnotatedUserOutput(BaseOutput):
         self.name = self.root_dir.name
 
     def required_paths(self) -> dict:
-        """Returns a dictionary with the required paths for the stash output structure."""
+        """Returns a dictionary with the required paths for the cache output structure."""
         required_paths = {"workflow": self.workflow_dir}
         # for path in self.workflow_src_dir.rglob("*"):  # Recursively find all files and dirs
         #     if not path.name.endswith(".config"):  # Exclude .config files

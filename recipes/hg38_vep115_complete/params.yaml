@@ -1,8 +1,8 @@
 ## * REQUIRED RESOURCES *
 annotation_tool_cmd: "docker run --rm -v /data:/data ensemblorg/ensembl-vep:release_115.2 vep"
 tool_version_command: "docker run --rm ensemblorg/ensembl-vep:release_115.2 vep --version | head -1 | awk '{print $2}'"
-bcftools_cmd: "${VCFSTASH_ROOT}/tools/bcftools"
-chr_add: "${VCFSTASH_ROOT}/resources/chr_add.txt"
+bcftools_cmd: "${VCFCACHE_ROOT}/tools/bcftools"
+chr_add: "${VCFCACHE_ROOT}/resources/chr_add.txt"
 temp_dir: "/tmp"
 
 ## * OPTIONAL RESOURCES *

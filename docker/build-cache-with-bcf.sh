@@ -74,15 +74,15 @@ fi
 DB_DIR="${CACHE_DIR}/db"
 rm -rf "${DB_DIR}"
 
-echo "Initializing VCFstash cache (blueprint only)..."
-vcfstash stash-init --force \
+echo "Initializing VCFcache cache (blueprint only)..."
+vcfcache blueprint-init --force \
         --vcf "${G_SRC}" \
         --output "${DB_DIR}" \
         -y "${PARAMS_FILE}"
 
 # NOTE: For Image A (lean), we only create the blueprint
 # Annotation will be done by the user with their own tools/configs
-# For Image B (fat), stash-annotate would be run here with full VEP setup
+# For Image B (fat), cache-build would be run here with full VEP setup
 
 echo "✓ Blueprint cache build complete!"
 echo "  - Cache directory: ${DB_DIR}"
