@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.13-slim-trixie
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV VCFCACHE_ROOT=/app
@@ -11,7 +11,8 @@ RUN apt-get update && \
       liblzma5 \
       libzstd1 \
       libncursesw6 \
-      ca-certificates && \
+      ca-certificates \
+      tabix && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
