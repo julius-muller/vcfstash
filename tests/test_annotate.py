@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import shutil
 import pytest
+import random
 from vcfcache.utils.paths import get_vcfcache_root, get_resource_path
 
 # Constants
@@ -23,6 +24,150 @@ def _env():
     env = os.environ.copy()
     env["VCFCACHE_ROOT"] = str(VCFCACHE_ROOT)
     return env
+
+
+def extract_canary_variants(cache_bcf, output_bcf, num_variants=5, seed=42):
+    """Extract random canary variants from cache for validation.
+
+    Args:
+        cache_bcf: Path to the cache BCF file
+        output_bcf: Path where canary variants should be written
+        num_variants: Number of random variants to extract
+        seed: Random seed for reproducibility
+
+    Returns:
+        List of variant IDs (CHROM:POS:REF:ALT) for the extracted variants
+    """
+    # Get total number of variants
+    stats_result = subprocess.run(
+        ["bcftools", "stats", str(cache_bcf)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
+    )
+
+    total_variants = 0
+    for line in stats_result.stdout.splitlines():
+        if "number of records:" in line:
+            total_variants = int(line.split(":")[-1].strip())
+            break
+
+    if total_variants == 0:
+        raise ValueError(f"No variants found in {cache_bcf}")
+
+    # Select random variant indices
+    random.seed(seed)
+    num_to_extract = min(num_variants, total_variants)
+    selected_indices = sorted(random.sample(range(total_variants), num_to_extract))
+
+    # Extract header
+    header_result = subprocess.run(
+        ["bcftools", "view", "-h", str(cache_bcf)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
+    )
+
+    # Get all variants
+    variants_result = subprocess.run(
+        ["bcftools", "view", "-H", str(cache_bcf)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
+    )
+
+    all_variants = variants_result.stdout.strip().split("\n")
+    selected_variants = [all_variants[i] for i in selected_indices]
+
+    # Create VCF with selected variants
+    vcf_content = header_result.stdout + "\n".join(selected_variants) + "\n"
+
+    # Write to temporary VCF, then convert to BCF
+    temp_vcf = str(output_bcf).replace(".bcf", ".vcf")
+    with open(temp_vcf, 'w') as f:
+        f.write(vcf_content)
+
+    # Convert to BCF and index
+    subprocess.run(
+        ["bcftools", "view", "-Ob", "-o", str(output_bcf), temp_vcf],
+        check=True
+    )
+    subprocess.run(
+        ["bcftools", "index", str(output_bcf)],
+        check=True
+    )
+
+    # Extract variant IDs for comparison
+    variant_ids = []
+    for variant_line in selected_variants:
+        fields = variant_line.split("\t")
+        chrom, pos, _, ref, alt = fields[0], fields[1], fields[2], fields[3], fields[4]
+        variant_ids.append(f"{chrom}:{pos}:{ref}:{alt}")
+
+    # Clean up temp VCF
+    os.remove(temp_vcf)
+
+    return variant_ids
+
+
+def compare_info_tag_values(bcf1, bcf2, info_tag, variant_ids):
+    """Compare INFO tag values between two BCF files for specific variants.
+
+    Args:
+        bcf1: Path to first BCF file
+        bcf2: Path to second BCF file
+        info_tag: Name of the INFO tag to compare (e.g., 'CSQ', 'MOCK_ANNO')
+        variant_ids: List of variant IDs to compare (CHROM:POS:REF:ALT format)
+
+    Returns:
+        dict: Comparison results with 'matches', 'mismatches', and 'details'
+    """
+    # Extract INFO tag values from both files
+    query_format = f"%CHROM:%POS:%REF:%ALT\\t%INFO/{info_tag}\\n"
+
+    result1 = subprocess.run(
+        ["bcftools", "query", "-f", query_format, str(bcf1)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
+    )
+
+    result2 = subprocess.run(
+        ["bcftools", "query", "-f", query_format, str(bcf2)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
+    )
+
+    # Parse results into dictionaries
+    def parse_query_output(output):
+        values = {}
+        for line in output.strip().split("\n"):
+            if not line:
+                continue
+            parts = line.split("\t")
+            if len(parts) == 2:
+                var_id, tag_value = parts
+                values[var_id] = tag_value
+        return values
+
+    values1 = parse_query_output(result1.stdout)
+    values2 = parse_query_output(result2.stdout)
+
+    # Compare values for specified variants
+    matches = []
+    mismatches = []
+
+    for var_id in variant_ids:
+        val1 = values1.get(var_id, "")
+        val2 = values2.get(var_id, "")
+
+        if val1 == val2:
+            matches.append(var_id)
+        else:
+            mismatches.append({
+                'variant': var_id,
+                'cached_value': val1,
+                'fresh_value': val2
+            })
+
+    return {
+        'matches': matches,
+        'mismatches': mismatches,
+        'total': len(variant_ids),
+        'match_count': len(matches),
+        'mismatch_count': len(mismatches)
+    }
 
 
 def run_blueprint_init(input_vcf, output_dir, force=False, normalize=False):
@@ -576,3 +721,162 @@ def test_normalization_flag(test_output_dir, params_file, test_scenario):
     # but we don't assert this as it depends on the test data
 
     print("Successfully verified normalization flag functionality")
+
+
+@pytest.mark.skipif(
+    os.environ.get("SKIP_CANARY_TEST", "0") == "1",
+    reason="Canary validation test skipped via SKIP_CANARY_TEST=1"
+)
+def test_canary_validation(test_output_dir, params_file, test_scenario):
+    """Test that cached annotations match fresh annotations for canary variants.
+
+    This critical test validates that the annotation tool produces identical results
+    when run on the same variants, ensuring:
+    - The annotation pipeline is working correctly
+    - The cached annotations are valid
+    - The annotation tool configuration hasn't changed
+
+    The test:
+    1. Creates a cache with annotated variants
+    2. Extracts random "canary" variants from the cache
+    3. Runs those same variants through the annotation pipeline again
+    4. Compares INFO tag values to ensure they're identical
+
+    Can be skipped via: SKIP_CANARY_TEST=1 pytest
+    """
+    import yaml
+
+    print(f"\n=== Testing canary validation (scenario: {test_scenario}) ===")
+
+    # Step 1: Create a database and cache
+    print("Creating database and cache...")
+    init_cmd = [VCFCACHE_CMD, "blueprint-init", "-i", str(TEST_VCF),
+                "-o", str(test_output_dir), "-y", str(params_file), "-f"]
+    init_result = subprocess.run(init_cmd, capture_output=True, text=True)
+    assert init_result.returncode == 0, f"blueprint-init failed: {init_result.stderr}"
+
+    # Step 2: Run cache-build to create the annotation cache
+    print("Creating annotation cache...")
+    annotate_name = "canary_test_annotation"
+    cache_build_cmd = [VCFCACHE_CMD, "cache-build", "--name", annotate_name,
+                       "--db", str(test_output_dir), "-a", str(TEST_ANNO_CONFIG),
+                       "-y", str(params_file), "-f"]
+    cache_build_result = subprocess.run(cache_build_cmd, capture_output=True, text=True)
+    assert cache_build_result.returncode == 0, f"cache-build failed: {cache_build_result.stderr}"
+
+    # Step 3: Load annotation config to get the INFO tag we need to validate
+    with open(TEST_ANNO_CONFIG, 'r') as f:
+        annotation_config = yaml.safe_load(f)
+
+    info_tag = annotation_config['must_contain_info_tag']
+    print(f"Validating INFO tag: {info_tag}")
+
+    # Step 4: Extract canary variants from the annotated cache
+    cache_dir = Path(test_output_dir) / "cache" / annotate_name
+    annotated_cache_bcf = cache_dir / "vcfcache_annotated.bcf"
+
+    assert annotated_cache_bcf.exists(), f"Annotated cache not found: {annotated_cache_bcf}"
+
+    canary_bcf = Path(test_output_dir) / "canary_variants.bcf"
+    print("Extracting canary variants from cache...")
+    variant_ids = extract_canary_variants(
+        annotated_cache_bcf,
+        canary_bcf,
+        num_variants=5,  # Test with 5 random variants
+        seed=42  # Reproducible selection
+    )
+
+    print(f"Extracted {len(variant_ids)} canary variants:")
+    for var_id in variant_ids:
+        print(f"  - {var_id}")
+
+    # Step 5: Strip annotations from canary variants to create fresh input
+    print("Creating unannotated canary variants...")
+    unannotated_canary = Path(test_output_dir) / "canary_unannotated.bcf"
+
+    # Remove all INFO tags to simulate fresh input
+    subprocess.run(
+        ["bcftools", "annotate", "-x", "INFO", "-Ob", "-o", str(unannotated_canary),
+         str(canary_bcf)],
+        check=True
+    )
+    subprocess.run(
+        ["bcftools", "index", str(unannotated_canary)],
+        check=True
+    )
+
+    # Step 6: Run the annotation command on the unannotated canaries
+    print("Running annotation pipeline on canary variants...")
+
+    # Read the annotation command from the config
+    annotation_cmd = annotation_config['annotation_cmd']
+
+    # Load params for variable substitution
+    with open(params_file, 'r') as f:
+        params_content = f.read()
+        # Replace VCFCACHE_ROOT
+        params_content = params_content.replace('${VCFCACHE_ROOT}', str(VCFCACHE_ROOT))
+    params = yaml.safe_load(params_content)
+
+    # Substitute variables in annotation command
+    fresh_annotated = Path(test_output_dir) / "canary_fresh_annotated.bcf"
+    auxiliary_dir = Path(test_output_dir) / "auxiliary"
+    auxiliary_dir.mkdir(exist_ok=True)
+
+    cmd = annotation_cmd
+    cmd = cmd.replace('${INPUT_BCF}', str(unannotated_canary))
+    cmd = cmd.replace('${OUTPUT_BCF}', str(fresh_annotated))
+    cmd = cmd.replace('${AUXILIARY_DIR}', str(auxiliary_dir))
+
+    # Substitute params variables
+    for key, value in params.items():
+        if isinstance(value, str):
+            cmd = cmd.replace(f'${{params.{key}}}', value)
+
+    # Execute the annotation command
+    result = subprocess.run(
+        cmd,
+        shell=True,
+        cwd=test_output_dir,
+        capture_output=True,
+        text=True,
+        env=_env()
+    )
+
+    if result.returncode != 0:
+        print(f"Annotation command failed!")
+        print(f"Command: {cmd}")
+        print(f"STDOUT: {result.stdout}")
+        print(f"STDERR: {result.stderr}")
+        assert False, f"Fresh annotation failed: {result.stderr}"
+
+    assert fresh_annotated.exists(), f"Fresh annotation output not found: {fresh_annotated}"
+
+    # Step 7: Compare INFO tag values between cached and fresh annotations
+    print(f"\nComparing {info_tag} values between cached and fresh annotations...")
+
+    comparison = compare_info_tag_values(
+        annotated_cache_bcf,
+        fresh_annotated,
+        info_tag,
+        variant_ids
+    )
+
+    print(f"\nComparison results:")
+    print(f"  Total variants: {comparison['total']}")
+    print(f"  Matches: {comparison['match_count']}")
+    print(f"  Mismatches: {comparison['mismatch_count']}")
+
+    if comparison['mismatches']:
+        print(f"\nMismatched variants:")
+        for mismatch in comparison['mismatches']:
+            print(f"  Variant: {mismatch['variant']}")
+            print(f"    Cached:  {mismatch['cached_value']}")
+            print(f"    Fresh:   {mismatch['fresh_value']}")
+
+    # Assert all variants match
+    assert comparison['mismatch_count'] == 0, \
+        f"Canary validation failed: {comparison['mismatch_count']} variants have different annotations"
+
+    print(f"\n✓ Canary validation passed: All {comparison['match_count']} variants have identical annotations")
+    print("Successfully validated that cached annotations match fresh annotations")
