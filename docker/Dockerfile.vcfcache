@@ -2,6 +2,7 @@ FROM python:3.13-slim-trixie
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV VCFCACHE_ROOT=/app
+ENV UV_CACHE_DIR=/root/.cache/uv
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -12,6 +13,8 @@ RUN apt-get update && \
       libzstd1 \
       libncursesw6 \
       ca-certificates \
+      build-essential \
+      curl \
       tabix && \
     rm -rf /var/lib/apt/lists/*
 
@@ -24,9 +27,10 @@ COPY tools ./tools
 COPY public_caches.yaml ./public_caches.yaml
 COPY tests ./tests
 
-RUN python -m venv /opt/venv && \
-    /opt/venv/bin/pip install --upgrade pip && \
-    /opt/venv/bin/pip install --no-cache-dir .
+# Install uv and all dev deps into /opt/venv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    /root/.local/bin/uv venv /opt/venv && \
+    /root/.local/bin/uv pip install --python /opt/venv/bin/python --no-cache-dir -e ".[dev]"
 
 ENV PATH="/app/tools:/opt/venv/bin:${PATH}"
 
