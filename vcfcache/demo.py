@@ -7,17 +7,21 @@ This module demonstrates the complete vcfcache workflow with all 4 commands:
 4. annotate: Use the cache to annotate a sample VCF
 
 Usage:
-    vcfcache demo [--keep-files]
+    vcfcache demo --smoke-test [--keep-files]
+    vcfcache demo --cache <cache> --vcf <vcf> -y <params>
 
 Or from Python:
-    from vcfcache.demo import run_demo
-    run_demo()
+    from vcfcache.demo import run_smoke_test, run_benchmark
+    run_smoke_test()
+    run_benchmark(cache_dir, vcf_file, params_file)
 """
 
+import hashlib
 import sys
 import subprocess
 import tempfile
 import shutil
+import time
 from pathlib import Path
 
 
@@ -83,8 +87,8 @@ def get_demo_data_dir():
     return package_dir / "demo_data"
 
 
-def run_demo(keep_files=False):
-    """Run the complete vcfcache demo workflow.
+def run_smoke_test(keep_files=False):
+    """Run the complete vcfcache smoke test workflow.
 
     Args:
         keep_files: If True, keep temporary files for inspection
@@ -92,7 +96,7 @@ def run_demo(keep_files=False):
     Returns:
         int: Exit code (0 for success, 1 for failure)
     """
-    print_section("VCFcache Complete Workflow Demo")
+    print_section("VCFcache Complete Workflow Smoke Test")
 
     # Get demo data directory
     demo_data = get_demo_data_dir()
@@ -316,22 +320,268 @@ def run_demo(keep_files=False):
                 print(f"⚠ Warning: Could not clean up {temp_dir}: {e}")
 
 
+def run_benchmark(cache_dir, vcf_file, params_file):
+    """Run benchmark comparing cached vs uncached annotation.
+
+    Args:
+        cache_dir: Path to annotation cache directory
+        vcf_file: Path to VCF/BCF file to annotate
+        params_file: Path to params YAML file
+
+    Returns:
+        int: Exit code (0 for success, 1 for failure)
+    """
+    print_section("VCFcache Annotation Benchmark")
+
+    cache_path = Path(cache_dir).expanduser().resolve()
+    vcf_path = Path(vcf_file).expanduser().resolve()
+    params_path = Path(params_file).expanduser().resolve()
+
+    # Validate inputs
+    if not cache_path.exists():
+        print(f"✗ Cache directory not found: {cache_path}")
+        return 1
+    if not vcf_path.exists():
+        print(f"✗ VCF file not found: {vcf_path}")
+        return 1
+    if not params_path.exists():
+        print(f"✗ Params file not found: {params_path}")
+        return 1
+
+    print(f"Cache: {cache_path}")
+    print(f"VCF:   {vcf_path}")
+    print(f"Params: {params_path}")
+    print()
+
+    # Estimate file size and ask for confirmation
+    vcf_size_mb = vcf_path.stat().st_size / (1024 * 1024)
+    print(f"VCF file size: {vcf_size_mb:.2f} MB")
+    print("This benchmark will run annotation twice (uncached + cached).")
+    print("Depending on the file size and annotation tool, this may take a while.")
+    print()
+
+    response = input("Do you want to proceed? [y/N]: ")
+    if response.lower() not in ['y', 'yes']:
+        print("Benchmark cancelled.")
+        return 0
+
+    # Create temporary directory for outputs
+    temp_dir = Path(tempfile.mkdtemp(prefix="vcfcache_benchmark_"))
+    print(f"\nWorking directory: {temp_dir}\n")
+
+    try:
+        uncached_dir = temp_dir / "uncached"
+        cached_dir = temp_dir / "cached"
+
+        # ====================================================================
+        # Run 1: Uncached annotation
+        # ====================================================================
+        print_section("Run 1: Uncached Annotation (Full Pipeline)")
+
+        start_time = time.time()
+        cmd_uncached = [
+            sys.executable, "-m", "vcfcache.cli",
+            "annotate",
+            "-a", str(cache_path),
+            "--vcf", str(vcf_path),
+            "--output", str(uncached_dir),
+            "-y", str(params_path),
+            "--uncached",  # Force uncached mode
+            "--force",
+        ]
+
+        print(f"Running: {' '.join(cmd_uncached)}\n")
+
+        result = subprocess.run(
+            cmd_uncached,
+            capture_output=True,
+            text=True,
+            timeout=3600,  # 1 hour timeout
+        )
+
+        uncached_time = time.time() - start_time
+
+        if result.returncode != 0:
+            print(f"✗ Uncached annotation FAILED")
+            print(f"\nSTDOUT:\n{result.stdout}")
+            print(f"\nSTDERR:\n{result.stderr}")
+            return 1
+
+        print(f"✓ Uncached annotation completed in {uncached_time:.2f}s\n")
+
+        # ====================================================================
+        # Run 2: Cached annotation
+        # ====================================================================
+        print_section("Run 2: Cached Annotation (With Cache)")
+
+        start_time = time.time()
+        cmd_cached = [
+            sys.executable, "-m", "vcfcache.cli",
+            "annotate",
+            "-a", str(cache_path),
+            "--vcf", str(vcf_path),
+            "--output", str(cached_dir),
+            "-y", str(params_path),
+            "--force",
+        ]
+
+        print(f"Running: {' '.join(cmd_cached)}\n")
+
+        result = subprocess.run(
+            cmd_cached,
+            capture_output=True,
+            text=True,
+            timeout=3600,
+        )
+
+        cached_time = time.time() - start_time
+
+        if result.returncode != 0:
+            print(f"✗ Cached annotation FAILED")
+            print(f"\nSTDOUT:\n{result.stdout}")
+            print(f"\nSTDERR:\n{result.stderr}")
+            return 1
+
+        print(f"✓ Cached annotation completed in {cached_time:.2f}s\n")
+
+        # Parse detailed timing from cached output
+        timing_details = {}
+        for line in result.stdout.split('\n'):
+            if 'cache hits' in line.lower() or 'missing' in line.lower():
+                print(f"  {line}")
+            if 'completed in' in line.lower() or 'time:' in line.lower():
+                print(f"  {line}")
+
+        # ====================================================================
+        # Compare outputs
+        # ====================================================================
+        print_section("Results Comparison")
+
+        # Find output files
+        vcf_basename = vcf_path.stem if vcf_path.suffix == '.gz' else vcf_path.stem
+        uncached_bcf = uncached_dir / f"{vcf_basename}_vst.bcf"
+        cached_bcf = cached_dir / f"{vcf_basename}_vst.bcf"
+
+        if not uncached_bcf.exists():
+            print(f"✗ Uncached output not found: {uncached_bcf}")
+            return 1
+        if not cached_bcf.exists():
+            print(f"✗ Cached output not found: {cached_bcf}")
+            return 1
+
+        # Compute MD5 of BCF bodies (without headers)
+        def compute_bcf_body_md5(bcf_path):
+            """Compute MD5 of BCF body without header."""
+            result = subprocess.run(
+                ["bcftools", "view", "-H", str(bcf_path)],
+                capture_output=True,
+                text=True,
+            )
+            return hashlib.md5(result.stdout.encode()).hexdigest()
+
+        print("Computing MD5 checksums (body only, excluding headers)...")
+        uncached_md5 = compute_bcf_body_md5(uncached_bcf)
+        cached_md5 = compute_bcf_body_md5(cached_bcf)
+
+        print(f"\nUncached output MD5: {uncached_md5}")
+        print(f"Cached output MD5:   {cached_md5}")
+
+        if uncached_md5 == cached_md5:
+            print("✓ Outputs are identical (body matches)")
+        else:
+            print("✗ WARNING: Outputs differ!")
+
+        # Timing comparison
+        print(f"\n{'─'*70}")
+        print("Timing Summary:")
+        print(f"{'─'*70}")
+        print(f"Uncached: {uncached_time:8.2f}s")
+        print(f"Cached:   {cached_time:8.2f}s")
+        print(f"{'─'*70}")
+
+        if cached_time < uncached_time:
+            speedup = uncached_time / cached_time
+            time_saved = uncached_time - cached_time
+            percent_saved = (time_saved / uncached_time) * 100
+            print(f"Speedup:  {speedup:8.2f}x")
+            print(f"Time saved: {time_saved:.2f}s ({percent_saved:.1f}%)")
+        else:
+            print("Note: Cached mode was not faster (file may be too small for caching benefit)")
+
+        # ====================================================================
+        # Print raw command for copy-paste
+        # ====================================================================
+        print_section("Raw Command for Copy-Paste")
+
+        print("# Cached annotation:")
+        print(" \\\n  ".join(cmd_cached))
+        print()
+        print("# Uncached annotation:")
+        print(" \\\n  ".join(cmd_uncached))
+
+        return 0
+
+    except KeyboardInterrupt:
+        print("\n\n✗ Benchmark interrupted by user")
+        return 1
+    except Exception as e:
+        print(f"\n\n✗ Benchmark failed with error: {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
+    finally:
+        # Cleanup
+        if temp_dir.exists():
+            try:
+                shutil.rmtree(temp_dir)
+                print(f"\n✓ Cleaned up temporary directory")
+            except Exception as e:
+                print(f"\n⚠ Warning: Could not clean up {temp_dir}: {e}")
+
+
 def main():
     """Entry point for command-line execution."""
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Run a comprehensive demo of the vcfcache workflow"
+        description="Run vcfcache smoke test or benchmark"
+    )
+    parser.add_argument(
+        "--smoke-test",
+        action="store_true",
+        help="Run comprehensive smoke test"
     )
     parser.add_argument(
         "--keep-files",
         action="store_true",
-        help="Keep temporary files for inspection"
+        help="Keep temporary files for inspection (smoke test only)"
+    )
+    parser.add_argument(
+        "-a", "--annotation_db",
+        type=str,
+        help="Annotation cache directory (benchmark mode)"
+    )
+    parser.add_argument(
+        "--vcf",
+        type=str,
+        help="VCF file (benchmark mode)"
+    )
+    parser.add_argument(
+        "-y", "--params",
+        type=str,
+        help="Params file (benchmark mode)"
     )
 
     args = parser.parse_args()
 
-    exit_code = run_demo(keep_files=args.keep_files)
+    if args.smoke_test:
+        exit_code = run_smoke_test(keep_files=args.keep_files)
+    elif args.annotation_db and args.vcf and args.params:
+        exit_code = run_benchmark(args.annotation_db, args.vcf, args.params)
+    else:
+        parser.print_help()
+        exit_code = 1
+
     sys.exit(exit_code)
 
 

@@ -112,11 +112,18 @@ def main() -> None:
         description="Speed up VCF annotation by using pre-cached common variants.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    # Get version, fallback to __init__.py if package not installed
+    try:
+        version_str = pkg_version("vcfcache")
+    except Exception:
+        from vcfcache import __version__
+        version_str = __version__
+
     parser.add_argument(
         "-v",
         "--version",
         action="version",
-        version=pkg_version("vcfcache"),
+        version=version_str,
         help="Show version and exit",
     )
 
@@ -340,14 +347,31 @@ def main() -> None:
     # demo command
     demo_parser = subparsers.add_parser(
         "demo",
-        help="Run comprehensive demo of vcfcache workflow (all 4 commands)",
+        help="Run demo workflow or benchmark cached vs uncached annotation",
         parents=[parent_parser],
+    )
+    demo_parser.add_argument(
+        "--smoke-test",
+        action="store_true",
+        help="Run comprehensive smoke test of all 4 commands (blueprint-init, blueprint-extend, cache-build, annotate)",
     )
     demo_parser.add_argument(
         "--keep-files",
         action="store_true",
-        help="Keep temporary files for inspection",
+        help="Keep temporary files for inspection (only for --smoke-test)",
     )
+    demo_parser.add_argument(
+        "-a",
+        "--annotation_db",
+        type=str,
+        help="Path to annotation cache directory (for benchmark mode)",
+    )
+    demo_parser.add_argument(
+        "--vcf",
+        type=str,
+        help="Path to VCF/BCF file to annotate (for benchmark mode)",
+    )
+    # Note: -y/--params inherited from parent_parser
 
     args = parser.parse_args(args=None if sys.argv[1:] else ["--help"])
 
@@ -547,9 +571,34 @@ def main() -> None:
             print(f"Upload complete. DOI: {dep.get('doi', 'draft')} MD5: {md5}")
 
         elif args.command == "demo":
-            from vcfcache.demo import run_demo
-            exit_code = run_demo(keep_files=args.keep_files)
-            sys.exit(exit_code)
+            from vcfcache.demo import run_smoke_test, run_benchmark
+
+            # If no arguments provided, show help
+            if not args.smoke_test and not (args.annotation_db and args.vcf):
+                demo_parser.print_help()
+                sys.exit(0)
+
+            # Run smoke test mode
+            if args.smoke_test:
+                exit_code = run_smoke_test(keep_files=args.keep_files)
+                sys.exit(exit_code)
+
+            # Run benchmark mode
+            if args.annotation_db and args.vcf:
+                if not args.params:
+                    print("Error: --params (-y) is required for benchmark mode")
+                    sys.exit(1)
+                exit_code = run_benchmark(
+                    cache_dir=args.annotation_db,
+                    vcf_file=args.vcf,
+                    params_file=args.params,
+                )
+                sys.exit(exit_code)
+
+            # Invalid combination
+            print("Error: Use either --smoke-test OR -a/--annotation_db + --vcf for benchmark mode")
+            demo_parser.print_help()
+            sys.exit(1)
 
     except Exception as e:
         # Only log the top-level error without traceback - it will be shown by the raise
