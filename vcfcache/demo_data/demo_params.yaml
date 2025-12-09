@@ -7,6 +7,7 @@ temp_dir: "/tmp"
 annotation_tool_cmd: "bcftools"
 tool_version_command: "bcftools --version-only"
 bcftools_cmd: "bcftools"
+threads: 2
 
 ## OPTIONAL CHECKS
 optional_checks: {}

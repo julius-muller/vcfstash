@@ -437,22 +437,34 @@ class WorkflowManager(WorkflowBase):
         bcftools = self.params_file_content["bcftools_cmd"]
         tag = self.nfa_config_content["must_contain_info_tag"]
 
+        # Get thread count from params
+        threads = self.params_file_content.get("threads", 1)
+
         # Step 1: Add cache annotations
         self.logger.info("Step 1/4: Adding cache annotations")
         step1_bcf = work_task / f"{sample_name}_isecvst.bcf"
         if self.contig_map:
-            # When renaming chroms, write renamed file to disk first (bcftools annotate needs indexed input)
+            # Pipe through contig renaming, save to temp file, then annotate
+            # (bcftools annotate -a requires indexed input, can't use stdin)
             renamed_bcf = work_task / f"{sample_name}_renamed.bcf"
-            rename_cmd = f"{bcftools} annotate --rename-chrs {self.contig_map} {input_bcf} -o {renamed_bcf} -Ob -W"
-            BcftoolsCommand(rename_cmd, self.logger, work_task).run()
-            # Now annotate the renamed file
-            cmd1 = f"{bcftools} annotate -a {db_bcf} {renamed_bcf} -c INFO -o {step1_bcf} -Ob -W"
-            BcftoolsCommand(cmd1, self.logger, work_task).run()
+            cmd1a = (
+                f"{bcftools} view -Ou {input_bcf} --threads {threads} | "
+                f"{bcftools} annotate --rename-chrs {self.contig_map} "
+                f"-o {renamed_bcf} -Ob -W --threads {threads}"
+            )
+            BcftoolsCommand(cmd1a, self.logger, work_task).run()
+
+            # Now annotate from cache using the renamed file
+            cmd1b = (
+                f"{bcftools} annotate -a {db_bcf} {renamed_bcf} -c INFO "
+                f"-o {step1_bcf} -Ob -W --threads {threads}"
+            )
+            BcftoolsCommand(cmd1b, self.logger, work_task).run()
         else:
             # No contig remapping needed, annotate directly
-            input_arg = str(input_bcf)
             cmd1 = (
-                f"{bcftools} annotate -a {db_bcf} {input_arg} -c INFO -o {step1_bcf} -Ob -W"
+                f"{bcftools} annotate -a {db_bcf} {input_bcf} -c INFO "
+                f"-o {step1_bcf} -Ob -W --threads {threads}"
             )
             BcftoolsCommand(cmd1, self.logger, work_task).run()
 
@@ -533,8 +545,14 @@ class WorkflowManager(WorkflowBase):
         aux_dir.mkdir(exist_ok=True)
         bcftools = self.params_file_content["bcftools_cmd"]
 
+        # Get thread count from params
+        threads = self.params_file_content.get("threads", 1)
+
         # Use a unique placeholder for stdin when piping
         STDIN_PLACEHOLDER = "__VCFCACHE_STDIN__"
+
+        print(f"\nDEBUG: Before _substitute_variables, original annotation_cmd:")
+        print(f"  First 200 chars: {repr(self.nfa_config_content['annotation_cmd'][:200])}\n")
 
         anno_cmd = self._substitute_variables(
             self.nfa_config_content["annotation_cmd"],
@@ -545,19 +563,30 @@ class WorkflowManager(WorkflowBase):
             },
         )
 
+        print(f"\nDEBUG: After _substitute_variables:")
+        print(f"  Has STDIN_PLACEHOLDER: {STDIN_PLACEHOLDER in anno_cmd}")
+        print(f"  First 200 chars: {repr(anno_cmd[:200])}\n")
+
         if self.contig_map:
-            # Pipe through contig renaming and handle stdin placeholder
-            # Save stdin to temp file, replace placeholder, execute annotation
-            prefix = f"{bcftools} annotate --rename-chrs {self.contig_map} {input_bcf} -Ou | \\\n"
+            # Pipe through contig renaming
+            # Save piped stdin to temp file (annotation commands may read INPUT_BCF multiple times)
+            anno_cmd_with_temp = anno_cmd.replace(STDIN_PLACEHOLDER, "$TEMP")
+            print(f"\nDEBUG: After replacing STDIN_PLACEHOLDER:")
+            print(f"  Has $TEMP (no backslash): {'$TEMP' in anno_cmd_with_temp and '\\$TEMP' not in anno_cmd_with_temp}")
+            print(f"  Has \\$TEMP (with backslash): {'\\$TEMP' in anno_cmd_with_temp}")
+            print(f"  First 200 chars: {repr(anno_cmd_with_temp[:200])}\n")
+            # Escape single quotes for bash -c
+            anno_cmd_escaped = anno_cmd_with_temp.replace("'", "'\"'\"'")
             anno_cmd = (
-                f"{prefix}"
+                f"{bcftools} view -Ou {input_bcf} --threads {threads} | "
+                f"{bcftools} annotate --rename-chrs {self.contig_map} -Ou --threads {threads} | "
                 f"bash -c '\n"
                 f"set -e\n"
                 f"TEMP=$(mktemp --suffix=.bcf)\n"
-                f"trap \"rm -f $TEMP\" EXIT\n"
+                f"trap \"rm -f $TEMP*\" EXIT\n"
                 f"cat > $TEMP\n"
-                f"bcftools index $TEMP\n"  # Index the temp file
-                f"{anno_cmd.replace(STDIN_PLACEHOLDER, \"$TEMP\")}\n"
+                f"{bcftools} index $TEMP\n"
+                f"{anno_cmd_escaped}\n"
                 f"'"
             )
 
