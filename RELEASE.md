@@ -112,11 +112,8 @@ pip install --index-url https://test.pypi.org/simple/ \
             --extra-index-url https://pypi.org/simple/ \
             vcfcache
 
-# Run smoke test
-vcfcache-test
-
-# Or run manually
-python -m vcfcache.smoke_test
+# Run comprehensive demo
+vcfcache demo
 
 # Test basic functionality
 vcfcache --help
@@ -127,14 +124,14 @@ deactivate
 rm -rf /tmp/vcfcache-test-env
 ```
 
-**Expected smoke test results:**
-- ✓ All core modules imported successfully
-- ✓ Version accessible
-- ✓ bcftools detected (requires bcftools >= 1.20 installed)
-- ✓ CLI help works
-- ✓ Recipe files accessible
+**Expected demo results:**
+- ✓ Step 1: blueprint-init - Creates initial cache
+- ✓ Step 2: blueprint-extend - Adds more variants
+- ✓ Step 3: cache-build - Annotates the blueprint
+- ✓ Step 4: annotate - Uses cache to annotate sample
+- Shows variant counts and validates annotation tags
 
-**If bcftools is not installed**, the smoke test will show installation instructions:
+**If bcftools is not installed**, the demo will fail with instructions:
 ```
 Install bcftools >= 1.20:
   Ubuntu/Debian: sudo apt-get install bcftools
@@ -168,8 +165,8 @@ source /tmp/vcfcache-pypi-test/bin/activate
 # Install from PyPI
 pip install vcfcache
 
-# Run smoke test
-vcfcache-test
+# Run comprehensive demo
+vcfcache demo
 
 # Clean up
 deactivate
@@ -218,11 +215,11 @@ python -m build
 # 4. Test on TestPyPI
 python -m twine upload --repository testpypi dist/*
 
-# 5. Smoke test from TestPyPI
+# 5. Demo from TestPyPI
 uv venv /tmp/test-env && source /tmp/test-env/bin/activate
 pip install --index-url https://test.pypi.org/simple/ \
             --extra-index-url https://pypi.org/simple/ vcfcache
-vcfcache-test
+vcfcache demo
 deactivate && rm -rf /tmp/test-env
 
 # 6. Upload to PyPI
@@ -237,9 +234,9 @@ gh release create v0.3.2 --title "v0.3.2" --notes-file CHANGELOG.md dist/*
 
 ## Troubleshooting
 
-### Smoke test fails: "bcftools not found"
+### Demo fails: "bcftools not found"
 
-The smoke test requires bcftools >= 1.20 to be installed. This is a runtime dependency of vcfcache.
+The demo requires bcftools >= 1.20 to be installed. This is a runtime dependency of vcfcache.
 
 Users should install bcftools before using vcfcache:
 - Ubuntu/Debian: `sudo apt-get install bcftools`

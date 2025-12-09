@@ -23,9 +23,8 @@ Requirements: Python >= 3.11, bcftools >= 1.20
 # Install vcfcache
 pip install vcfcache
 
-# Verify installation
-vcfcache-test
-# or: python -m vcfcache.smoke_test
+# Run comprehensive demo (tests all 4 commands)
+vcfcache demo
 
 # Use it
 vcfcache --help
@@ -36,7 +35,11 @@ vcfcache --help
 - macOS: `brew install bcftools`
 - Conda: `conda install -c bioconda bcftools`
 
-The smoke test (`vcfcache-test`) will verify your installation and show helpful messages if dependencies are missing.
+The demo command runs a complete workflow testing:
+1. `blueprint-init` - Create cache from variants
+2. `blueprint-extend` - Add more variants
+3. `cache-build` - Annotate the cache
+4. `annotate` - Use cache to annotate sample VCF
 
 ---
 
