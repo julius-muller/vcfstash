@@ -1,0 +1,20 @@
+##fileformat=VCFv4.2
+##contig=<ID=1,length=40>
+##contig=<ID=2,length=40>
+##contig=<ID=4,length=40>
+##contig=<ID=9,length=40>
+##contig=<ID=11,length=40>
+##contig=<ID=22,length=40>
+##contig=<ID=M,length=40>
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele Frequency">
+##INFO=<ID=AC,Number=A,Type=Integer,Description="Allele Count">
+##INFO=<ID=AN,Number=1,Type=Integer,Description="Total number of alleles">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+1	5	testvar1	C	G	100	PASS	AF=0.1;AC=12;AN=120;DP=500
+1	7	testvar2a	GC	G	.	PASS	AF=0.2;AC=10;AN=124;DP=510
+1	8	testvar2	CT	C	100	PASS	AF=0.05;AC=6;AN=120;DP=450
+2	2	testvar3	A	G,T	100	PASS	AF=0.2,0.1;AC=24,12;AN=120;DP=600
+2	4	testvar4	G	A	100	PASS	AF=0.05;AC=6;AN=120;DP=450
+2	10	testvar5	ACGT	A	100	PASS	AF=0.15;AC=18;AN=120;DP=480
+9	5	testvar6	T	TAC,TA,TACC	100	PASS	AF=0.13;AC=12;AN=110;DP=420

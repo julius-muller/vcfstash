@@ -1,0 +1,24 @@
+# Demo Annotation Configuration for VCFcache
+# Uses bcftools to add a mock annotation for demonstration
+
+# Annotation command: adds DEMO_TAG to INFO field
+annotation_cmd: |
+  echo '##INFO=<ID=DEMO_TAG,Number=1,Type=String,Description="Demo annotation tag">' > newheader.txt
+  ${params.bcftools_cmd} query -f '%CHROM\t%POS\tdemo\n' ${INPUT_BCF} > demo.txt
+  bgzip -c demo.txt > demo.txt.gz
+  tabix -s 1 -b 2 -e 2 demo.txt.gz
+  ${params.bcftools_cmd} annotate \
+      -a demo.txt.gz \
+      -h newheader.txt \
+      -c CHROM,POS,INFO/DEMO_TAG \
+      ${INPUT_BCF} \
+      -Ob -o ${OUTPUT_BCF} -W
+
+# Validation: check for this INFO tag in output
+must_contain_info_tag: DEMO_TAG
+
+# Optional version check (empty = skip)
+required_tool_version: ""
+
+# Optional checks (locked with cache)
+optional_checks: {}

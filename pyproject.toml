@@ -50,7 +50,6 @@ dev = [
 
 [project.scripts]
 vcfcache = "vcfcache.cli:main"
-vcfcache-test = "vcfcache.smoke_test:main"
 
 [tool.pytest.ini_options]
 pythonpath = [
@@ -73,7 +72,7 @@ include = ["vcfcache/**", "tests/**"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["vcfcache"]
-include = ["vcfcache/recipes/**"]
+include = ["vcfcache/recipes/**", "vcfcache/demo_data/**"]
 
 
 [tool.ruff]

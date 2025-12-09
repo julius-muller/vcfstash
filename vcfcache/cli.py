@@ -333,6 +333,18 @@ def main() -> None:
         help="Publish the deposit after upload (otherwise leave draft)",
     )
 
+    # demo command
+    demo_parser = subparsers.add_parser(
+        "demo",
+        help="Run comprehensive demo of vcfcache workflow (all 4 commands)",
+        parents=[parent_parser],
+    )
+    demo_parser.add_argument(
+        "--keep-files",
+        action="store_true",
+        help="Keep temporary files for inspection",
+    )
+
     args = parser.parse_args(args=None if sys.argv[1:] else ["--help"])
 
     show_command_only = args.command == "annotate" and getattr(
@@ -529,6 +541,11 @@ def main() -> None:
             if args.publish:
                 dep = zenodo.publish_deposit(dep, token, sandbox=sandbox)
             print(f"Upload complete. DOI: {dep.get('doi', 'draft')} MD5: {md5}")
+
+        elif args.command == "demo":
+            from vcfcache.demo import run_demo
+            exit_code = run_demo(keep_files=args.keep_files)
+            sys.exit(exit_code)
 
     except Exception as e:
         # Only log the top-level error without traceback - it will be shown by the raise
