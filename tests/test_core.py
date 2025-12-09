@@ -69,14 +69,18 @@ def test_vcf_reference_validation(test_scenario):
     print(f"\n=== Testing VCF reference validation (scenario: {test_scenario}) ===")
 
     from vcfcache.database.base import VCFDatabase
+    from vcfcache.utils.validation import check_bcftools_installed
     import logging
 
     # Set up test files
     vcf_file = TEST_DATA_DIR / "crayz_db.bcf"
     ref_file = TEST_ROOT / "data/references/reference.fasta"
 
+    # Get system bcftools path
+    bcftools_path = check_bcftools_installed()
+
     # Create a VCFDatabase instance
-    db = VCFDatabase(Path(TEST_ROOT), 2, True, TEST_ROOT.parent / "tools" / "bcftools")
+    db = VCFDatabase(Path(TEST_ROOT), 2, True, Path(bcftools_path))
     db.logger = logging.getLogger("test")
 
     # Test validation with valid files

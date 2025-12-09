@@ -362,13 +362,7 @@ def main() -> None:
     if not (show_command_only or list_only or args.command in ["pull", "list", "push"]):
         from vcfcache.utils.validation import MIN_BCFTOOLS_VERSION
         logger.debug(f"Minimum required bcftools version: {MIN_BCFTOOLS_VERSION}")
-        workflow_dir = None
-        if args.command in ["blueprint-extend", "cache-build"] and args.db:
-            workflow_dir = Path(args.db) / "workflow"
-        bcftools_path = check_bcftools_installed(
-            Path(args.params) if args.params else None,
-            workflow_dir=workflow_dir if workflow_dir and workflow_dir.exists() else None,
-        )
+        bcftools_path = check_bcftools_installed()
 
     try:
         if args.command == "blueprint-init":
