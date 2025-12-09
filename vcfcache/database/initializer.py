@@ -162,7 +162,6 @@ class DatabaseInitializer(VCFDatabase):
     def initialize(self) -> None:
         """Initialize new VCF database
         self = DatabaseInitializer(name='nftest', input_file=Path('tests/data/nodata/gnomad_test.bcf'),
-        config_file=Path('workflow/nextflow.config'), output_dir=Path('~/tmp/test'), verbosity=2, force=True)
         self.workflow_dir
         self.output_dir
         self.input_file

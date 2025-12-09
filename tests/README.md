@@ -12,7 +12,6 @@ The test suite is **scenario‑aware**: the same tests adapt to what’s availab
 **What's available:**
 - ✅ Python package with vcfcache installed
 - ✅ bcftools (bundled in `tools/bcftools`)
-- ✅ Nextflow (bundled in `vcfcache/workflow/.nextflow/`)
 - ✅ Test data files (`tests/data/`)
 - ❌ NO pre-built cache at `/cache`
 - ❌ NO VEP

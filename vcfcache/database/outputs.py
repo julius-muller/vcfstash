@@ -99,11 +99,6 @@ class CacheOutput(BaseOutput):
       <cache_root_dir>/
       ├── blueprint/
       ├── cache/
-      └── workflow/
-          ├── ... parse from vcfcache
-          ├── modules/
-          │   ├── ... parse from vcfcache
-
 
     self = CacheOutput(cache_root_dir='.')
     """

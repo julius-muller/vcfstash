@@ -72,7 +72,6 @@ class DatabaseAnnotator(VCFDatabase):
 
         Args:
             db_path: Path to the database
-            workflow_dir: Optional workflow directory (defaults to <db_path>/workflow)
             params_file: Optional parameters file
             verbosity: Logging verbosity level (0=WARNING, 1=INFO, 2=DEBUG)
         """
@@ -315,7 +314,6 @@ class VCFAnnotator(VCFDatabase):
             annotation_db: Path to the annotation database
             output_dir: Path to the output directory
             config_file: Optional configuration file with process configurations for resoureces.
-            params_file: Optional parameters file defaults to <db_path>/workflow/init.yaml
             force: Whether to overwrite existing output directory
             debug: Whether to enable debug mode
             verbosity: Logging verbosity level (0=WARNING, 1=INFO, 2=DEBUG)
