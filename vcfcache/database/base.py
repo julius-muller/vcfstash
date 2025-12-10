@@ -182,22 +182,19 @@ class VCFDatabase:
         self,
         vcf_path: Path,
         ref_fasta: Path,
-        chr_add_path: Optional[Path] = None,
         variants_to_check: int = 3,
     ) -> Tuple[bool, Optional[str]]:
-        r"""Validates a VCF/BCF file against a reference genome with optional chromosome name mapping.
+        r"""Validates a VCF/BCF file against a reference genome with automatic chromosome name mapping.
 
         This method performs two checks:
         1. Verifies that all contigs in the VCF/BCF index are found in the reference FASTA index
-           (with optional mapping through chr_add file)
+           (with automatic chr prefix and mitochondrial chromosome handling)
         2. Checks a configurable number of variants from different chromosomes to ensure their reference
            alleles match the reference genome
 
         Args:
             vcf_path (Path): Path to the VCF/BCF file to validate
             ref_fasta (Path): Path to the reference genome FASTA file
-            chr_add_path (Path, optional): Path to chromosome mapping file. Format: two columns
-                                           separated by tab, e.g., "1\tchr1". Default is None.
             variants_to_check (int, optional): Number of variants to check. Defaults to 3.
 
         Returns:
@@ -265,50 +262,27 @@ class VCFDatabase:
                     f"Found {len(vcf_contigs)} unique chromosomes in VCF index"
                 )
 
-            # Load chromosome mapping if provided
-            chrom_map = {}
-            if chr_add_path and Path(chr_add_path).exists():
-                if self.logger:
-                    self.logger.debug(f"Loading chromosome mapping from {chr_add_path}")
-                with open(chr_add_path, "r") as f:
-                    for line in f:
-                        if line.strip() and not line.startswith("#"):
-                            cols = line.strip().split("\t")
-                            if len(cols) >= 2:
-                                src, dest = cols[0], cols[1]
-                                chrom_map[src] = dest
-                                # Also add reverse mapping
-                                chrom_map[dest] = src
-                if self.logger:
-                    self.logger.debug(f"Loaded {len(chrom_map)} chromosome mappings")
-
-            # Check if all VCF contigs are in reference (with mapping)
+            # Check if all VCF contigs are in reference (with automatic mapping)
             missing_contigs = set()
             for contig in vcf_contigs:
                 # Check direct match
                 if contig in ref_contigs:
                     continue
 
-                # Check mapped contig name
-                mapped_contig = chrom_map.get(contig)
-                if mapped_contig and mapped_contig in ref_contigs:
+                # Try common transformations
+                # Try with/without 'chr' prefix
+                if contig.startswith("chr") and contig[3:] in ref_contigs:
+                    continue
+                if f"chr{contig}" in ref_contigs:
                     continue
 
-                # Try common transformations if no mapping found
-                if not mapped_contig:
-                    # Try with/without 'chr' prefix
-                    if contig.startswith("chr") and contig[3:] in ref_contigs:
-                        continue
-                    if f"chr{contig}" in ref_contigs:
-                        continue
-
-                    # Try MT/M variations for mitochondrial DNA
-                    if contig in ("MT", "M", "chrM", "chrMT") and (
-                        "chrM" in ref_contigs
-                        or "M" in ref_contigs
-                        or "MT" in ref_contigs
-                    ):
-                        continue
+                # Try MT/M variations for mitochondrial DNA
+                if contig in ("MT", "M", "chrM", "chrMT") and (
+                    "chrM" in ref_contigs
+                    or "M" in ref_contigs
+                    or "MT" in ref_contigs
+                ):
+                    continue
 
                 # If we get here, the contig is missing
                 missing_contigs.add(contig)
@@ -316,7 +290,7 @@ class VCFDatabase:
             if missing_contigs:
                 return (
                     False,
-                    f"Contigs in VCF not found in reference (even after mapping): {', '.join(missing_contigs)}",
+                    f"Contigs in VCF not found in reference (even after automatic mapping): {', '.join(missing_contigs)}",
                 )
 
             # Check reference alleles for a subset of variants

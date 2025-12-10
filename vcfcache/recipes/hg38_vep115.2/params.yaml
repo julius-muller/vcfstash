@@ -2,7 +2,6 @@
 annotation_tool_cmd: "vep"
 tool_version_command: "vep --version | head -1 | awk '{print $2}'"
 bcftools_cmd: "${VCFCACHE_ROOT}/tools/bcftools"
-chr_add: "${VCFCACHE_ROOT}/resources/chr_add.txt"
 temp_dir: "/tmp"
 
 ## * OPTIONAL RESOURCES *

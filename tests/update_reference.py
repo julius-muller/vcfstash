@@ -22,7 +22,7 @@ TEST_DATA_DIR = TEST_ROOT / "data" / "nodata"
 TEST_PARAMS = TEST_ROOT / "config" / "example_params.yaml"
 TEST_VCF = TEST_DATA_DIR / "crayz_db.bcf"
 EXPECTED_OUTPUT_DIR = TEST_ROOT / "data" / "expected_output"
-TEST_ANNO_CONFIG = TEST_ROOT / "config" / "example_annotation.config"
+TEST_ANNO_CONFIG = TEST_ROOT / "config" / "test_annotation.yaml"
 
 # Set Nextflow-specific environment variables
 os.environ['NXF_VER'] = '25.10.2'

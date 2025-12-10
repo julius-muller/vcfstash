@@ -16,7 +16,8 @@ TEST_ROOT = get_vcfcache_root() / "tests"
 TEST_DATA_DIR = TEST_ROOT / "data" / "nodata"
 TEST_PARAMS = TEST_ROOT / "config" / "test_params.yaml"
 TEST_ANNO_CONFIG = TEST_ROOT / "config" / "test_annotation.yaml"
-VEP_ANNO_CONFIG = TEST_ROOT / "config" / "example_annotation.config"
+# VEP annotation config for annotated scenario (uses real VEP annotations)
+VEP_ANNO_CONFIG = get_vcfcache_root() / "vcfcache" / "recipes" / "docker-annotated" / "annotation.yaml"
 
 
 # ============================================================================

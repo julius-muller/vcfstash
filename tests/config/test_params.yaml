@@ -1,8 +1,6 @@
 ## * REQUIRED RESOURCES *
 # Do not change the key names in this section, as they are used in the code.
 
-# Mapping of chromosome names between the reference genome and the VCF file
-chr_add: "${VCFCACHE_ROOT}/resources/chr_add.txt"
 # Temporary directory for storing intermediate files
 temp_dir: "/tmp"
 # Tool paths and commands
@@ -16,9 +14,9 @@ tool_version_command: "bcftools --version-only"
 bcftools_cmd: "bcftools"
 
 ## * OPTIONAL RESOURCES *
-# Alls keys here can be utilized in the example_annotation.config file as ${params.MYKEY}
+# All keys here can be utilized in the annotation.yaml file as ${params.MYKEY}
 
 
 ## * OPTIONAL CHECKS *
-# Optional checks and verifications. These can be set to any key:value pair, but all keys must match the values in the example_annotation.config.
+# Optional checks and verifications. These can be set to any key:value pair, but all keys must match the values in the annotation.yaml.
 optional_checks: {}

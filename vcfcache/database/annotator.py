@@ -102,7 +102,7 @@ class DatabaseAnnotator(VCFDatabase):
             user_config=Path(anno_config_file).expanduser().resolve()
         )
 
-        self.params_file = self.output_dir / "annotation.yaml"
+        self.params_file = self.output_dir / "params.snapshot.yaml"
         if params_file:
             params_path = (
                 Path(params_file) if isinstance(params_file, str) else params_file
@@ -139,7 +139,7 @@ class DatabaseAnnotator(VCFDatabase):
             self.logger.debug(f"Config file: {self.config_file}")
 
     def _preprocess_annotation_config(self, user_config: Path) -> Path:
-        """Preprocess example_annotation.config to fix variable substitution issues.
+        """Preprocess annotation.yaml to fix variable substitution issues.
         Replaces problematic variable references with their escaped versions.
         This only has to be done once, as the config is copied to the output directory and used for all subsequent vcfcache annotate runs
 
@@ -167,7 +167,7 @@ class DatabaseAnnotator(VCFDatabase):
         for old, new in replacements:
             modified_content = modified_content.replace(old, new)
 
-        output_cfg = self.output_dir / "example_annotation.config"
+        output_cfg = self.output_dir / "annotation.yaml"
         with open(output_cfg, "w") as f:
             f.write(modified_content)
 
@@ -352,7 +352,7 @@ class VCFAnnotator(VCFDatabase):
         self.output_vcf = Path(self.output_dir / f"{self.vcf_name}_vst{fext}")
 
         # now also import the mandatory annotation file, that cannot be provided by the user at this stage
-        self.anno_config_file = self.annotation_db_path / "example_annotation.config"
+        self.anno_config_file = self.annotation_db_path / "annotation.yaml"
         if not self.anno_config_file.exists():
             raise FileNotFoundError(
                 f"Annotation config file not found: {self.anno_config_file}"
@@ -377,14 +377,14 @@ class VCFAnnotator(VCFDatabase):
             )
             self.config_file = self.annotation_wfl_path / self.config_file
 
-        self.params_file = self.annotation_wfl_path / "annotation.yaml"
+        self.params_file = self.annotation_wfl_path / "params.snapshot.yaml"
         if params_file:
             params_path = (
                 Path(params_file) if isinstance(params_file, str) else params_file
             )
             shutil.copyfile(params_path.expanduser().resolve(), self.params_file)
         else:
-            wfi = self.annotation_db_path / "annotation.yaml"
+            wfi = self.annotation_db_path / "params.snapshot.yaml"
             assert (
                 wfi.exists()
             ), f"Workflow annotation params file not found: {wfi}, required if no yaml provided!"

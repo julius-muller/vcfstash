@@ -172,7 +172,7 @@ def test_path_resolution(test_scenario):
         f"Expected either dev structure (vcfcache/) or Docker structure (resources/, tools/) in {root}"
 
     # Test resource path resolution
-    resource_path = get_resource_path(Path("resources/chr_add.txt"))
+    resource_path = get_resource_path(Path("resources/conv_uawf.png"))
     # Path should be constructed, whether or not it exists
     assert isinstance(resource_path, Path)
 
