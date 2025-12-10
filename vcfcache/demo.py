@@ -96,6 +96,34 @@ def collect_detailed_timings(cache_dir, output_dir):
     return detailed_timings
 
 
+def show_step_timing(log_file):
+    """Display detailed timing for a specific workflow step."""
+    import re
+
+    if not log_file.exists():
+        return
+
+    timing_pattern = re.compile(r'Command completed in ([\d.]+)s: (.+)')
+    operations = []
+
+    with log_file.open() as f:
+        for line in f:
+            match = timing_pattern.search(line)
+            if match:
+                duration = float(match.group(1))
+                cmd = match.group(2).strip()
+                operations.append((cmd, duration))
+
+    if operations:
+        print("\n  Detailed timing:")
+        total = sum(dur for _, dur in operations)
+        for cmd, duration in operations:
+            pct = (duration / total * 100) if total > 0 else 0
+            print(f"    • {cmd:30s}: {format_duration(duration):>10s}  ({pct:5.1f}%)")
+        print(f"    {'─' * 55}")
+        print(f"    {'Total':30s}: {format_duration(total):>10s}")
+
+
 def run_command(cmd, description, cwd=None):
     """Run a command and check for success."""
     print(f"Running: {' '.join(cmd)}")
@@ -247,6 +275,9 @@ def run_smoke_test(keep_files=False):
                     print(f"  {line.split(':')[1].strip()}")
                     break
 
+        # Show detailed timing for this step
+        show_step_timing(cache_dir / "blueprint" / "workflow.log")
+
         # ====================================================================
         # Step 2: blueprint-extend
         # ====================================================================
@@ -273,6 +304,9 @@ def run_smoke_test(keep_files=False):
                 if line.startswith('SN') and 'number of records' in line:
                     print(f"  {line.split(':')[1].strip()}")
                     break
+
+        # Show detailed timing for this step
+        show_step_timing(cache_dir / "blueprint" / "workflow.log")
 
         # ====================================================================
         # Step 3: cache-build
@@ -309,6 +343,9 @@ def run_smoke_test(keep_files=False):
             print(f"✓ Annotation tag CSQ present in cache")
         else:
             print(f"⚠ Warning: CSQ not found in cache header")
+
+        # Show detailed timing for this step
+        show_step_timing(cache_dir / "cache" / "demo_cache" / "workflow.log")
 
         # ====================================================================
         # Step 4: annotate
@@ -356,6 +393,9 @@ def run_smoke_test(keep_files=False):
         result = subprocess.run(header_cmd, capture_output=True, text=True)
         if result.returncode == 0 and "##INFO=<ID=CSQ," in result.stdout:
             print(f"✓ Annotation tag CSQ present in output")
+
+        # Show detailed timing for this step
+        show_step_timing(output_dir / "workflow.log")
 
         # ====================================================================
         # Validation: Compare cached vs uncached annotation
