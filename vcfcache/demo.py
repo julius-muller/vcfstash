@@ -40,10 +40,22 @@ def print_step(step_num, description):
     print(f"{'─'*70}\n")
 
 
+def format_duration(seconds):
+    """Format duration as m:s.ms"""
+    minutes = int(seconds // 60)
+    secs = seconds % 60
+    if minutes > 0:
+        return f"{minutes}m {secs:.3f}s"
+    else:
+        return f"{secs:.3f}s"
+
+
 def run_command(cmd, description, cwd=None):
     """Run a command and check for success."""
     print(f"Running: {' '.join(cmd)}")
     print()
+
+    start_time = time.time()
 
     try:
         result = subprocess.run(
@@ -54,13 +66,15 @@ def run_command(cmd, description, cwd=None):
             timeout=300
         )
 
+        duration = time.time() - start_time
+
         if result.returncode != 0:
-            print(f"✗ {description} FAILED")
+            print(f"✗ {description} FAILED (took {format_duration(duration)})")
             print(f"\nSTDOUT:\n{result.stdout}")
             print(f"\nSTDERR:\n{result.stderr}")
-            return False
+            return False, duration
 
-        print(f"✓ {description} succeeded")
+        print(f"✓ {description} succeeded (took {format_duration(duration)})")
 
         # Show abbreviated output
         if result.stdout:
@@ -71,14 +85,16 @@ def run_command(cmd, description, cwd=None):
             else:
                 print(f"\n{result.stdout}")
 
-        return True
+        return True, duration
 
     except subprocess.TimeoutExpired:
-        print(f"✗ {description} TIMED OUT")
-        return False
+        duration = time.time() - start_time
+        print(f"✗ {description} TIMED OUT (after {format_duration(duration)})")
+        return False, duration
     except Exception as e:
-        print(f"✗ {description} FAILED: {e}")
-        return False
+        duration = time.time() - start_time
+        print(f"✗ {description} FAILED: {e} (after {format_duration(duration)})")
+        return False, duration
 
 
 def get_demo_data_dir():
@@ -134,6 +150,9 @@ def run_smoke_test(keep_files=False):
     if keep_files:
         print(f"Note: Files will be kept for inspection")
 
+    # Track timing for each step
+    timings = {}
+
     try:
         # Define paths
         cache_dir = temp_dir / "cache"
@@ -160,7 +179,9 @@ def run_smoke_test(keep_files=False):
             # Note: Multiallelic splitting is now always performed
         ]
 
-        if not run_command(cmd, "Blueprint initialization"):
+        success, duration = run_command(cmd, "Blueprint initialization")
+        timings['blueprint-init'] = duration
+        if not success:
             return 1
 
         # Verify blueprint was created
@@ -192,7 +213,9 @@ def run_smoke_test(keep_files=False):
             "-i", str(bp_extend_file)
         ]
 
-        if not run_command(cmd, "Blueprint extension"):
+        success, duration = run_command(cmd, "Blueprint extension")
+        timings['blueprint-extend'] = duration
+        if not success:
             return 1
 
         print(f"\n✓ Blueprint extended with additional variants")
@@ -220,7 +243,9 @@ def run_smoke_test(keep_files=False):
             "--force"
         ]
 
-        if not run_command(cmd, "Cache build"):
+        success, duration = run_command(cmd, "Cache build")
+        timings['cache-build'] = duration
+        if not success:
             return 1
 
         # Verify cache was created
@@ -257,7 +282,9 @@ def run_smoke_test(keep_files=False):
             "--force"
         ]
 
-        if not run_command(cmd, "Sample annotation"):
+        success, duration = run_command(cmd, "Sample annotation")
+        timings['annotate (cached)'] = duration
+        if not success:
             return 1
 
         # Verify output was created
@@ -302,7 +329,9 @@ def run_smoke_test(keep_files=False):
             "--force"
         ]
 
-        if not run_command(cmd_uncached, "Uncached annotation (for validation)"):
+        success, duration = run_command(cmd_uncached, "Uncached annotation (for validation)")
+        timings['annotate (uncached)'] = duration
+        if not success:
             print("✗ ERROR: Uncached annotation failed")
             print("This is a critical issue - uncached mode must work for validation.")
             return 1
@@ -347,6 +376,16 @@ def run_smoke_test(keep_files=False):
         print("  3. cache-build     - Annotated the blueprint")
         print("  4. annotate        - Used cache to annotate sample")
         print("  5. validation      - Verified cached == uncached (MD5 match)\n")
+
+        # Timing summary
+        print("Timing Summary:")
+        print("─" * 60)
+        total_time = sum(timings.values())
+        for step, duration in timings.items():
+            pct = (duration / total_time * 100) if total_time > 0 else 0
+            print(f"  {step:25s}: {format_duration(duration):>12s}  ({pct:5.1f}%)")
+        print("─" * 60)
+        print(f"  {'Total':25s}: {format_duration(total_time):>12s}\n")
 
         print(f"Demo files location: {demo_data}")
         if keep_files:
