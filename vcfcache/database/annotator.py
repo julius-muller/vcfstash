@@ -455,77 +455,136 @@ class VCFAnnotator(VCFDatabase):
             return "mt"
         return n
 
-    def _write_contig_map(self, cache_map: dict[str, str]) -> None:
-        """Generate a contig map file for rename-chrs when prefixes differ."""
-        contigs = self._list_contigs(self.input_vcf)
-        mapping_dir = self.output_annotations.root_dir / "work"
-        mapping_dir.mkdir(parents=True, exist_ok=True)
-        map_file = mapping_dir / "contig_map.txt"
+    def _check_contig_compatibility(self) -> tuple[bool, bool]:
+        """Check if contig names between cache and input are compatible.
 
-        lines = []
-        for contig in contigs:
-            key = self._canonical_contig(contig)
-            target = cache_map.get(key)
-            if not target or contig == target:
-                continue
-            lines.append(f"{contig}\t{target}\n")
-
-        if lines:
-            map_file.write_text("".join(lines))
-            self.contig_map_file = map_file
-
-    def _ensure_contig_compatibility(self) -> None:
-        """Ensure contigs between input and cache are compatible, auto-fixing chr prefixes."""
-        self._ensure_index(self.cache_file)
-        self._ensure_index(self.input_vcf)
-
+        Returns:
+            (compatible, needs_cache_rename):
+                - compatible: True if there's overlap between cache and input contigs
+                - needs_cache_rename: True if cache needs "chr" prefix to match input
+        """
         cache_contigs = self._list_contigs(self.cache_file)
         input_contigs = self._list_contigs(self.input_vcf)
 
         cache_set = set(cache_contigs)
         input_set = set(input_contigs)
+
+        # Perfect match - no renaming needed
         if cache_set == input_set:
-            return
+            return (True, False)
 
-        cache_canon = {self._canonical_contig(c) for c in cache_contigs}
-        input_canon = {self._canonical_contig(c) for c in input_contigs}
+        # Check if cache or input has short contig names (1-2 chars)
+        cache_has_short_names = all(len(c) <= 2 for c in cache_contigs)
+        input_has_short_names = all(len(c) <= 2 for c in input_contigs)
+        cache_has_chr_prefix = any(c.startswith("chr") and len(c) >= 4 for c in cache_contigs)
+        input_has_chr_prefix = any(c.startswith("chr") and len(c) >= 4 for c in input_contigs)
 
-        if cache_canon == input_canon:
-            cache_map: dict[str, str] = {}
-            for contig in cache_contigs:
-                cache_map[self._canonical_contig(contig)] = contig
-            # Write a map for rename-chrs (used during workflow)
-            self._write_contig_map(cache_map)
-            return
+        # Check overlap without any prefix changes
+        direct_overlap = cache_set & input_set
 
-        # Check overlap after canonicalization (chr prefix normalization)
-        overlap = cache_canon & input_canon
-        missing_in_cache = input_canon - cache_canon
+        # Check overlap if we add/remove "chr" prefix
+        needs_rename = False
+        rename_type = None  # "add_chr" or "remove_chr"
 
-        # It's okay if input has contigs not in cache (they won't get annotations)
-        # But we need at least some overlap to proceed
-        if not overlap:
+        if cache_has_short_names and input_has_chr_prefix:
+            # Cache has short names (1, 2), input has chr prefix (chr1, chr2)
+            # Try adding "chr" prefix to cache
+            cache_with_chr = {f"chr{c}" for c in cache_contigs}
+            chr_overlap = cache_with_chr & input_set
+            if len(chr_overlap) > len(direct_overlap):
+                needs_rename = True
+                rename_type = "add_chr"
+                overlap_count = len(chr_overlap)
+            else:
+                overlap_count = len(direct_overlap)
+        elif cache_has_chr_prefix and input_has_short_names:
+            # Cache has chr prefix (chr1, chr2), input has short names (1, 2)
+            # Try removing "chr" prefix from cache
+            cache_without_chr = {c[3:] if c.startswith("chr") else c for c in cache_contigs}
+            no_chr_overlap = cache_without_chr & input_set
+            if len(no_chr_overlap) > len(direct_overlap):
+                needs_rename = True
+                rename_type = "remove_chr"
+                overlap_count = len(no_chr_overlap)
+            else:
+                overlap_count = len(direct_overlap)
+        else:
+            overlap_count = len(direct_overlap)
+
+        if overlap_count == 0:
             raise RuntimeError(
                 "Contig names between cache and input are completely incompatible.\n"
-                f"Cache contigs (canonical): {sorted(list(cache_canon))[:10]}\n"
-                f"Input contigs (canonical): {sorted(list(input_canon))[:10]}\n"
-                "No overlap found even after chr prefix normalization."
+                f"Cache contigs: {sorted(list(cache_set))[:10]}\n"
+                f"Input contigs: {sorted(list(input_set))[:10]}\n"
+                "No overlap found."
             )
 
-        # If there's overlap, create contig map for chr prefix fixing
-        if overlap:
-            cache_map: dict[str, str] = {}
-            for contig in cache_contigs:
-                cache_map[self._canonical_contig(contig)] = contig
-            self._write_contig_map(cache_map)
+        # Log info about contigs
+        if needs_rename:
+            action = "add 'chr' prefix" if rename_type == "add_chr" else "remove 'chr' prefix"
+            msg = f"Will {action} to cache contigs to match input"
+        else:
+            msg = f"Found {overlap_count} overlapping contig(s) between cache and input"
 
-            # Log info about missing contigs (but don't fail - they'll be annotated uncached)
-            if missing_in_cache:
-                msg = f"Note: Input has {len(missing_in_cache)} contig(s) not in cache (will annotate these uncached): {sorted(list(missing_in_cache))[:5]}"
+        if self.logger:
+            self.logger.info(msg)
+        else:
+            print(msg)
+
+        return (True, (needs_rename, rename_type))
+
+    def _ensure_contig_compatibility(self) -> None:
+        """Ensure contigs between input and cache are compatible.
+
+        IMPORTANT: Input contig names are NEVER altered. Only cache may be renamed.
+        """
+        self._ensure_index(self.cache_file)
+        self._ensure_index(self.input_vcf)
+
+        compatible, rename_info = self._check_contig_compatibility()
+
+        if not compatible:
+            raise RuntimeError("Cache and input contigs are not compatible")
+
+        needs_cache_rename, rename_type = rename_info
+        if needs_cache_rename:
+            # Create a renamed copy of the cache
+            # This is stored alongside the cache and reused for subsequent annotations
+            suffix = "chrprefixed" if rename_type == "add_chr" else "nochr"
+            renamed_cache = self.cache_file.parent / f"{self.cache_file.stem}_{suffix}.bcf"
+
+            if not renamed_cache.exists():
+                action = "chr-prefixed" if rename_type == "add_chr" else "chr-removed"
+                msg = f"Creating {action} version of cache at: {renamed_cache}"
                 if self.logger:
                     self.logger.info(msg)
                 else:
                     print(msg)
+
+                # Create contig rename map
+                mapping_dir = self.output_annotations.root_dir / "work"
+                mapping_dir.mkdir(parents=True, exist_ok=True)
+                map_file = mapping_dir / "cache_rename_map.txt"
+
+                cache_contigs = self._list_contigs(self.cache_file)
+                lines = []
+                for contig in cache_contigs:
+                    if rename_type == "add_chr" and len(contig) <= 2:
+                        lines.append(f"{contig}\tchr{contig}\n")
+                    elif rename_type == "remove_chr" and contig.startswith("chr"):
+                        lines.append(f"{contig}\t{contig[3:]}\n")
+
+                map_file.write_text("".join(lines))
+
+                # Rename cache contigs
+                cmd = (
+                    f"{self.bcftools_path} annotate --rename-chrs {map_file} "
+                    f"{self.cache_file} -o {renamed_cache} -Ob -W"
+                )
+                subprocess.run(cmd, shell=True, check=True, capture_output=True)
+
+            # Use renamed cache for annotation
+            self.cache_file = renamed_cache
 
     def _validate_inputs(self) -> None:
         """Validate input files, directories, and YAML parameters."""

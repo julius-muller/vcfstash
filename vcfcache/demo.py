@@ -157,7 +157,7 @@ def run_smoke_test(keep_files=False):
             "--output", str(cache_dir),
             "-y", str(params_file),
             "--force",
-            "--normalize",  # Split multiallelic variants and normalize
+            # Note: Multiallelic splitting is now always performed
         ]
 
         if not run_command(cmd, "Blueprint initialization"):

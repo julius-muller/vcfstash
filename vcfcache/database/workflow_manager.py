@@ -306,19 +306,12 @@ class WorkflowManager(WorkflowBase):
         output_bcf = self.output_dir / "vcfcache.bcf"
         bcftools = self.params_file_content["bcftools_cmd"]
 
-        if normalize:
-            # Normalize multiallelics without forcing contig renames
-            self.logger.info("Applying normalization (splitting multiallelic sites)")
+        # Always split multiallelic variants for user-provided VCF files
+        self.logger.info("Removing GT and INFO fields, splitting multiallelic sites")
 
-            cmd = f"""{bcftools} view -G -Ou {input_bcf} | {bcftools} annotate -x INFO | \\
+        cmd = f"""{bcftools} view -G -Ou {input_bcf} | \\
+{bcftools} annotate -x INFO -Ou | \\
 {bcftools} norm -m- -o {output_bcf} -Ob --write-index
-"""
-        else:
-            # Just remove GT and INFO
-            self.logger.info("Removing GT and INFO fields only")
-
-            cmd = f"""{bcftools} view -G -Ou {input_bcf} | \\
-{bcftools} annotate -x INFO -o {output_bcf} -Ob --write-index
 """
 
         return BcftoolsCommand(cmd, self.logger, work_task).run()
@@ -342,21 +335,15 @@ class WorkflowManager(WorkflowBase):
 
         bcftools = self.params_file_content["bcftools_cmd"]
 
-        # Step 1: Normalize/filter new input (same as blueprint-init)
+        # Step 1: Normalize/filter new input (always split multiallelics)
         normalized = work_task / "normalized.bcf"
         input_bcf = self.input_file
 
-        if normalize:
-            self.logger.info("Normalizing new input (splitting multiallelic sites)")
+        self.logger.info("Filtering new input (drop INFO) and splitting multiallelic sites")
 
-            norm_cmd = f"""{bcftools} view -G -Ou {input_bcf} | {bcftools} annotate -x INFO | \\
+        norm_cmd = f"""{bcftools} view -G -Ou {input_bcf} | \\
+{bcftools} annotate -x INFO -Ou | \\
 {bcftools} norm -m- -o {normalized} -Ob --write-index
-"""
-        else:
-            self.logger.info("Filtering new input (drop INFO)")
-
-            norm_cmd = f"""{bcftools} view -G -Ou {input_bcf} | \\
-{bcftools} annotate -x INFO -o {normalized} -Ob --write-index
 """
 
         BcftoolsCommand(norm_cmd, self.logger, work_task).run()
@@ -440,33 +427,24 @@ class WorkflowManager(WorkflowBase):
         # Get thread count from params
         threads = self.params_file_content.get("threads", 1)
 
+        # Step 0: Split multiallelic variants in input
+        self.logger.info("Step 0/4: Splitting multiallelic variants in input")
+        normalized_input = work_task / f"{sample_name}_normalized.bcf"
+        norm_cmd = (
+            f"{bcftools} norm -m- {input_bcf} -o {normalized_input} -Ob -W --threads {threads}"
+        )
+        BcftoolsCommand(norm_cmd, self.logger, work_task).run()
+        input_bcf = normalized_input  # Use normalized input for subsequent steps
+
         # Step 1: Add cache annotations
+        # Note: Input contigs are never renamed. Cache may have been renamed if needed.
         self.logger.info("Step 1/4: Adding cache annotations")
         step1_bcf = work_task / f"{sample_name}_isecvst.bcf"
-        if self.contig_map:
-            # Pipe through contig renaming, save to temp file, then annotate
-            # (bcftools annotate -a requires indexed input, can't use stdin)
-            renamed_bcf = work_task / f"{sample_name}_renamed.bcf"
-            cmd1a = (
-                f"{bcftools} view -Ou {input_bcf} --threads {threads} | "
-                f"{bcftools} annotate --rename-chrs {self.contig_map} "
-                f"-o {renamed_bcf} -Ob -W --threads {threads}"
-            )
-            BcftoolsCommand(cmd1a, self.logger, work_task).run()
-
-            # Now annotate from cache using the renamed file
-            cmd1b = (
-                f"{bcftools} annotate -a {db_bcf} {renamed_bcf} -c INFO "
-                f"-o {step1_bcf} -Ob -W --threads {threads}"
-            )
-            BcftoolsCommand(cmd1b, self.logger, work_task).run()
-        else:
-            # No contig remapping needed, annotate directly
-            cmd1 = (
-                f"{bcftools} annotate -a {db_bcf} {input_bcf} -c INFO "
-                f"-o {step1_bcf} -Ob -W --threads {threads}"
-            )
-            BcftoolsCommand(cmd1, self.logger, work_task).run()
+        cmd1 = (
+            f"{bcftools} annotate -a {db_bcf} {input_bcf} -c INFO "
+            f"-o {step1_bcf} -Ob -W --threads {threads}"
+        )
+        BcftoolsCommand(cmd1, self.logger, work_task).run()
 
         # Step 2: Filter to get missing annotations
         self.logger.info("Step 2/4: Identifying variants missing from cache")
@@ -548,43 +526,27 @@ class WorkflowManager(WorkflowBase):
         # Get thread count from params
         threads = self.params_file_content.get("threads", 1)
 
+        # Step 0: Split multiallelic variants in input
+        self.logger.info("Splitting multiallelic variants in input")
+        normalized_input = work_task / f"{sample_name}_normalized.bcf"
+        norm_cmd = (
+            f"{bcftools} norm -m- {input_bcf} -o {normalized_input} -Ob -W --threads {threads}"
+        )
+        BcftoolsCommand(norm_cmd, self.logger, work_task).run()
+        input_bcf = normalized_input  # Use normalized input for annotation
+
         # Use a unique placeholder for stdin when piping
         STDIN_PLACEHOLDER = "__VCFCACHE_STDIN__"
 
+        # Note: Input contigs are never renamed. Cache may have been renamed if needed.
         anno_cmd = self._substitute_variables(
             self.nfa_config_content["annotation_cmd"],
             extra_vars={
-                "INPUT_BCF": STDIN_PLACEHOLDER if self.contig_map else str(input_bcf),
+                "INPUT_BCF": str(input_bcf),
                 "OUTPUT_BCF": str(output_bcf),
                 "AUXILIARY_DIR": str(aux_dir),
             },
         )
-
-        if self.contig_map:
-            # Pipe through contig renaming
-            # Save piped stdin to temp file (annotation commands may read INPUT_BCF multiple times)
-            anno_cmd_with_temp = anno_cmd.replace(STDIN_PLACEHOLDER, "$TEMP")
-
-            # Remove backslashes that were added by _preprocess_annotation_config for Nextflow compatibility
-            # We need $TEMP to expand properly in bash, not be literal \$TEMP
-            anno_cmd_with_temp = anno_cmd_with_temp.replace("\\$TEMP", "$TEMP")
-            anno_cmd_with_temp = anno_cmd_with_temp.replace("\\${OUTPUT_BCF}", "${OUTPUT_BCF}")
-            anno_cmd_with_temp = anno_cmd_with_temp.replace("\\${AUXILIARY_DIR}", "${AUXILIARY_DIR}")
-
-            # Escape single quotes for bash -c
-            anno_cmd_escaped = anno_cmd_with_temp.replace("'", "'\"'\"'")
-            anno_cmd = (
-                f"{bcftools} view -Ou {input_bcf} --threads {threads} | "
-                f"{bcftools} annotate --rename-chrs {self.contig_map} -Ou --threads {threads} | "
-                f"bash -c '\n"
-                f"set -e\n"
-                f"TEMP=$(mktemp --suffix=.bcf)\n"
-                f"trap \"rm -f $TEMP*\" EXIT\n"
-                f"cat > $TEMP\n"
-                f"{bcftools} index $TEMP\n"
-                f"{anno_cmd_escaped}\n"
-                f"'"
-            )
 
         result = BcftoolsCommand(anno_cmd, self.logger, work_task).run()
 
