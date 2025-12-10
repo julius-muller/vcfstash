@@ -59,7 +59,7 @@ annotation_cmd: |
     # Create VEP-style CSQ value
     csq = alt "|" consequence "|" impact "|" gene "|" ensg "|Transcript|" transcript "|protein_coding|" exon "||" hgvsc "|" hgvsp "|" cdna_pos "|" cds_pos "|" aa_pos;
 
-    print chrom, pos, csq;
+    print chrom, pos, ref, alt, csq;
   }' > demo.txt
 
   bgzip -c demo.txt > demo.txt.gz
@@ -67,7 +67,7 @@ annotation_cmd: |
   ${params.bcftools_cmd} annotate \
       -a demo.txt.gz \
       -h newheader.txt \
-      -c CHROM,POS,INFO/CSQ \
+      -c CHROM,POS,REF,ALT,INFO/CSQ \
       ${INPUT_BCF} \
       -Ob -o ${OUTPUT_BCF} -W
 

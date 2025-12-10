@@ -353,7 +353,7 @@ class WorkflowManager(WorkflowBase):
         self.logger.info(f"Merging with existing blueprint: {db_bcf}")
 
         merge_cmd = (
-            f"{bcftools} merge {db_bcf} {normalized} -o {output_bcf} -Ob --write-index"
+            f"{bcftools} merge -m none {db_bcf} {normalized} -o {output_bcf} -Ob --write-index"
         )
 
         return BcftoolsCommand(merge_cmd, self.logger, work_task).run()
