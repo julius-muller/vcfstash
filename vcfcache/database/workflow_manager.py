@@ -51,6 +51,8 @@ class BcftoolsCommand:
         Raises:
             subprocess.CalledProcessError: If command fails and check=True
         """
+        import time
+
         self.logger.debug(f"Running command in {self.work_dir}")
         self.logger.debug(f"Command: {self.cmd}")
 
@@ -58,6 +60,9 @@ class BcftoolsCommand:
         script_file = self.work_dir / "command.sh"
         script_file.write_text(f"#!/bin/bash\nset -euo pipefail\n\n{self.cmd}\n")
         script_file.chmod(0o755)
+
+        # Start timing
+        start_time = time.time()
 
         # Execute command
         result = subprocess.run(
@@ -68,6 +73,26 @@ class BcftoolsCommand:
             cwd=self.work_dir,
             executable="/bin/bash",
         )
+
+        # Calculate duration
+        duration = time.time() - start_time
+
+        # Extract command name (first word after bcftools)
+        cmd_name = "unknown"
+        if "bcftools" in self.cmd:
+            parts = self.cmd.split()
+            for i, part in enumerate(parts):
+                if "bcftools" in part and i + 1 < len(parts):
+                    cmd_name = f"bcftools {parts[i+1].split()[0]}"
+                    break
+
+        # Log timing
+        self.logger.info(f"Command completed in {duration:.3f}s: {cmd_name}")
+
+        # Save timing info
+        timing_file = self.work_dir / "timing.txt"
+        with timing_file.open("a") as f:
+            f.write(f"{cmd_name}\t{duration:.3f}\n")
 
         # Save stdout/stderr
         (self.work_dir / "stdout.txt").write_text(result.stdout)

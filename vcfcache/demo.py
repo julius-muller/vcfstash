@@ -50,6 +50,52 @@ def format_duration(seconds):
         return f"{secs:.3f}s"
 
 
+def collect_detailed_timings(cache_dir, output_dir):
+    """Collect detailed timing information from workflow log files."""
+    import re
+    detailed_timings = {}
+
+    # Pattern to match timing log lines
+    timing_pattern = re.compile(r'Command completed in ([\d.]+)s: (.+)')
+
+    # Collect from cache operations
+    for subdir in ["blueprint", "cache/demo_cache"]:
+        log_file = cache_dir / subdir / "workflow.log"
+        if log_file.exists():
+            step_name = subdir.replace("/", "-")
+            if step_name not in detailed_timings:
+                detailed_timings[step_name] = []
+
+            with log_file.open() as f:
+                for line in f:
+                    match = timing_pattern.search(line)
+                    if match:
+                        duration = float(match.group(1))
+                        cmd = match.group(2).strip()
+                        detailed_timings[step_name].append((cmd, duration))
+
+    # Collect from annotation operations
+    for output_subdir, step_name in [(output_dir, "annotate-cached"),
+                                       (output_dir.parent / "output_uncached", "annotate-uncached")]:
+        if not output_subdir.exists():
+            continue
+
+        log_file = output_subdir / "workflow.log"
+        if log_file.exists():
+            if step_name not in detailed_timings:
+                detailed_timings[step_name] = []
+
+            with log_file.open() as f:
+                for line in f:
+                    match = timing_pattern.search(line)
+                    if match:
+                        duration = float(match.group(1))
+                        cmd = match.group(2).strip()
+                        detailed_timings[step_name].append((cmd, duration))
+
+    return detailed_timings
+
+
 def run_command(cmd, description, cwd=None):
     """Run a command and check for success."""
     print(f"Running: {' '.join(cmd)}")
@@ -386,6 +432,20 @@ def run_smoke_test(keep_files=False):
             print(f"  {step:25s}: {format_duration(duration):>12s}  ({pct:5.1f}%)")
         print("─" * 60)
         print(f"  {'Total':25s}: {format_duration(total_time):>12s}\n")
+
+        # Detailed timing breakdown
+        detailed_timings = collect_detailed_timings(cache_dir, output_dir)
+        if detailed_timings:
+            print("\nDetailed Operation Timing:")
+            print("─" * 60)
+            for step_name, operations in sorted(detailed_timings.items()):
+                step_total = sum(dur for _, dur in operations)
+                print(f"\n  {step_name}:")
+                for cmd, duration in operations:
+                    pct = (duration / step_total * 100) if step_total > 0 else 0
+                    print(f"    {cmd:30s}: {format_duration(duration):>10s}  ({pct:5.1f}%)")
+                print(f"    {'Subtotal':30s}: {format_duration(step_total):>10s}")
+            print("─" * 60 + "\n")
 
         print(f"Demo files location: {demo_data}")
         if keep_files:
