@@ -163,11 +163,35 @@ def compare_versions(version1: str, version2: str) -> int:
 
 
 def find_bcftools() -> Optional[str]:
-    """Find bcftools binary in system PATH.
+    """Find bcftools binary, checking VCFCACHE_BCFTOOLS env var first, then system PATH.
+
+    Environment variable VCFCACHE_BCFTOOLS can be used to override the system bcftools.
+    This is useful when the system bcftools is too old or not available.
 
     Returns:
         Path to bcftools binary if found, None otherwise
+
+    Example:
+        >>> # Override system bcftools
+        >>> os.environ['VCFCACHE_BCFTOOLS'] = '/opt/bcftools-1.22/bin/bcftools'
+        >>> bcftools_path = find_bcftools()
     """
+    # Check environment variable first
+    env_path = os.environ.get("VCFCACHE_BCFTOOLS")
+    if env_path:
+        # Expand user paths and resolve
+        env_path_resolved = Path(env_path).expanduser().resolve()
+        # Verify it exists and is executable
+        if env_path_resolved.exists() and os.access(env_path_resolved, os.X_OK):
+            return str(env_path_resolved)
+        # If env var is set but invalid, warn but continue to PATH search
+        logger = logging.getLogger("vcfcache")
+        logger.warning(
+            f"VCFCACHE_BCFTOOLS points to invalid or non-executable path: {env_path_resolved}, "
+            "falling back to PATH search"
+        )
+
+    # Fall back to system PATH
     return shutil.which("bcftools")
 
 
@@ -202,9 +226,10 @@ def check_bcftools_installed(min_version: str = MIN_BCFTOOLS_VERSION) -> str:
     """Check if bcftools is installed and meets minimum version requirement.
 
     This function:
-    1. Looks for bcftools in system PATH using shutil.which()
-    2. Checks the version is >= min_version
-    3. Returns the path to the binary
+    1. Checks VCFCACHE_BCFTOOLS environment variable first
+    2. Falls back to system PATH using shutil.which()
+    3. Checks the version is >= min_version
+    4. Returns the path to the binary
 
     Args:
         min_version: Minimum required version (default: 1.20)
@@ -219,6 +244,9 @@ def check_bcftools_installed(min_version: str = MIN_BCFTOOLS_VERSION) -> str:
     Example:
         >>> bcftools_path = check_bcftools_installed()
         >>> print(f"Using bcftools at: {bcftools_path}")
+        >>> # Or override system bcftools
+        >>> os.environ['VCFCACHE_BCFTOOLS'] = '/opt/bcftools-1.22/bin/bcftools'
+        >>> bcftools_path = check_bcftools_installed()
     """
     logger = logging.getLogger("vcfcache")
 
@@ -233,8 +261,10 @@ def check_bcftools_installed(min_version: str = MIN_BCFTOOLS_VERSION) -> str:
             "  - Ubuntu/Debian: sudo apt-get install bcftools\n"
             "  - macOS: brew install bcftools\n"
             "  - Conda: conda install -c bioconda bcftools\n"
-            "  - From source: http://www.htslib.org/download/"
-            "-OR- use the docker image with bundled bcftools"
+            "  - From source: http://www.htslib.org/download/\n"
+            "  - OR use the docker image with bundled bcftools\n\n"
+            "Alternatively, set VCFCACHE_BCFTOOLS to point to a specific bcftools binary:\n"
+            "  export VCFCACHE_BCFTOOLS=/path/to/bcftools"
         )
         logger.error(error_msg)
         raise FileNotFoundError(error_msg)
@@ -254,7 +284,9 @@ def check_bcftools_installed(min_version: str = MIN_BCFTOOLS_VERSION) -> str:
                 "  - Ubuntu/Debian: sudo apt-get update && sudo apt-get install --only-upgrade bcftools\n"
                 "  - macOS: brew upgrade bcftools\n"
                 "  - Conda: conda update bcftools\n"
-                "  - From source: http://www.htslib.org/download/"
+                "  - From source: http://www.htslib.org/download/\n\n"
+                "Alternatively, set VCFCACHE_BCFTOOLS to override system bcftools:\n"
+                "  export VCFCACHE_BCFTOOLS=/path/to/newer/bcftools"
             )
             logger.error(error_msg)
             raise RuntimeError(error_msg)

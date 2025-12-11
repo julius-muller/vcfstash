@@ -157,6 +157,21 @@ optional_checks:
 
 Special vars: `${INPUT_BCF}`, `${OUTPUT_BCF}`, `${AUXILIARY_DIR}`, `${params.*}`.
 
+**bcftools Override:**
+
+vcfcache requires bcftools >= 1.20. Override system bcftools with:
+```bash
+export VCFCACHE_BCFTOOLS=/path/to/bcftools-1.22
+vcfcache annotate ...
+```
+
+Or in params.yaml:
+```yaml
+bcftools_cmd: "/opt/bcftools/bin/bcftools"
+```
+
+The environment variable affects vcfcache's internal bcftools checks, while `bcftools_cmd` in params.yaml is used within annotation commands.
+
 ---
 
 ## 7) Docker Build/Testing
@@ -176,7 +191,8 @@ Multi-stage Dockerfile: `docker/Dockerfile.vcfcache`
 
 ## 8) Troubleshooting
 
-- bcftools errors in Docker: ensure `PATH` includes `/app/tools` (bundled) and tabix is available (already installed in the image).
-- Manifest alias not found: check `public_caches.yaml` path or pass `--manifest <path>`.
-- Zenodo upload: export `ZENODO_TOKEN`; set `ZENODO_SANDBOX=1` to target the sandbox API.
-- Large images: use `--target final` for runtime; `--target test` is only for CI/dev. 
+- **bcftools not found or too old**: Install bcftools >= 1.20, or set `VCFCACHE_BCFTOOLS=/path/to/newer/bcftools` to override system version.
+- **bcftools errors in Docker**: Ensure `PATH` includes `/app/tools` (bundled) and tabix is available (already installed in the image).
+- **Manifest alias not found**: Check `public_caches.yaml` path or pass `--manifest <path>`.
+- **Zenodo upload**: Export `ZENODO_TOKEN`; set `ZENODO_SANDBOX=1` to target the sandbox API.
+- **Large images**: Use `--target final` for runtime; `--target test` is only for CI/dev. 

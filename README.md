@@ -30,10 +30,11 @@ vcfcache demo
 vcfcache --help
 ```
 
-**Note:** bcftools is a runtime dependency and must be installed separately:
+**Note:** bcftools >= 1.20 is a runtime dependency and must be installed separately:
 - Ubuntu/Debian: `sudo apt-get install bcftools`
 - macOS: `brew install bcftools`
 - Conda: `conda install -c bioconda bcftools`
+- Or set `VCFCACHE_BCFTOOLS=/path/to/bcftools` to use a specific version
 
 The demo command runs a complete workflow testing:
 1. `blueprint-init` - Create cache from variants
@@ -159,6 +160,29 @@ optional_checks:
 ```
 
 Special variables: `${INPUT_BCF}`, `${OUTPUT_BCF}`, `${AUXILIARY_DIR}`, and `${params.*}`.
+
+---
+
+## bcftools Configuration
+
+vcfcache requires bcftools >= 1.20. The system will automatically search for bcftools in your PATH, but you can override this in two ways:
+
+**1. Environment variable (recommended for non-standard installations):**
+```bash
+# Override system bcftools
+export VCFCACHE_BCFTOOLS=/path/to/bcftools-1.22/bin/bcftools
+vcfcache annotate ...
+
+# Or inline for a single command
+VCFCACHE_BCFTOOLS=/opt/bcftools/bin/bcftools vcfcache demo --smoke-test
+```
+
+**2. Via params.yaml (for annotation workflows):**
+```yaml
+bcftools_cmd: "/usr/local/bin/bcftools-1.22"
+```
+
+The environment variable takes precedence over PATH search, but `bcftools_cmd` in params.yaml is used within annotation commands. Use the environment variable when you need to override the system bcftools globally, and use `bcftools_cmd` in params.yaml for annotation-specific bcftools configuration.
 
 ---
 
