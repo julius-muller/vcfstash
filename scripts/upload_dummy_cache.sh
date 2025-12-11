@@ -89,7 +89,7 @@ from vcfcache.utils.archive import extract_cache
 doi = sys.argv[1]
 dest_dir = Path(sys.argv[2])
 tar_dest = dest_dir / "cache.tar.gz"
-download_doi(doi, tar_dest)
+download_doi(doi, tar_dest, sandbox=sandbox)
 extracted = extract_cache(tar_dest, dest_dir)
 print("Extracted:", extracted)
 PY

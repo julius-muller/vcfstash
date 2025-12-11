@@ -22,15 +22,20 @@ def _auth_headers(token: Optional[str]) -> dict:
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 
-def download_doi(doi: str, dest: Path) -> Path:
-    """Download the first file of a Zenodo record given a DOI.
+def download_doi(doi: str, dest: Path, sandbox: bool = False) -> Path:
+    """Download the first file of a Zenodo record given a DOI or record ID.
+
+    Args:
+        doi: Zenodo DOI (e.g. 10.5281/zenodo.12345) or record id.
+        dest: Local path to write the downloaded file.
+        sandbox: If True, target the Zenodo sandbox API.
 
     Note: For simplicity we pick the first attached file. Records intended for
     vcfcache caches should contain a single tarball.
     """
 
     rec_id = doi.split(".")[-1] if "zenodo" in doi else doi
-    url = f"{ZENODO_API}/records/{rec_id}"
+    url = f"{_api_base(sandbox)}/records/{rec_id}"
     resp = requests.get(url, timeout=30)
     resp.raise_for_status()
     record = resp.json()

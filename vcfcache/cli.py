@@ -478,7 +478,8 @@ def main() -> None:
                 print(
                     f"Downloading cache for alias '{entry.alias}' from DOI {entry.doi}..."
                 )
-                download_doi(entry.doi, tar_dest)
+                sandbox = os.environ.get("ZENODO_SANDBOX", "0") == "1"
+                download_doi(entry.doi, tar_dest, sandbox=sandbox)
                 cache_dir = extract_cache(tar_dest, cache_store)
                 alias_or_path = cache_dir / "cache" / entry.alias
                 args.a = str(alias_or_path)
@@ -520,7 +521,8 @@ def main() -> None:
             tar_name = args.filename or "cache.tar.gz"
             tar_path = Path(args.dest).expanduser().resolve() / tar_name
             print(f"Downloading cache from DOI {args.doi} -> {tar_path}")
-            download_doi(args.doi, tar_path)
+            sandbox = os.environ.get("ZENODO_SANDBOX", "0") == "1"
+            download_doi(args.doi, tar_path, sandbox=sandbox)
             extracted = extract_cache(tar_path, Path(args.dest))
             print(f"Extracted to {extracted}")
 
@@ -535,12 +537,18 @@ def main() -> None:
             from vcfcache.utils.archive import file_md5
             import json
 
-            token = os.environ.get("ZENODO_TOKEN")
+            sandbox = os.environ.get("ZENODO_SANDBOX", "0") == "1"
+            token = (
+                os.environ.get("ZENODO_SANDBOX_TOKEN")
+                if sandbox
+                else os.environ.get("ZENODO_TOKEN")
+            ) or os.environ.get("ZENODO_TOKEN")
             if not token:
                 raise RuntimeError(
-                    "ZENODO_TOKEN environment variable required for push"
+                    "ZENODO_SANDBOX_TOKEN (or ZENODO_TOKEN) required for sandbox push"
+                    if sandbox
+                    else "ZENODO_TOKEN environment variable required for push"
                 )
-            sandbox = os.environ.get("ZENODO_SANDBOX", "0") == "1"
 
             cache_dir = Path(args.cache_dir).expanduser().resolve()
             if not cache_dir.exists():
@@ -561,6 +569,19 @@ def main() -> None:
                     if text.strip().startswith("{")
                     else yaml.safe_load(text)
                 )
+            if args.publish and not metadata:
+                # Zenodo requires minimal metadata before publishing.
+                metadata = {
+                    "title": f"VCFcache cache {cache_dir.name}",
+                    "upload_type": "dataset",
+                    "description": (
+                        "VCFcache cache tarball uploaded via vcfcache push. "
+                        "This may be a sandbox/test record."
+                    ),
+                    "creators": [{"name": "vcfcache"}],
+                }
+
+            if metadata:
                 zenodo_url = (
                     f"{zenodo._api_base(sandbox)}/deposit/depositions/{dep['id']}"
                 )
@@ -574,7 +595,10 @@ def main() -> None:
             zenodo.upload_file(dep, tar_path, token, sandbox=sandbox)
             if args.publish:
                 dep = zenodo.publish_deposit(dep, token, sandbox=sandbox)
-            print(f"Upload complete. DOI: {dep.get('doi', 'draft')} MD5: {md5}")
+            print(
+                f"Upload complete. Deposition ID: {dep.get('id', 'unknown')} "
+                f"DOI: {dep.get('doi', 'draft')} MD5: {md5}"
+            )
 
         elif args.command == "demo":
             from vcfcache.demo import run_smoke_test, run_benchmark
