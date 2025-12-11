@@ -45,7 +45,8 @@ dev = [
     "pytest>=9.0.2", # python -m pytest -xvs
     "ruff>=0.14.8", # ruff check --fix vcfcache
     "black>=25.12.0", # black vcfcache
-    "mypy>=1.19.0" # mypy vcfcache
+    "mypy>=1.19.0", # mypy vcfcache
+    "twine>=4.0.0" # twine upload dist/*
 ]
 
 [project.scripts]

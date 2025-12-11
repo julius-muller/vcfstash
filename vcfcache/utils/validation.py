@@ -234,6 +234,7 @@ def check_bcftools_installed(min_version: str = MIN_BCFTOOLS_VERSION) -> str:
             "  - macOS: brew install bcftools\n"
             "  - Conda: conda install -c bioconda bcftools\n"
             "  - From source: http://www.htslib.org/download/"
+            "-OR- use the docker image with bundled bcftools"
         )
         logger.error(error_msg)
         raise FileNotFoundError(error_msg)
