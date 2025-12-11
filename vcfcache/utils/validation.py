@@ -16,7 +16,7 @@ from typing import Dict, Optional, Tuple
 import yaml
 
 # Minimum required bcftools version
-MIN_BCFTOOLS_VERSION = "1.16"
+MIN_BCFTOOLS_VERSION = "1.20"
 
 def check_duplicate_md5(db_info: dict, new_md5: str) -> bool:
     """Check if a file with the same MD5 was already added."""
