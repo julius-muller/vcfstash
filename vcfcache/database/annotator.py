@@ -34,7 +34,6 @@ class DatabaseAnnotator(VCFDatabase):
         cached_annotations (AnnotatedCacheOutput): Object managing annotation cached data.
         logger (Logger): Logging utility for the annotator.
         output_dir (Path): Output directory for annotation-related files.
-        config_file (Optional[Path]): Path to the processed configuration file (if provided/available).
         info_snapshot_file (Path): Path for storing snapshot information about the blueprint in use.
         anno_config_file (Path): Preprocessed annotation configuration file path.
         params_file (Path): Path to the annotation parameters YAML file.
@@ -58,9 +57,8 @@ class DatabaseAnnotator(VCFDatabase):
         annotation_name: str,
         db_path: Path | str,
         anno_config_file: Path | str,
-        bcftools_path: Path,
+        bcftools_path: Path | str,
         params_file: Optional[Path | str] = None,
-        config_file: Optional[Path | str] = None,
         verbosity: int = 0,
         force: bool = False,
         debug: bool = False,
@@ -87,14 +85,6 @@ class DatabaseAnnotator(VCFDatabase):
         self.logger: Logger = self.connect_loggers()
         self._setup_annotation_cache(force)
         self.output_dir = self.cached_annotations.annotation_dir
-
-        self.config_file = None
-        if config_file:
-            self.config_file = self.output_dir / "process.config"
-            config_path = (
-                Path(config_file) if isinstance(config_file, str) else config_file
-            )
-            shutil.copyfile(config_path.expanduser().resolve(), self.config_file)
 
         self.info_snapshot_file = self.output_dir / "blueprint_snapshot.info"
 
@@ -124,7 +114,6 @@ class DatabaseAnnotator(VCFDatabase):
             input_file=self.blueprint_bcf,
             output_dir=self.output_dir,
             name=self.annotation_name,
-            config_file=self.config_file if self.config_file is not None else None,
             anno_config_file=self.anno_config_file,
             params_file=self.params_file,
             verbosity=self.verbosity,
@@ -136,7 +125,6 @@ class DatabaseAnnotator(VCFDatabase):
         if self.logger:
             self.logger.info("Initializing database annotation")
             self.logger.debug(f"Annotation directory: {self.output_dir}")
-            self.logger.debug(f"Config file: {self.config_file}")
 
     def _preprocess_annotation_config(self, user_config: Path) -> Path:
         """Preprocess annotation.yaml to fix variable substitution issues.
@@ -245,9 +233,7 @@ class VCFAnnotator(VCFDatabase):
     database while managing output directories and workflows.
 
     This class is designed for handling large-scale genomic data annotations.
-    It integrates with a Nextflow workflow for automated processing and includes
-    methods for validating input files, managing output directories, and setting
-    up configuration files. It requires an annotation database and an input VCF/BCF
+    It requires an annotation database and an input VCF/BCF
     file, both of which should be prepared and structured correctly beforehand.
 
     Attributes:
@@ -255,7 +241,6 @@ class VCFAnnotator(VCFDatabase):
         annotation_db_path (Path): Path to the structured annotation database directory.
         annotation_name (str): Name derived from the annotation database.
         output_dir (Path): Directory where annotated output files will be stored.
-        config_file (Optional[Path]): Path to the configuration file, if used.
         params_file (Path): Path to the parameters YAML file.
         logger (Logger): Logging instance for the class.
         nx_workflow (WorkflowManager): Instance of the workflow manager.
@@ -264,8 +249,6 @@ class VCFAnnotator(VCFDatabase):
         input_vcf (Path | str): Path to the input VCF/BCF file, which must be indexed.
         annotation_db (Path | str): Path to the annotation database.
         output_dir (Path | str): Path where annotated results will be stored.
-        config_file (Optional[Path | str]): Optional configuration file; defaults
-            to the process configuration from the annotation database.
         params_file (Optional[Path | str]): Path to a custom parameters file; if
             not provided, defaults to "annotation.yaml" from the annotation database.
         verbosity (int): Logging verbosity level; 0 (WARNING), 1 (INFO), or 2 (DEBUG).
@@ -301,7 +284,6 @@ class VCFAnnotator(VCFDatabase):
         annotation_db: Path | str,
         output_dir: Path | str,
         bcftools_path: Path,
-        config_file: Optional[Path | str] = None,
         params_file: Optional[Path | str] = None,
         verbosity: int = 0,
         force: bool = False,
@@ -313,7 +295,6 @@ class VCFAnnotator(VCFDatabase):
             input_vcf: Path to the input BCF/VCF file, needs to be indexed!
             annotation_db: Path to the annotation database
             output_dir: Path to the output directory
-            config_file: Optional configuration file with process configurations for resoureces.
             force: Whether to overwrite existing output directory
             debug: Whether to enable debug mode
             verbosity: Logging verbosity level (0=WARNING, 1=INFO, 2=DEBUG)
@@ -358,25 +339,6 @@ class VCFAnnotator(VCFDatabase):
                 f"Annotation config file not found: {self.anno_config_file}"
             )
 
-        # Define config_file as Optional[Path]
-        self.config_file: Optional[Path] = (
-            Path(config_file).expanduser().resolve()
-            if config_file and isinstance(config_file, str)
-            else (
-                config_file.expanduser().resolve()
-                if config_file
-                else self.annotation_db_path / "process.config"
-            )
-        )
-        # Update config_file to be Optional[Path]
-        if not self.config_file or not self.config_file.exists():
-            self.config_file = None
-        else:
-            shutil.copyfile(
-                self.config_file, self.annotation_wfl_path / self.config_file.name
-            )
-            self.config_file = self.annotation_wfl_path / self.config_file
-
         self.params_file = self.annotation_wfl_path / "params.snapshot.yaml"
         if params_file:
             params_path = (
@@ -406,7 +368,6 @@ class VCFAnnotator(VCFDatabase):
             input_file=self.input_vcf,
             output_dir=self.output_dir,
             name=self.annotation_name,
-            config_file=self.config_file,
             anno_config_file=self.anno_config_file,
             params_file=self.params_file,
             verbosity=self.verbosity,
@@ -419,7 +380,6 @@ class VCFAnnotator(VCFDatabase):
         if self.logger:
             self.logger.info(f"Initializing annotation of {self.input_vcf.name}")
             self.logger.debug(f"Cache file: {self.cache_file}")
-            self.logger.debug(f"Config file: {self.config_file}")
 
     def _ensure_index(self, bcf: Path) -> None:
         """Ensure an index exists for the given BCF/VCF."""

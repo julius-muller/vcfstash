@@ -217,7 +217,7 @@ recipes/
 pytest -m blueprint tests/ -v
 ```
 
-Only runs tests compatible with blueprint image (no Nextflow/VEP).
+Only runs tests compatible with blueprint image.
 
 ### Testing Annotated Image
 
@@ -232,9 +232,6 @@ Runs all tests including full integration tests with VEP.
 ## Troubleshooting
 
 ### Blueprint Image
-
-**Issue:** "Nextflow not found"
-- **Solution:** Blueprint is data-only. Use annotated image for full pipeline.
 
 **Issue:** "Cannot run annotation"
 - **Solution:** Blueprint requires you to run `cache-build` separately with your tools.

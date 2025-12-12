@@ -4,7 +4,7 @@
 ## * REQUIRED RESOURCES *
 annotation_tool_cmd: "vep"
 # Parse the version line from VEP stdout (same pattern as tests/config/example_params.yaml)
-tool_version_command: "vep | grep -oP \"ensembl-vep\\s+:\\s+\\K\\d+\\.\\d+\""
+tool_version_command: "vep | awk '/ensembl-vep/ {print $NF}'"
 # Use bcftools 1.22 from /opt/bcftools (VEP image has 1.13 which lacks --write-index)
 bcftools_cmd: "/opt/bcftools/bin/bcftools"
 reference: "/tmp/dummy.fa"  # Placeholder - not used during cache init from BCF

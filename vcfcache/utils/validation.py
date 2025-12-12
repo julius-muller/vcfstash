@@ -366,7 +366,6 @@ def generate_test_command(
     vcfcache_path="${VCFCACHE_ROOT}/vcfcache.py",
     vcf_path="${VCFCACHE_ROOT}/tests/data/nodata/crayz_db.bcf",
     output_dir="/tmp/vcfcache/test_cache",
-    config_path="${VCFCACHE_ROOT}/tests/config/nextflow_test.config",
     yaml_path="${VCFCACHE_ROOT}/tests/config/example_params.yaml",
     annotation_config="${VCFCACHE_ROOT}/tests/config/example_annotation.config",
     add_vcf_path="${VCFCACHE_ROOT}/tests/data/nodata/crayz_db2.bcf",

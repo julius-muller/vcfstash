@@ -31,7 +31,6 @@ def create_workflow(**kwargs) -> WorkflowBase:
                  - input_file: Path to input VCF/BCF
                  - output_dir: Output directory
                  - name: Workflow instance name
-                 - config_file: Optional process config (ignored, for compatibility)
                  - anno_config_file: Optional annotation config
                  - params_file: Optional YAML params
                  - verbosity: Verbosity level
@@ -113,12 +112,6 @@ class VCFDatabase:
         # Set up central logging
         log_file = self.cache_path / f"{logger_name}.log"
         return setup_logging(verbosity=self.verbosity, log_file=log_file)
-
-    def setup_config(self, config_file: Path | str, config_name: str) -> Path:
-        config_path = Path(config_file) if isinstance(config_file, str) else config_file
-        config_path = config_path.expanduser().resolve()
-        shutil.copyfile(config_path, self.workflow_dir / config_name)
-        return self.workflow_dir / config_name
 
     def ensure_indexed(self, file_path: Path) -> None:
         """Ensure input file has an index file (CSI or TBI)"""
@@ -385,7 +378,6 @@ class VCFDatabase:
     ) -> None:
         """Copy workflow files from source to destination,
 
-        Note: For pure Python workflows, the source may be empty (no Nextflow files).
         In this case, we just ensure the destination directory exists.
 
         Parameters:
@@ -404,7 +396,6 @@ class VCFDatabase:
             # Check if source has any files to copy
             source_files = list(source.glob("*"))
             if not source_files:
-                # Source is empty (pure Python, no Nextflow files) - nothing to copy
                 return
 
             # Copy entire directory structure except *.config files

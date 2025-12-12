@@ -129,7 +129,6 @@ class WorkflowManager(WorkflowBase):
         output_dir: Path,
         name: str,
         workflow: Path | None = None,
-        config_file: Optional[Path] = None,
         anno_config_file: Optional[Path] = None,
         params_file: Optional[Path] = None,
         verbosity: int = 0,
@@ -142,7 +141,6 @@ class WorkflowManager(WorkflowBase):
             input_file: Path to input VCF/BCF file
             output_dir: Directory for output files
             name: Unique name for this workflow instance
-            config_file: Optional process configuration file (not used in pure Python)
             anno_config_file: Optional annotation configuration YAML file
             params_file: Required YAML parameters file
             verbosity: Verbosity level (0=quiet, 1=info, 2=debug)
@@ -152,7 +150,6 @@ class WorkflowManager(WorkflowBase):
             input_file=input_file,
             output_dir=output_dir,
             name=name,
-            config_file=config_file,
             anno_config_file=anno_config_file,
             params_file=params_file,
             verbosity=verbosity,
@@ -250,6 +247,10 @@ class WorkflowManager(WorkflowBase):
             RuntimeError: If workflow execution fails
         """
         start_time = datetime.datetime.now()
+        normalize = bool(
+            nextflow_args
+            and any(a in ("-n", "--normalize", "normalize") for a in nextflow_args)
+        )
 
         # Create work directory
         self._create_work_dir(self.output_dir, dirname="work")
@@ -259,11 +260,11 @@ class WorkflowManager(WorkflowBase):
         try:
             # Route to appropriate workflow method
             if db_mode == "blueprint-init":
-                result = self._run_blueprint_init()
+                result = self._run_blueprint_init(normalize=normalize)
             elif db_mode == "blueprint-extend":
                 if not db_bcf:
                     raise ValueError("db_bcf is required for blueprint-extend mode")
-                result = self._run_blueprint_extend(db_bcf)
+                result = self._run_blueprint_extend(db_bcf, normalize=normalize)
             elif db_mode == "cache-build":
                 if not db_bcf:
                     raise ValueError("db_bcf is required for cache-build mode")
@@ -301,7 +302,7 @@ class WorkflowManager(WorkflowBase):
             self.logger.error(f"Unexpected error: {e}")
             raise
 
-    def _run_blueprint_init(self) -> subprocess.CompletedProcess:
+    def _run_blueprint_init(self, normalize: bool = False) -> subprocess.CompletedProcess:
         """Initialize database blueprint.
 
         Returns:
@@ -319,18 +320,23 @@ class WorkflowManager(WorkflowBase):
         # Get thread count from params
         threads = self.params_file_content.get("threads", 1)
 
-        # Always split multiallelic variants for user-provided VCF files
-        self.logger.info("Removing GT and INFO fields, splitting multiallelic sites")
-
-        cmd = f"""{bcftools} view -G -Ou --threads {threads} {input_bcf} | \\
-                {bcftools} annotate -x INFO -Ou --threads {threads} | \\
-                {bcftools} norm -m- -o {output_bcf} -Ob --write-index --threads {threads}
-            """
+        if normalize:
+            self.logger.info("Removing GT/INFO fields and splitting multiallelic sites")
+            cmd = f"""{bcftools} view -G -Ou --threads {threads} {input_bcf} | \\
+                    {bcftools} annotate -x INFO -Ou --threads {threads} | \\
+                    {bcftools} norm -m- -o {output_bcf} -Ob --write-index --threads {threads}
+                """
+        else:
+            self.logger.info("Removing GT/INFO fields (no multiallelic splitting)")
+            cmd = f"""{bcftools} view -G -Ou --threads {threads} {input_bcf} | \\
+                    {bcftools} annotate -x INFO -Ou --threads {threads} | \\
+                    {bcftools} view -o {output_bcf} -Ob --write-index --threads {threads}
+                """
 
         return BcftoolsCommand(cmd, self.logger, work_task).run()
 
     def _run_blueprint_extend(
-        self, db_bcf: Path
+        self, db_bcf: Path, normalize: bool = False
     ) -> subprocess.CompletedProcess:
         """Add variants to existing blueprint.
 
@@ -350,25 +356,31 @@ class WorkflowManager(WorkflowBase):
         # Get thread count from params
         threads = self.params_file_content.get("threads", 1)
 
-        # Step 1: Normalize/filter new input (always split multiallelics)
-        normalized = work_task / "normalized.bcf"
+        # Step 1: Filter new input (drop INFO), optionally split multiallelics
+        filtered = work_task / "filtered.bcf"
         input_bcf = self.input_file
 
-        self.logger.info("Filtering new input (drop INFO) and splitting multiallelic sites")
+        if normalize:
+            self.logger.info("Filtering new input (drop INFO) and splitting multiallelic sites")
+            step_cmd = f"""{bcftools} view -G -Ou --threads {threads} {input_bcf} | \\
+                {bcftools} annotate -x INFO -Ou --threads {threads} | \\
+                {bcftools} norm -m- -o {filtered} -Ob --write-index --threads {threads}
+            """
+        else:
+            self.logger.info("Filtering new input (drop INFO) (no multiallelic splitting)")
+            step_cmd = f"""{bcftools} view -G -Ou --threads {threads} {input_bcf} | \\
+                {bcftools} annotate -x INFO -Ou --threads {threads} | \\
+                {bcftools} view -o {filtered} -Ob --write-index --threads {threads}
+            """
 
-        norm_cmd = f"""{bcftools} view -G -Ou --threads {threads} {input_bcf} | \\
-            {bcftools} annotate -x INFO -Ou --threads {threads} | \\
-            {bcftools} norm -m- -o {normalized} -Ob --write-index --threads {threads}
-        """
-
-        BcftoolsCommand(norm_cmd, self.logger, work_task).run()
+        BcftoolsCommand(step_cmd, self.logger, work_task).run()
 
         # Step 2: Merge with existing blueprint
         output_bcf = self.output_dir / "vcfcache.bcf"
         self.logger.info(f"Merging with existing blueprint: {db_bcf}")
 
         merge_cmd = (
-            f"{bcftools} merge -m none --threads {threads} {db_bcf} {normalized} -o {output_bcf} -Ob --write-index"
+            f"{bcftools} merge -m none --threads {threads} {db_bcf} {filtered} -o {output_bcf} -Ob --write-index"
         )
 
         return BcftoolsCommand(merge_cmd, self.logger, work_task).run()

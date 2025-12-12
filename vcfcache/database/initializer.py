@@ -17,29 +17,19 @@ class DatabaseInitializer(VCFDatabase):
     It provides tools for validating inputs, ensuring output directory structure, and creating
     the database while handling workflow execution and logging.
 
-    Attributes:
-        input_file: Path to the input VCF/BCF file.
-        config_file: Path to the Nextflow configuration file.
-        output_dir: Path to the output directory for database initialization.
-        verbosity: Logging verbosity level.
-        force: Boolean to indicate whether to overwrite existing database files.
-        debug: Boolean to enable or disable debug mode.
-        logger: Logger instance for logging workflow steps and errors.
-        config_yaml: Path to the YAML configuration file.
-        nx_workflow: Instance of the associated workflow manager.
     """
 
     def __init__(
         self,
         input_file: Path | str,
-        bcftools_path: Path,
+        bcftools_path: Path | str | None,
         params_file: Optional[Path | str] = None,
-        config_file: Optional[Path | str] = None,
         output_dir: Path | str = Path("."),
         verbosity: int = 0,
         force: bool = False,
         debug: bool = False,
         threads: int = 1,
+        normalize: bool = False,
     ) -> None:
         """Initialize the database creator.
 
@@ -47,11 +37,12 @@ class DatabaseInitializer(VCFDatabase):
             input_file: Path to input BCF/VCF file (required)
             bcftools_path: Path to bcftools binary
             params_file: Path to params YAML file (optional, will auto-generate if not provided)
-            config_file: Path to Nextflow config file (optional, deprecated)
             output_dir: Output directory (default: current directory)
             verbosity: Logging verbosity level (0=WARNING, 1=INFO, 2=DEBUG)
             force: Force overwrite of existing database (default: False)
+            debug: Boolean to enable or disable debug mode (default: False)
             threads: Number of threads for bcftools (default: 1)
+            normalize: If True, split multiallelic variants using bcftools norm -m-
 
         """
         # Initialize the parent class
@@ -72,14 +63,7 @@ class DatabaseInitializer(VCFDatabase):
             destination=self.workflow_dir,
             skip_config=True,
         )
-
-        self.config_file = None
-        if config_file:
-            self.config_file = self.workflow_dir / "init.config"
-            config_path = (
-                Path(config_file) if isinstance(config_file, str) else config_file
-            )
-            shutil.copyfile(config_path.expanduser().resolve(), self.config_file)
+        self.normalize = normalize
 
         # Handle params file - create minimal one if not provided
         self.config_yaml = self.workflow_dir / "init.yaml"
@@ -106,7 +90,6 @@ class DatabaseInitializer(VCFDatabase):
             input_file=self.input_file,
             output_dir=self.blueprint_dir,
             name="init",
-            config_file=self.config_file,
             params_file=params_path,
             verbosity=self.verbosity,
         )
@@ -118,7 +101,6 @@ class DatabaseInitializer(VCFDatabase):
             self.logger.info(f"Initializing database: {self.cache_name}")
             self.logger.debug(f"Input file: {self.input_file}")
             self.logger.debug(f"Output directory: {self.blueprint_dir}")
-            self.logger.debug(f"Config file: {self.config_file}")
 
     def _log_contigs(self) -> None:
         """Log a preview of contigs present in the input BCF/VCF (top 30)."""

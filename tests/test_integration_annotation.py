@@ -25,7 +25,6 @@ def test_full_integration_annotation():
     """
 
     alias = "cache-hg38-gnomad-4.1wgs-AF0100-vep-115.2-basic"
-    manifest = Path(__file__).resolve().parent.parent / "public_caches.yaml"
     sample_vcf = Path(__file__).resolve().parent / "data" / "nodata" / "sample4.bcf"
     params = Path(__file__).resolve().parent / "config" / "test_params.yaml"
 
@@ -38,7 +37,6 @@ def test_full_integration_annotation():
             f"vcfcache annotate -a {alias} "
             f"--vcf {sample_vcf} "
             f"--output {outdir} "
-            f"--manifest {manifest} "
             f"-y {params} "
             f"--force "
         )

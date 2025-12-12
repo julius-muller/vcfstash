@@ -101,7 +101,7 @@ CACHE_NAME="gnomad_${GENOME_LOWER}_${TYPE}_af${AF_CLEAN}"
 IMAGE_NAME="${REGISTRY}/vcfcache-blueprint:${TAG}"
 
 echo "==============================================================================="
-echo "Building Blueprint Docker Image (Pure Python - No Nextflow/Java)"
+echo "Building Blueprint Docker Image"
 echo "==============================================================================="
 echo "BCF file:        ${BCF_FILE}"
 echo "Genome:          ${GENOME}"

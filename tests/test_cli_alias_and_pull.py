@@ -23,36 +23,6 @@ def make_dummy_cache(tmp_path: Path, alias: str) -> Path:
     return cache_root
 
 
-def test_cli_pull_downloads_and_extracts(tmp_path, monkeypatch, capsys):
-    alias = "cache-hg38-gnomad-4.1wgs-AF0100-vep-115.2-basic"
-    cache_root = make_dummy_cache(tmp_path, alias)
-    tar_path = tmp_path / "dummy.tar.gz"
-    tar_cache(cache_root, tar_path)
-
-    def fake_download(doi, dest, sandbox=False):
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(tar_path.read_bytes())
-        return dest
-
-    monkeypatch.setattr(cli, "download_doi", fake_download)
-
-    args = [
-        "pull",
-        "--doi",
-        "10.5281/zenodo.fake",
-        "--dest",
-        str(tmp_path / "out"),
-    ]
-
-    monkeypatch.setattr(cli, "sys", sys)
-    monkeypatch.setattr(sys, "argv", ["vcfcache"] + args)
-    cli.main()
-
-    extracted = tmp_path / "out" / cache_root.name
-    assert extracted.exists()
-    assert (extracted / "cache" / alias / "vcfcache_annotated.bcf").exists()
-
-
 def test_cli_annotate_alias_resolves_and_prints_command(tmp_path, monkeypatch, capsys):
     alias = "cache-hg38-gnomad-4.1wgs-AF0100-vep-115.2-basic"
     cache_root = make_dummy_cache(tmp_path, alias)
@@ -64,28 +34,7 @@ def test_cli_annotate_alias_resolves_and_prints_command(tmp_path, monkeypatch, c
         return dest
 
     monkeypatch.setattr(cli, "download_doi", fake_download)
-
-    manifest = tmp_path / "manifest.yaml"
-    manifest.write_text(
-        json.dumps(
-            [
-                {
-                    "alias": alias,
-                    "type": "cache",
-                    "version": "0.3.0",
-                    "genome": "hg38",
-                    "source": "gnomad",
-                    "release": "4.1wgs",
-                    "filt": "AF0100",
-                    "tool": "vep",
-                    "tool_version": "115.2",
-                    "preset": "basic",
-                    "doi": "10.5281/zenodo.fake",
-                    "updated_at": "2025-01-01",
-                }
-            ]
-        )
-    )
+    monkeypatch.setattr(cli, "resolve_zenodo_alias", lambda a, item_type, sandbox: ("10.5281/zenodo.fake", alias))
 
     args = [
         "annotate",
@@ -96,8 +45,6 @@ def test_cli_annotate_alias_resolves_and_prints_command(tmp_path, monkeypatch, c
         "--output",
         str(tmp_path / "out"),
         "--show-command",
-        "--manifest",
-        str(manifest),
     ]
 
     monkeypatch.setattr(cli.Path, "home", lambda: tmp_path)
@@ -109,29 +56,19 @@ def test_cli_annotate_alias_resolves_and_prints_command(tmp_path, monkeypatch, c
     assert "echo annotate" in captured.out
 
 
-def test_cli_list_manifest(tmp_path, monkeypatch, capsys):
-    manifest = tmp_path / "manifest.yaml"
-    manifest.write_text(
-        """
-- alias: cache-hg38-gnomad-4.1wgs-AF0100-vep-115.2-basic
-  type: cache
-  version: "0.3.0"
-  genome: hg38
-  source: gnomad
-  release: 4.1wgs
-  filt: AF0100
-  tool: vep
-  tool_version: "115.2"
-  preset: basic
-  doi: 10.5281/zenodo.fake
-  updated_at: 2025-01-01
-"""
+def test_cli_list_queries_zenodo(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(
+        cli,
+        "search_zenodo_records",
+        lambda item_type, genome=None, source=None, sandbox=False: [
+            {"title": "VCFcache cache: x", "doi": "10.5281/zenodo.fake", "created": "2025-01-01", "size_mb": 0.01}
+        ],
     )
 
-    args = ["list", "--public-caches", "--manifest", str(manifest)]
+    args = ["list", "caches"]
     monkeypatch.setattr(cli, "sys", sys)
     monkeypatch.setattr(sys, "argv", ["vcfcache"] + args)
     cli.main()
     captured = capsys.readouterr()
-    assert "alias" in captured.out
-    assert "cache-hg38-gnomad-4.1wgs-AF0100-vep-115.2-basic" in captured.out
+    assert "Available vcfcache caches on Zenodo" in captured.out
+    assert "10.5281/zenodo.fake" in captured.out

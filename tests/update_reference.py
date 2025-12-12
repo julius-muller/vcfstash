@@ -24,12 +24,6 @@ TEST_VCF = TEST_DATA_DIR / "crayz_db.bcf"
 EXPECTED_OUTPUT_DIR = TEST_ROOT / "data" / "expected_output"
 TEST_ANNO_CONFIG = TEST_ROOT / "config" / "test_annotation.yaml"
 
-# Set Nextflow-specific environment variables
-os.environ['NXF_VER'] = '25.10.2'
-os.environ['NXF_DISABLE_CHECK_LATEST'] = '1'
-os.environ['NXF_OFFLINE'] = 'true'
-
-
 
 def normalize_bcf_timestamps(bcf_file):
     """Normalize timestamps in BCF file to make tests more stable."""

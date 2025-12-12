@@ -76,7 +76,7 @@ include = ["vcfcache/**", "tests/**"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["vcfcache"]
-include = ["vcfcache/recipes/**", "vcfcache/demo_data/**", "vcfcache/public_caches.yaml"]
+include = ["vcfcache/recipes/**", "vcfcache/demo_data/**"]
 
 
 [tool.ruff]

@@ -23,7 +23,6 @@ class DatabaseUpdater(VCFDatabase):
     Attributes:
         db_path (Path): Path to the database directory.
         input_file (Path): File path to the input VCF/BCF file.
-        config_file (Optional[Path]): Optional configuration file path.
         params_file (Optional[Path]): Optional parameters file path (auto-generated if not provided).
         verbosity (int): Verbosity level for logging. Higher numbers increase detail.
         debug (bool): Debug flag indicating whether debugging is enabled.
@@ -34,19 +33,19 @@ class DatabaseUpdater(VCFDatabase):
         self,
         db_path: Path | str,
         input_file: Path | str,
-        bcftools_path: Path,
-        config_file: Optional[Path] | Optional[str] = None,
+        bcftools_path: Path | str,
         params_file: Optional[Path] | Optional[str] = None,
         verbosity: int = 0,
         debug: bool = False,
         threads: int = 1,
+        normalize: bool = False,
     ):
         super().__init__(Path(db_path), verbosity, debug, bcftools_path)
         self.cached_output.validate_structure()
         self.logger = self.connect_loggers()
         self.input_file = Path(input_file).expanduser().resolve()
         self.input_md5 = compute_md5(self.input_file)  # might take too long to do here
-        self.config_file: Optional[Path] = None
+        self.normalize = normalize
 
         # Handle params file - use existing or auto-generate
         if params_file:
@@ -76,7 +75,6 @@ class DatabaseUpdater(VCFDatabase):
             input_file=self.input_file,
             output_dir=self.blueprint_dir,
             name=f"add_{self.input_md5}",
-            config_file=self.config_file,
             params_file=self.params_file,
             verbosity=self.verbosity,
         )

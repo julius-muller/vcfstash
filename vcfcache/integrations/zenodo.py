@@ -164,3 +164,54 @@ def search_zenodo_records(
 
     except requests.exceptions.RequestException as e:
         raise ZenodoError(f"Failed to search Zenodo: {e}") from e
+
+
+def resolve_zenodo_alias(
+    alias_or_doi: str,
+    item_type: str = "caches",
+    sandbox: bool = False,
+) -> tuple[str, str]:
+    """Resolve a cache/blueprint alias to a Zenodo DOI via keywords search.
+
+    Args:
+        alias_or_doi: Alias (e.g. cache-hg38-...) or a DOI/record id.
+        item_type: "caches" or "blueprints".
+        sandbox: If True, query the Zenodo sandbox API.
+
+    Returns:
+        (doi, alias)
+    """
+    # If the user passed a DOI or record id directly, just use it.
+    if alias_or_doi.startswith("10.") or "zenodo." in alias_or_doi:
+        rec_id = alias_or_doi.split(".")[-1] if "zenodo" in alias_or_doi else alias_or_doi
+        return alias_or_doi, f"zenodo-{rec_id}"
+
+    alias = alias_or_doi
+    keyword_type = "cache" if item_type == "caches" else "blueprint"
+    escaped = alias.replace('"', '\\"')
+    query = f'keywords:vcfcache AND keywords:{keyword_type} AND keywords:"{escaped}"'
+
+    search_url = f"{_api_base(sandbox)}/records/"
+    try:
+        resp = requests.get(search_url, params={"q": query, "size": 1}, timeout=30)
+        if not resp.ok:
+            error_detail = ""
+            try:
+                error_detail = f" - {resp.json()}"
+            except Exception:
+                error_detail = f" - {resp.text[:200]}"
+            raise ZenodoError(
+                f"Zenodo API error ({resp.status_code}): {resp.reason}{error_detail}"
+            )
+        data = resp.json()
+        hits = data.get("hits", {}).get("hits", [])
+        if not hits:
+            raise ZenodoError(
+                f"Could not resolve alias '{alias}' on Zenodo ({'sandbox' if sandbox else 'production'})."
+            )
+        doi = hits[0].get("doi")
+        if not doi:
+            raise ZenodoError(f"Resolved record for '{alias}' has no DOI (not published?).")
+        return doi, alias
+    except requests.exceptions.RequestException as e:
+        raise ZenodoError(f"Failed to resolve alias on Zenodo: {e}") from e

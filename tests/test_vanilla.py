@@ -1,7 +1,7 @@
 """Tests for vanilla vcfcache package (no cache, no external tools).
 
 These tests should pass in a plain Python environment without any
-cache files, Nextflow, or annotation tools.
+cache files or annotation tools.
 """
 
 import pytest

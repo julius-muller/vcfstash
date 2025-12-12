@@ -110,7 +110,7 @@ def test_cache_metadata(test_scenario):
 
 
 def test_workflow_directory(test_scenario):
-    """Test that workflow directory exists (pure Python - no Nextflow files needed)."""
+    """Test that workflow directory exists."""
     _skip_if_vanilla(test_scenario)
 
     workflow_dir = Path("/cache/db/workflow")

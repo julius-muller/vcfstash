@@ -37,27 +37,24 @@ docker run --rm -v $(pwd):/work ghcr.io/julius-muller/vcfcache:v0.3.0 \
     --force
 ```
 
-List public caches:
+List available public items from Zenodo:
 ```bash
-vcfcache list --public-caches
+vcfcache list caches
+vcfcache list blueprints
 ```
 
 ---
 
-## 2) Aliases & Manifest
+## 2) Aliases & Discovery
 
 Alias schema:
 - Blueprint: `bp-<genome>-<source>-<release>-<filt>`
 - Cache: `cache-<genome>-<source>-<release>-<filt>-<tool>-<tool_version>-<preset>`
 
-Manifest (`public_caches.yaml`) fields:
-- Required: `alias`, `type` (blueprint|cache), `version` (vcfcache that built it), `genome`, `source`, `release`, `filt`, `doi`, `updated_at`, `md5`
-- Caches additionally: `tool`, `tool_version`, `preset`, `annotation_yaml_md5`
-
 Helper commands:
-- Resolve/download: `vcfcache annotate -a <alias>` (auto pull from Zenodo to `~/.cache/vcfcache/caches/<alias>`)
-- Manual pull: `vcfcache pull --doi <doi> --dest <dir>`
-- Upload: `vcfcache push --cache-dir <dir>` (needs `ZENODO_TOKEN`, real Zenodo by default)
+- Discover: `vcfcache list [blueprints|caches]`
+- Resolve/download: `vcfcache annotate -a <alias>` (auto downloads from Zenodo to `~/.cache/vcfcache/caches/`)
+- Upload: `vcfcache push --cache-dir <dir>` (requires `ZENODO_TOKEN`; use `--test` + `ZENODO_SANDBOX_TOKEN` for sandbox)
 
 ---
 
@@ -76,7 +73,7 @@ Helper commands:
 └── work/ (temp, safe to delete)
 ```
 
-Pure Python implementation - no Nextflow/JVM required. Docker image includes bcftools; for pip install, bcftools >= 1.20 must be installed separately.
+Pure Python implementation. Docker image includes bcftools; for pip install, bcftools >= 1.20 must be installed separately.
 
 ---
 
@@ -192,6 +189,6 @@ Multi-stage Dockerfile: `docker/Dockerfile.vcfcache`
 ## 8) Troubleshooting
 
 - **bcftools not found or too old** (pip install): Install bcftools >= 1.20, or set `VCFCACHE_BCFTOOLS=/path/to/newer/bcftools` to override system version. Docker image already includes bcftools.
-- **Manifest alias not found**: Check `vcfcache/public_caches.yaml` path or pass `--manifest <path>`.
+- **Alias not found on Zenodo**: Ensure the Zenodo record has keywords `vcfcache`, `cache`/`blueprint`, and the alias; verify with `vcfcache list`.
 - **Zenodo upload**: Export `ZENODO_TOKEN`; set `ZENODO_SANDBOX=1` to target the sandbox API.
 - **Large Docker images**: Use `--target final` for runtime; `--target test` is only for CI/dev. 

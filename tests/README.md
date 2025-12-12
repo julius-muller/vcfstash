@@ -34,8 +34,6 @@ python -m pytest tests/ -vv --color=yes --disable-warnings -rA
 
 **What's available:**
 - ✅ Pre-built cache at `/cache` (gnomAD variants, AF-filtered)
-- ✅ bcftools (bundled)
-- ✅ Nextflow (bundled)
 - ✅ Test data files (copied during build)
 - ❌ NO VEP
 
@@ -63,8 +61,6 @@ docker run --rm -t \
 **What's available:**
 - ✅ Pre-built cache at `/cache` (gnomAD + VEP annotations)
 - ✅ VEP (Ensembl Variant Effect Predictor)
-- ✅ bcftools (bundled)
-- ✅ Nextflow (bundled)
 - ✅ Test data files (copied during build)
 
 **How tests adapt:**
@@ -308,8 +304,6 @@ def test_cache_feature(test_scenario):
 - In Docker: verify `/app/tools/bcftools` exists and is executable
 
 ### Tests hang or timeout
-- Nextflow workflows may take time on first run
-- Check disk space (Nextflow needs temp space)
 - Increase timeout in pytest: `pytest --timeout=300`
 
 ---

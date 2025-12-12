@@ -109,7 +109,6 @@ class CacheOutput(BaseOutput):
         self.workflow_dir = self.cache_root_dir / "workflow"
         self.workflow_src_dir = self.module_src_dir / "workflow"
 
-        # Note: workflow_src_dir may be empty (pure Python, no Nextflow files)
         # We keep the workflow_dir for storing config snapshots
 
     def required_paths(self) -> dict:
@@ -132,7 +131,6 @@ class CacheOutput(BaseOutput):
         # Minimal existence checks
         required_paths = self.required_paths()
 
-        # workflow_src is optional (pure Python workflow, no Nextflow files)
         # Skip it in validation since it's excluded from create_structure
         paths_to_check = {k: v for k, v in required_paths.items() if k != "workflow_src"}
 

@@ -2,8 +2,6 @@
 
 Cache common variants once, reuse them for every sample. VCFcache builds a normalized blueprint, annotates it once, and reuses those results so only rare/novel variants are annotated at runtime.
 
-**Pure Python. No Nextflow/JVM required.**
-
 ---
 
 ## Quick Start - pip install
@@ -39,7 +37,7 @@ docker run --rm -v $(pwd):/work ghcr.io/julius-muller/vcfcache:latest \
     --force
 
 # List available public caches
-docker run --rm ghcr.io/julius-muller/vcfcache:latest list --public-caches
+docker run --rm ghcr.io/julius-muller/vcfcache:latest list caches
 ```
 
 ---

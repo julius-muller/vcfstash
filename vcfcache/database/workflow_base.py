@@ -1,7 +1,6 @@
 """Abstract base class for workflow execution backends.
 
-This module defines the interface that all workflow backends must implement,
-whether using Nextflow (legacy) or pure Python (default).
+This module defines the interface that all workflow backends must implement.
 """
 
 from abc import ABC, abstractmethod
@@ -40,7 +39,6 @@ class WorkflowBase(ABC):
         output_dir: Path,
         name: str,
         workflow: Path | None = None,
-        config_file: Optional[Path] = None,
         anno_config_file: Optional[Path] = None,
         params_file: Optional[Path] = None,
         verbosity: int = 0,
@@ -52,7 +50,6 @@ class WorkflowBase(ABC):
             input_file: Path to the input VCF/BCF file
             output_dir: Directory where output files will be stored
             name: Unique name for this workflow instance
-            config_file: Optional path to process configuration file
             anno_config_file: Optional path to annotation configuration file
             params_file: Optional path to YAML parameters file
             verbosity: Verbosity level (0=quiet, 1=info, 2=debug)
@@ -82,7 +79,6 @@ class WorkflowBase(ABC):
     def run(
         self,
         db_mode: str,
-        nextflow_args: Optional[List[str]] = None,
         trace: bool = False,
         db_bcf: Optional[Path] = None,
         dag: bool = False,
@@ -102,7 +98,6 @@ class WorkflowBase(ABC):
 
         Args:
             db_mode: The workflow mode (see above)
-            nextflow_args: Additional arguments (backend-specific)
             trace: Whether to generate trace file
             db_bcf: Path to database BCF file (for blueprint-extend, annotate modes)
             dag: Whether to generate DAG visualization (may not be supported)
