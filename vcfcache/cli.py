@@ -226,23 +226,37 @@ def main() -> None:
         help="(optional) Force overwrite if output directory exists"
     )
 
-    # add command
-    add_parser = subparsers.add_parser(
-        "blueprint-extend", help="Add new VCF to the blueprint", parents=[parent_parser]
+    # blueprint-extend command
+    extend_parser = subparsers.add_parser(
+        "blueprint-extend",
+        help="Add variants to existing blueprint",
+        parents=[init_parent_parser],
+        description="Extend an existing blueprint by adding variants from a new VCF/BCF file."
     )
-    add_parser.add_argument(
-        "-d", "--db", required=True, help="Path to the existing database directory"
+    extend_parser.add_argument(
+        "-d",
+        "--db",
+        dest="db",
+        required=True,
+        metavar="DIR",
+        help="Path to existing blueprint directory"
     )
-    add_parser.add_argument(
-        "-i", "--vcf", dest="i", help="Path to the VCF file to be added", required=True
+    extend_parser.add_argument(
+        "-i",
+        "--vcf",
+        dest="i",
+        required=True,
+        metavar="VCF",
+        help="Input VCF/BCF file to add (must be indexed with .csi)"
     )
-    add_parser.add_argument(
-        "-n",
-        "--normalize",
-        dest="normalize",
-        action="store_true",
-        help="Apply normalization steps (add chr prefix, filter chromosomes, split multiallelic sites)",
-        default=False,
+    extend_parser.add_argument(
+        "-t",
+        "--threads",
+        dest="threads",
+        type=int,
+        default=1,
+        metavar="N",
+        help="(optional) Number of threads for bcftools (default: 1)"
     )
 
     # annotate command
@@ -457,12 +471,12 @@ def main() -> None:
             updater = DatabaseUpdater(
                 db_path=args.db,
                 input_file=args.i,
-                config_file=Path(args.config) if args.config else None,
-                params_file=Path(args.params) if args.params else None,
+                config_file=None,
+                params_file=None,
                 verbosity=args.verbose,
                 debug=args.debug,
                 bcftools_path=bcftools_path,
-                normalize=args.normalize,
+                threads=args.threads,
             )
             updater.add()
 

@@ -118,8 +118,7 @@ class CacheOutput(BaseOutput):
             "blueprint": self.cache_root_dir / "blueprint",
             "cache": self.cache_root_dir / "cache",
             "workflow": self.workflow_dir,
-            "workflow_src": self.workflow_src_dir,
-            "modules": self.workflow_dir / "modules",
+            "workflow_src": self.workflow_src_dir
         }
 
     def create_structure(self) -> None:

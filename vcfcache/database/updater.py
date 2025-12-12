@@ -24,10 +24,10 @@ class DatabaseUpdater(VCFDatabase):
         db_path (Path): Path to the database directory.
         input_file (Path): File path to the input VCF/BCF file.
         config_file (Optional[Path]): Optional configuration file path.
-        params_file (Optional[Path]): Optional parameters file path.
+        params_file (Optional[Path]): Optional parameters file path (auto-generated if not provided).
         verbosity (int): Verbosity level for logging. Higher numbers increase detail.
         debug (bool): Debug flag indicating whether debugging is enabled.
-        normalize (bool): Apply normalization steps (add chr prefix, filter chromosomes, split multiallelic sites).
+        threads (int): Number of threads for bcftools operations (default: 1).
     """
 
     def __init__(
@@ -39,26 +39,16 @@ class DatabaseUpdater(VCFDatabase):
         params_file: Optional[Path] | Optional[str] = None,
         verbosity: int = 0,
         debug: bool = False,
-        normalize: bool = False,
+        threads: int = 1,
     ):
         super().__init__(Path(db_path), verbosity, debug, bcftools_path)
         self.cached_output.validate_structure()
         self.logger = self.connect_loggers()
-        self.normalize = normalize
         self.input_file = Path(input_file).expanduser().resolve()
         self.input_md5 = compute_md5(self.input_file)  # might take too long to do here
         self.config_file: Optional[Path] = None
-        self.params_file: Optional[Path] = None
-        if config_file:
-            self.config_file = self.blueprint_dir / f"add_{self.input_md5}.config"
-            config_path = (
-                Path(config_file) if isinstance(config_file, str) else config_file
-            )
-            shutil.copyfile(config_path.expanduser().resolve(), self.config_file)
-        else:
-            wfini = self.workflow_dir / "init.config"
-            self.config_file = wfini if wfini.exists() else None
 
+        # Handle params file - use existing or auto-generate
         if params_file:
             self.params_file = self.blueprint_dir / f"add_{self.input_md5}.yaml"
             params_path = (
@@ -66,8 +56,19 @@ class DatabaseUpdater(VCFDatabase):
             )
             shutil.copyfile(params_path.expanduser().resolve(), self.params_file)
         else:
+            # Check if init.yaml exists from blueprint-init
             wfini = self.workflow_dir / "init.yaml"
-            self.params_file = wfini if wfini.exists() else None
+            if wfini.exists():
+                self.params_file = wfini
+            else:
+                # Auto-generate minimal params file
+                import yaml
+                self.params_file = self.workflow_dir / "extend.yaml"
+                minimal_params = {
+                    "bcftools_cmd": str(bcftools_path),
+                    "threads": threads,
+                }
+                self.params_file.write_text(yaml.dump(minimal_params))
 
         # Initialize workflow backend (pure Python)
         from vcfcache.database.base import create_workflow
@@ -171,11 +172,8 @@ class DatabaseUpdater(VCFDatabase):
 
             # Run the workflow in database mode
             start_time = datetime.now()
-            # Pass the normalize parameter to the workflow
-            nextflow_args = ["--normalize", str(self.normalize).lower()]
             self.nx_workflow.run(
                 db_mode="blueprint-extend",
-                nextflow_args=nextflow_args,
                 trace=True,
                 dag=True,
                 report=True,
