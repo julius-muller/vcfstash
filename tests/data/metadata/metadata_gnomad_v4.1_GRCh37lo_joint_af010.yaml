@@ -1,0 +1,64 @@
+title: "gnomAD v4.1 GRCh37 Blueprint (AF ≥ 0.10, lifted from GRCh38)"
+
+description: |
+  VCFcache blueprint derived from gnomAD v4.1 joint frequency data,
+  lifted over from GRCh38 to GRCh37 (hg19).
+
+  This blueprint contains 8.0M high-quality variant sites filtered to
+  allele frequency (AF) ≥ 0.10 (10% or 1 in 10 individuals), then lifted
+  over from GRCh38 to GRCh37 using CrossMap. All genotype and INFO fields
+  have been removed, retaining only genomic positions (CHROM, POS, REF, ALT).
+  Multiallelic sites have been split into separate records.
+
+  Coverage: chr1-22, chrX, chrY (GRCh37 coordinates)
+  Source: gnomAD v4.1.0 joint frequency (807,162 samples)
+  Processing: AF-filtered (≥10%), GRCh38→GRCh37 liftover, normalized,
+              GT/INFO removed, multiallelics split
+
+  NOTE: This is a liftover from GRCh38. For native GRCh38 analysis, use the
+  GRCh38 blueprint instead.
+
+  This blueprint serves as a foundation for building annotation caches with
+  tools like VEP, SnpEff, or bcftools +split-vep, enabling rapid annotation
+  of sample VCFs using GRCh37/hg19 coordinates with very common variants
+  (≥10% population frequency).
+
+upload_type: dataset
+
+creators:
+  - name: "Julius Müller"
+    affiliation: "DKFZ Heidelberg, Germany"
+    orcid: "0000-0002-1046-2968"
+
+keywords:
+  - vcfcache
+  - gnomAD
+  - GRCh37
+  - hg19
+  - blueprint
+  - liftover
+  - variant annotation
+  - population genetics
+  - allele frequency
+  - CrossMap
+  - common variants
+
+license: cc-by-4.0
+
+access_right: open
+
+related_identifiers:
+  - identifier: "10.1038/s41586-020-2308-7"
+    relation: "isDerivedFrom"
+    resource_type: "publication"
+    scheme: "doi"
+  - identifier: "https://gnomad.broadinstitute.org/"
+    relation: "isDocumentedBy"
+    resource_type: "other"
+    scheme: "url"
+
+version: "4.1.0-af010-liftover-hg19"
+
+notes: |
+  Liftover from GRCh38 to GRCh37 performed using CrossMap.
+  Reference: hg38ToHg19.over.chain.gz from UCSC Genome Browser.

@@ -1,0 +1,51 @@
+title: "gnomAD v4.1 GRCh38 Blueprint (AF ≥ 0.10)"
+
+description: |
+  VCFcache blueprint derived from gnomAD v4.1 joint frequency data (GRCh38).
+
+  This blueprint contains 8.1M high-quality variant sites filtered to
+  allele frequency (AF) ≥ 0.10 (10% or 1 in 10 individuals). All genotype
+  and INFO fields have been removed, retaining only genomic positions
+  (CHROM, POS, REF, ALT). Multiallelic sites have been split into separate records.
+
+  Coverage: chr1-22, chrX, chrY
+  Source: gnomAD v4.1.0 joint frequency (807,162 samples)
+  Processing: AF-filtered (≥10%), normalized, GT/INFO removed, multiallelics split
+
+  This blueprint serves as a foundation for building annotation caches with
+  tools like VEP, SnpEff, or bcftools +split-vep, enabling rapid annotation
+  of sample VCFs by pre-annotating very common variants (≥10% population frequency).
+
+upload_type: dataset
+
+creators:
+  - name: "Julius Müller"
+    affiliation: "DKFZ Heidelberg, Germany"
+    orcid: "0000-0002-1046-2968"
+
+keywords:
+  - vcfcache
+  - gnomAD
+  - GRCh38
+  - hg38
+  - blueprint
+  - variant annotation
+  - population genetics
+  - allele frequency
+  - common variants
+
+license: cc-by-4.0
+
+access_right: open
+
+related_identifiers:
+  - identifier: "10.1038/s41586-020-2308-7"
+    relation: "isDerivedFrom"
+    resource_type: "publication"
+    scheme: "doi"
+  - identifier: "https://gnomad.broadinstitute.org/"
+    relation: "isDocumentedBy"
+    resource_type: "other"
+    scheme: "url"
+
+version: "4.1.0-af010"
