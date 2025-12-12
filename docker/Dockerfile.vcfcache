@@ -15,7 +15,6 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY vcfcache ./vcfcache
 COPY resources ./resources
-COPY public_caches.yaml ./public_caches.yaml
 COPY tests ./tests
 
 # Runtime env: lean install
