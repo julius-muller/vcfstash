@@ -369,13 +369,13 @@ def main() -> None:
     # push command
     push_parser = subparsers.add_parser(
         "push",
-        help="Upload cache to Zenodo",
+        help="Upload cache to remote storage",
         parents=[init_parent_parser],
         description=(
-            "Upload a cache directory to Zenodo as a versioned, citable dataset. "
-            "Creates a tarball of the cache and uploads it to Zenodo with metadata. "
-            "Requires ZENODO_TOKEN environment variable. "
-            "Use ZENODO_SANDBOX=1 for testing (requires ZENODO_SANDBOX_TOKEN)."
+            "Upload a cache directory to remote storage as a versioned, citable dataset. "
+            "Auto-detects blueprint vs cache and generates appropriate naming: "
+            "bp_{name}.tar.gz for blueprints, cache_{name}.tar.gz for caches. "
+            "Requires ZENODO_TOKEN environment variable (or ZENODO_SANDBOX_TOKEN for --test mode)."
         )
     )
     push_parser.add_argument(
@@ -383,6 +383,22 @@ def main() -> None:
         required=True,
         metavar="DIR",
         help="Cache directory to upload (blueprint or annotated cache)"
+    )
+    push_parser.add_argument(
+        "--dest",
+        choices=["zenodo"],
+        default="zenodo",
+        metavar="DEST",
+        help="(optional) Upload destination: zenodo (default: zenodo)"
+    )
+    push_parser.add_argument(
+        "--test",
+        action="store_true",
+        help=(
+            "(optional) Upload to test/sandbox environment instead of production. "
+            "Uses ZENODO_SANDBOX_TOKEN instead of ZENODO_TOKEN. "
+            "Test uploads do not affect production and can be safely deleted."
+        )
     )
     push_parser.add_argument(
         "--metadata",
@@ -619,15 +635,16 @@ def main() -> None:
             from vcfcache.utils.archive import file_md5
             import json
 
-            sandbox = os.environ.get("ZENODO_SANDBOX", "0") == "1"
+            # Use --test flag to determine sandbox mode
+            sandbox = args.test
             token = (
                 os.environ.get("ZENODO_SANDBOX_TOKEN")
                 if sandbox
                 else os.environ.get("ZENODO_TOKEN")
-            ) or os.environ.get("ZENODO_TOKEN")
+            )
             if not token:
                 raise RuntimeError(
-                    "ZENODO_SANDBOX_TOKEN (or ZENODO_TOKEN) required for sandbox push"
+                    "ZENODO_SANDBOX_TOKEN environment variable required for --test mode"
                     if sandbox
                     else "ZENODO_TOKEN environment variable required for push"
                 )
@@ -636,9 +653,28 @@ def main() -> None:
             if not cache_dir.exists():
                 raise FileNotFoundError(f"Cache directory not found: {cache_dir}")
 
-            tar_path = cache_dir.parent / f"{cache_dir.name}.tar.gz"
+            # Auto-detect blueprint vs cache and generate appropriate name
+            is_blueprint = (cache_dir / "blueprint").is_dir() and not (cache_dir / "cache").is_dir()
+            is_cache = (cache_dir / "cache").is_dir()
+
+            if not is_blueprint and not is_cache:
+                raise ValueError(
+                    f"Directory {cache_dir} does not appear to be a valid blueprint or cache. "
+                    "Expected 'blueprint/' or 'cache/' subdirectory."
+                )
+
+            dir_name = cache_dir.name
+            prefix = "bp" if is_blueprint else "cache"
+            tar_name = f"{prefix}_{dir_name}.tar.gz"
+            tar_path = cache_dir.parent / tar_name
+
+            logger.info(f"Detected {'blueprint' if is_blueprint else 'cache'}: {dir_name}")
+            logger.info(f"Creating archive: {tar_name}")
+
             tar_cache(cache_dir, tar_path)
             md5 = file_md5(tar_path)
+
+            logger.info(f"Archive MD5: {md5}")
 
             dep = zenodo.create_deposit(token, sandbox=sandbox)
 
@@ -653,12 +689,13 @@ def main() -> None:
                 )
             if args.publish and not metadata:
                 # Zenodo requires minimal metadata before publishing.
+                item_type = "blueprint" if is_blueprint else "annotated cache"
                 metadata = {
-                    "title": f"VCFcache cache {cache_dir.name}",
+                    "title": f"VCFcache {item_type}: {dir_name}",
                     "upload_type": "dataset",
                     "description": (
-                        "VCFcache cache tarball uploaded via vcfcache push. "
-                        "This may be a sandbox/test record."
+                        f"VCFcache {item_type} uploaded as {tar_name}. "
+                        f"{'This is a test/sandbox record.' if sandbox else ''}"
                     ),
                     "creators": [{"name": "vcfcache"}],
                 }
