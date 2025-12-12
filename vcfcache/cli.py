@@ -721,15 +721,11 @@ def main() -> None:
                 size_mb = record.get('size_mb', 0)
 
                 print(f"\n{title}")
-                print(f"  DOI: {doi}")
-                print(f"  Created: {created}")
-                print(f"  Size: {size_mb:.1f} MB")
-
-                # Show download command
-                print(f"  Download: vcfcache blueprint-init --doi {doi} -o ./blueprints")
+                print(f"  DOI: {doi} | Created: {created} | Size: {size_mb:.1f} MB")
 
             print(f"\n{'=' * 80}")
-            print(f"Total: {len(records)} {item_type} found\n")
+            print(f"Total: {len(records)} {item_type} found")
+            print(f"Download: vcfcache blueprint-init --doi <DOI> -o ./blueprints\n")
 
         elif args.command == "push":
             from vcfcache.integrations import zenodo
