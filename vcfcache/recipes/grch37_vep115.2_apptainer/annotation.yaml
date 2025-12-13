@@ -1,0 +1,28 @@
+## GRCh37 VEP 115.2 annotation config (Apptainer)
+
+annotation_cmd: |
+  ${params.bcftools_cmd} view ${INPUT_BCF} | \
+  ${params.annotation_tool_cmd} \
+    --offline \
+    --no_stats \
+    --buffer_size ${params.vep_buffer} \
+    --fork ${params.vep_forks} \
+    --cache \
+    --dir_cache ${params.vep_cache} \
+    --format vcf \
+    --vcf \
+    --force_overwrite \
+    -i STDIN \
+    -o STDOUT \
+    -a GRCh37 \
+    --symbol \
+    --hgvs \
+    --variant_class | \
+  ${params.bcftools_cmd} view -o ${OUTPUT_BCF} -Ob -W
+
+must_contain_info_tag: CSQ
+required_tool_version: "115.2"
+
+optional_checks:
+  vep_cache_version: "115.2"
+  genome_build: "GRCh37"

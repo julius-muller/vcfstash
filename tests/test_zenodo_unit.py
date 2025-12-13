@@ -105,3 +105,38 @@ def test_publish_deposit_posts_publish_link():
         assert out["doi"] == "10.5072/zenodo.1"
         assert post_mock.call_args.args[0] == deposition["links"]["publish"]
 
+
+def test_resolve_zenodo_alias_queries_keywords_and_honors_sandbox():
+    resp = MagicMock()
+    resp.ok = True
+    resp.json.return_value = {"hits": {"hits": [{"doi": "10.5072/zenodo.12345"}]}}
+
+    with patch("vcfcache.integrations.zenodo.requests.get", return_value=resp) as get_mock:
+        doi, alias = zenodo.resolve_zenodo_alias(
+            "cache-hg38-gnomad-4.1joint-AF0100-vep-115.2-basic",
+            item_type="caches",
+            sandbox=True,
+        )
+        assert doi == "10.5072/zenodo.12345"
+        assert alias == "cache-hg38-gnomad-4.1joint-AF0100-vep-115.2-basic"
+
+        called_url = get_mock.call_args.args[0]
+        called_params = get_mock.call_args.kwargs["params"]
+        assert called_url == f"{zenodo.ZENODO_SANDBOX_API}/records/"
+        assert "keywords:vcfcache" in called_params["q"]
+        assert "keywords:cache" in called_params["q"]
+        assert 'keywords:"cache-hg38-gnomad-4.1joint-AF0100-vep-115.2-basic"' in called_params["q"]
+
+
+def test_resolve_zenodo_alias_raises_on_missing_hits():
+    resp = MagicMock()
+    resp.ok = True
+    resp.json.return_value = {"hits": {"hits": []}}
+
+    with patch("vcfcache.integrations.zenodo.requests.get", return_value=resp):
+        with pytest.raises(zenodo.ZenodoError):
+            zenodo.resolve_zenodo_alias(
+                "cache-hg38-gnomad-4.1joint-AF0100-vep-115.2-basic",
+                item_type="caches",
+                sandbox=False,
+            )
