@@ -1,5 +1,7 @@
-## Annotated Docker Image Annotation Configuration
-## VEP annotation command for blueprint annotation
+## GRCh38 VEP 115.2 annotation config
+##
+## This annotation config is VEP installation-agnostic (works with native, Docker, or Apptainer).
+## The installation method is specified in params.yaml via annotation_tool_cmd.
 
 annotation_cmd: |
   ${params.bcftools_cmd} view ${INPUT_BCF} | \
@@ -7,7 +9,6 @@ annotation_cmd: |
     --offline \
     --buffer_size ${params.vep_buffer} \
     --fork ${params.vep_forks} \
-    --no_stats \
     --cache \
     --dir_cache ${params.vep_cache} \
     --format vcf \
@@ -15,7 +16,6 @@ annotation_cmd: |
     --force_overwrite \
     -i STDIN \
     -o STDOUT \
-    --warning_file ${AUXILIARY_DIR}/vep_warnings.log \
     -a GRCh38 \
     --transcript_version \
     --total_length \
@@ -33,8 +33,11 @@ annotation_cmd: |
     --appris \
     --mane \
     --biotype \
-    --domains | \
-    ${params.bcftools_cmd} view -o ${OUTPUT_BCF} -Ob -W
+    --domains \
+    --stats_file ${AUXILIARY_DIR}/vep_stats.html \
+    --warning_file ${AUXILIARY_DIR}/vep_warnings.txt 2>&1 | \
+      tee ${AUXILIARY_DIR}/vep_output.txt | \
+  ${params.bcftools_cmd} view -o ${OUTPUT_BCF} -Ob -W
 
 must_contain_info_tag: CSQ
 required_tool_version: "115.2"

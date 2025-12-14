@@ -1,5 +1,7 @@
-## Docker Cache Annotation Configuration
-## VEP annotation command for cache blueprint
+## GRCh38 VEP 115.2 annotation config
+##
+## This annotation config is VEP installation-agnostic (works with native, Docker, or Apptainer).
+## The installation method is specified in params.yaml via annotation_tool_cmd.
 
 annotation_cmd: |
   ${params.bcftools_cmd} view ${INPUT_BCF} | \
@@ -21,7 +23,10 @@ annotation_cmd: |
     --hgvs \
     --variant_class \
     --sift b \
-    --polyphen b | \
+    --polyphen b \
+    --stats_file ${AUXILIARY_DIR}/vep_stats.html \
+    --warning_file ${AUXILIARY_DIR}/vep_warnings.txt 2>&1 | \
+      tee ${AUXILIARY_DIR}/vep_output.txt | \
   ${params.bcftools_cmd} view -o ${OUTPUT_BCF} -Ob --write-index
 
 must_contain_info_tag: CSQ
