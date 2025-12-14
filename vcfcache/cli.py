@@ -893,12 +893,21 @@ def main() -> None:
                 zenodo_url = (
                     f"{zenodo._api_base(sandbox)}/deposit/depositions/{dep['id']}"
                 )
-                requests.put(
+                resp = requests.put(
                     zenodo_url,
                     params={"access_token": token},
                     json={"metadata": metadata},
                     timeout=30,
-                ).raise_for_status()
+                )
+                if not resp.ok:
+                    error_msg = f"Failed to update metadata: {resp.status_code} {resp.reason}"
+                    try:
+                        error_detail = resp.json()
+                        error_msg += f"\nZenodo error: {error_detail}"
+                    except Exception:
+                        error_msg += f"\nResponse: {resp.text[:500]}"
+                    raise RuntimeError(error_msg)
+                resp.raise_for_status()
 
             zenodo.upload_file(dep, tar_path, token, sandbox=sandbox)
             if args.publish:
