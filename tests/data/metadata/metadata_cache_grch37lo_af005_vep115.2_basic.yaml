@@ -56,10 +56,10 @@ access_right: open
 
 related_identifiers:
   - identifier: "10.5072/zenodo.414724"
-    relation: "isCompiledFrom"
+    relation: "isSupplementTo"
     resource_type: "dataset"
     scheme: "doi"
-    # gnomAD v4.1 GRCh37 Blueprint (AF ≥ 0.05)
+    # gnomAD v4.1 GRCh37 Blueprint (AF ≥ 0.05) - this cache supplements the blueprint
   - identifier: "10.1038/s41586-020-2308-7"
     relation: "isDerivedFrom"
     resource_type: "publication"
