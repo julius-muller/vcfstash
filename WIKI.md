@@ -12,8 +12,7 @@ Practical reference for building, distributing, and consuming VCFcache blueprint
 5. Using Public Caches (Zenodo)
 6. Configuration (YAML)
 7. Docker Build/Testing
-8. Releases (PyPI + Docker)
-9. Troubleshooting
+8. Troubleshooting
 
 ---
 
@@ -203,55 +202,7 @@ Multi-stage Dockerfile: `docker/Dockerfile.vcfcache`
 
 ---
 
-## 8) Releases (PyPI + Docker)
-
-### Versioning (beta/rc/final)
-
-Use PEP 440 versions:
-- Beta: `0.4.0b0`, `0.4.0b1`, ...
-- RC: `0.4.0rc1`, `0.4.0rc2`, ...
-- Final: `0.4.0`
-
-Recommended tags:
-- `v0.4.0b0` / `v0.4.0rc1` / `v0.4.0`
-
-### Keeping GitHub, PyPI, and Docker in sync
-
-Use the git tag as the single source of truth:
-- Create a tag `v<version>` that matches `pyproject.toml`’s version exactly.
-- Publish artifacts (PyPI + Docker) from that tag commit only.
-
-### Automated (recommended): GitHub Actions on tags
-
-Workflow: `.github/workflows/release.yml`
-- Runs on `push` to tags matching `v*`.
-- Builds/tests and creates `dist/*`.
-- Creates a GitHub Release (marks as pre-release for `bN/rcN` tags).
-- Publishes:
-  - pre-releases → TestPyPI
-  - finals → PyPI
-- Builds/pushes Docker:
-  - always pushes `ghcr.io/<owner>/vcfcache:v<version>`
-  - pushes `ghcr.io/<owner>/vcfcache:latest` only for final releases
-
-Required secrets:
-- `PYPI_API_TOKEN` (for PyPI)
-- `TEST_PYPI_API_TOKEN` (for TestPyPI)
-
-### Manual (local): `scripts/release.sh`
-
-The script is an interactive checklist that can:
-- bump versions in `pyproject.toml` and `vcfcache/__init__.py`
-- build + smoke test + run pytest
-- upload to (Test)PyPI
-- build/tag/push Docker
-- create a GitHub Release (pre-release for `bN/rcN`)
-
-See `RELEASE.md` for the full checklist.
-
----
-
-## 9) Troubleshooting
+## 8) Troubleshooting
 
 - **bcftools not found or too old** (pip install): Install bcftools >= 1.20, or set `VCFCACHE_BCFTOOLS=/path/to/newer/bcftools` to override system version. Docker image already includes bcftools.
 - **Alias not found on Zenodo**: Ensure the Zenodo record has keywords `vcfcache`, `cache`/`blueprint`, and the alias; verify with `vcfcache list`.

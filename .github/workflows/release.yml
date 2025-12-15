@@ -40,6 +40,21 @@ jobs:
 
       - name: Build bcftools and htslib (>=1.20)
         run: |
+          set -euo pipefail
+
+          fetch() {
+            # fetch <url1> <url2> <out>
+            # Use retries to survive transient GitHub/CDN 5xx.
+            local url1="$1"
+            local url2="$2"
+            local out="$3"
+            echo "Downloading: $url1"
+            if ! curl -fsSL --retry 6 --retry-all-errors --retry-delay 5 -o "$out" "$url1"; then
+              echo "Primary download failed; trying fallback: $url2"
+              curl -fsSL --retry 6 --retry-all-errors --retry-delay 5 -o "$out" "$url2"
+            fi
+          }
+
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential \
@@ -52,8 +67,10 @@ jobs:
             zlib1g-dev
 
           # Build and install htslib (provides bgzip and tabix)
-          curl -fsSL -o htslib.tar.bz2 \
-            "https://github.com/samtools/htslib/releases/download/${BCFTOOLS_VERSION}/htslib-${BCFTOOLS_VERSION}.tar.bz2"
+          fetch \
+            "https://github.com/samtools/htslib/releases/download/${BCFTOOLS_VERSION}/htslib-${BCFTOOLS_VERSION}.tar.bz2" \
+            "https://codeload.github.com/samtools/htslib/tar.gz/refs/tags/${BCFTOOLS_VERSION}" \
+            htslib.tar.bz2
           tar -xjf htslib.tar.bz2
           cd "htslib-${BCFTOOLS_VERSION}"
           ./configure --prefix="${GITHUB_WORKSPACE}/.local"
@@ -62,8 +79,10 @@ jobs:
           cd ..
 
           # Build and install bcftools
-          curl -fsSL -o bcftools.tar.bz2 \
-            "https://github.com/samtools/bcftools/releases/download/${BCFTOOLS_VERSION}/bcftools-${BCFTOOLS_VERSION}.tar.bz2"
+          fetch \
+            "https://github.com/samtools/bcftools/releases/download/${BCFTOOLS_VERSION}/bcftools-${BCFTOOLS_VERSION}.tar.bz2" \
+            "https://codeload.github.com/samtools/bcftools/tar.gz/refs/tags/${BCFTOOLS_VERSION}" \
+            bcftools.tar.bz2
           tar -xjf bcftools.tar.bz2
           cd "bcftools-${BCFTOOLS_VERSION}"
           ./configure --prefix="${GITHUB_WORKSPACE}/.local"
@@ -209,4 +228,3 @@ jobs:
           target: final
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-
