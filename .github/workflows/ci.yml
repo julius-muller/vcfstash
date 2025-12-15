@@ -19,6 +19,8 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.13"]
+    env:
+      BCFTOOLS_VERSION: "1.22"
     steps:
       - uses: actions/checkout@v4
 
@@ -38,12 +40,32 @@ jobs:
       - name: Install dependencies
         run: uv pip install --python .venv/bin/python -e ".[dev]"
 
-      - name: Install bcftools
+      - name: Build bcftools (>=1.20)
         run: |
           sudo apt-get update
-          sudo apt-get install -y bcftools
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            ca-certificates \
+            curl \
+            libbz2-dev \
+            libcurl4-openssl-dev \
+            liblzma-dev \
+            libssl-dev \
+            zlib1g-dev
+
+          curl -fsSL -o bcftools.tar.bz2 \
+            "https://github.com/samtools/bcftools/releases/download/${BCFTOOLS_VERSION}/bcftools-${BCFTOOLS_VERSION}.tar.bz2"
+          tar -xjf bcftools.tar.bz2
+          cd "bcftools-${BCFTOOLS_VERSION}"
+          ./configure --prefix="${GITHUB_WORKSPACE}/.local"
+          make -j2
+          make install
+
+          "${GITHUB_WORKSPACE}/.local/bin/bcftools" --version | head -n1
 
       - name: Run tests
+        env:
+          VCFCACHE_BCFTOOLS: ${{ github.workspace }}/.local/bin/bcftools
         run: .venv/bin/python -m pytest -q
 
   docker-tests:
