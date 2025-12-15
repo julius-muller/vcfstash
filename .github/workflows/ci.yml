@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
   pytest:
@@ -37,16 +38,12 @@ jobs:
       - name: Install dependencies
         run: uv pip install --python .venv/bin/python -e ".[dev]"
 
-      - name: Ensure bundled bcftools is executable
+      - name: Install bcftools
         run: |
-          if [ -f "./tools/bcftools" ]; then
-            chmod +x ./tools/bcftools
-          fi
+          sudo apt-get update
+          sudo apt-get install -y bcftools
 
       - name: Run tests
-        env:
-          # Prefer bundled bcftools to avoid distro-version drift.
-          VCFCACHE_BCFTOOLS: ${{ github.workspace }}/tools/bcftools
         run: .venv/bin/python -m pytest -q
 
   docker-tests:
