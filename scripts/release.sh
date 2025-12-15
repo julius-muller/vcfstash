@@ -110,6 +110,110 @@ ask_yn_skip() {
   done
 }
 
+docker_login_ghcr() {
+  # Non-interactive GHCR login using a token.
+  # Prefer GHCR_TOKEN (PAT with write:packages). Fallback to gh auth token if available.
+  local registry="ghcr.io"
+
+  local user="${GHCR_USERNAME:-}"
+  if [[ -z "$user" ]] && command -v gh >/dev/null 2>&1; then
+    user="$(gh api user -q .login 2>/dev/null || true)"
+  fi
+  if [[ -z "$user" ]]; then
+    log "  ✗ Could not determine GH username. Set GHCR_USERNAME (e.g. julius-muller)."
+    return 1
+  fi
+
+  local token="${GHCR_TOKEN:-}"
+  if [[ -z "$token" ]] && command -v gh >/dev/null 2>&1; then
+    token="$(gh auth token 2>/dev/null || true)"
+  fi
+  if [[ -z "$token" ]]; then
+    log "  ✗ No GHCR token available."
+    log "    Export GHCR_TOKEN (PAT with write:packages) then run this script again, or run:"
+    log "      echo \"\$GHCR_TOKEN\" | docker login ghcr.io -u $user --password-stdin"
+    return 1
+  fi
+
+  echo "$token" | docker login "$registry" -u "$user" --password-stdin >/dev/null
+  return 0
+}
+
+derive_wiki_repo_url() {
+  # Derive https URL for the GitHub wiki repo from origin remote.
+  # Returns: prints URL or empty string.
+  # Can be overridden with WIKI_REPO_URL env var.
+  if [[ -n "${WIKI_REPO_URL:-}" ]]; then
+    echo "$WIKI_REPO_URL"
+    return 0
+  fi
+
+  local origin
+  origin="$(git remote get-url origin 2>/dev/null || true)"
+  if [[ -z "$origin" ]]; then
+    echo ""
+    return 0
+  fi
+
+  # Normalize origin to owner/repo
+  local slug=""
+  if [[ "$origin" =~ ^git@github\.com:(.+)\.git$ ]]; then
+    slug="${BASH_REMATCH[1]}"
+  elif [[ "$origin" =~ ^https?://github\.com/(.+)\.git$ ]]; then
+    slug="${BASH_REMATCH[1]}"
+  elif [[ "$origin" =~ ^https?://github\.com/(.+)$ ]]; then
+    slug="${BASH_REMATCH[1]}"
+  fi
+
+  if [[ -z "$slug" ]]; then
+    echo ""
+    return 0
+  fi
+
+  echo "https://github.com/${slug}.wiki.git"
+}
+
+sync_github_wiki_from_file() {
+  # Sync ./WIKI.md into the GitHub wiki repo as Home.md.
+  # Requires git push permissions to <repo>.wiki.git
+  local wiki_url
+  wiki_url="$(derive_wiki_repo_url)"
+  if [[ -z "$wiki_url" ]]; then
+    log "  ✗ Could not derive wiki repo URL from origin; set WIKI_REPO_URL manually."
+    return 1
+  fi
+  if [[ ! -f "WIKI.md" ]]; then
+    log "  ✗ WIKI.md not found in repo root."
+    return 1
+  fi
+
+  local tmp
+  tmp="$(mktemp -d -t vcfcache-wiki.XXXXXX)"
+  log "  → Cloning wiki repo: $wiki_url"
+  if ! git clone --depth 1 "$wiki_url" "$tmp" >/dev/null 2>&1; then
+    log "  ✗ Failed to clone wiki repo."
+    log "    If the wiki is disabled, enable it in GitHub repo settings (Features → Wikis), or skip this step."
+    log "    If auth fails, ensure you can push to the wiki repo: $wiki_url"
+    rm -rf "$tmp"
+    return 1
+  fi
+
+  cp WIKI.md "$tmp/Home.md"
+  (
+    cd "$tmp"
+    if git diff --quiet -- Home.md; then
+      log "  ✓ Wiki already up-to-date (no changes)"
+      return 0
+    fi
+    git add Home.md
+    git commit -m "Sync wiki from WIKI.md (v$VERSION)" >/dev/null
+    git push >/dev/null
+    log "  ✓ Updated GitHub Wiki Home.md"
+  )
+  rm -rf "$tmp"
+  return 0
+}
+
 cd "$PROJECT_ROOT"
 
 # Get current versions from files
@@ -120,6 +224,23 @@ GH_PRERELEASE_FLAG=""
 if [[ "$IS_PRERELEASE" == "1" ]] || [[ "$FORCE_GH_PRERELEASE" == "1" ]]; then
   GH_PRERELEASE_FLAG="--prerelease"
 fi
+
+release_notes_file() {
+  # Create a temp release notes file containing only the relevant CHANGELOG section.
+  # Falls back to CHANGELOG.md if extraction fails.
+  local tmp
+  tmp="$(mktemp -t "vcfcache-release-notes.XXXXXX.md")"
+  if .venv/bin/python scripts/release_notes_from_changelog.py "$VERSION" >"$tmp" 2>/dev/null; then
+    echo "$tmp"
+    return 0
+  fi
+  if python scripts/release_notes_from_changelog.py "$VERSION" >"$tmp" 2>/dev/null; then
+    echo "$tmp"
+    return 0
+  fi
+  rm -f "$tmp"
+  echo "CHANGELOG.md"
+}
 
 log "Starting release process for version $VERSION"
 log "Current versions: pyproject.toml=$CURRENT_VERSION_PYPROJECT, __init__.py=$CURRENT_VERSION_INIT"
@@ -244,16 +365,6 @@ log "Step 5: Build and push Docker image"
 if ! ask_yn_skip "Build Docker image for v$VERSION?"; then
   log "  ⊘ Skipped Docker build"
 else
-  # Get latest Docker image version from GHCR (optional, for informational purposes)
-  log "  → Checking GHCR for current version..."
-  DOCKER_LATEST=""
-  if docker pull ghcr.io/julius-muller/vcfcache:latest --quiet 2>/dev/null; then
-    DOCKER_LATEST=$(docker run --rm ghcr.io/julius-muller/vcfcache:latest --version 2>/dev/null | head -1 || echo "")
-    if [[ -n "$DOCKER_LATEST" ]]; then
-      log "  → Current GHCR version: v$DOCKER_LATEST"
-    fi
-  fi
-
   # Build image
   log "  → Building Docker image..."
   ./scripts/local-build/build-and-push-final.sh --skip-push --force
@@ -264,6 +375,16 @@ else
 
   # Push
   if ask_yn_skip "Push Docker images to GHCR?"; then
+    log "  → Logging in to GHCR (ghcr.io)..."
+    if ! docker_login_ghcr; then
+      log "  ✗ GHCR login failed."
+      log "    If you previously logged into Docker Hub, make sure to login specifically to GHCR:"
+      log "      docker logout ghcr.io || true"
+      log "      echo \"\$GHCR_TOKEN\" | docker login ghcr.io -u <github-username> --password-stdin"
+      log "    Token must include: write:packages (and read:packages)."
+      exit 1
+    fi
+
     docker push "ghcr.io/julius-muller/vcfcache:v$VERSION"
     if [[ "$IS_PRERELEASE" != "1" ]]; then
       docker push ghcr.io/julius-muller/vcfcache:latest
@@ -311,13 +432,25 @@ fi
 
 # Create GitHub release
 log "  → Creating GitHub release..."
+NOTES_FILE="$(release_notes_file)"
 gh release create "v$VERSION" \
   --title "vcfcache v$VERSION" \
   $GH_PRERELEASE_FLAG \
-  --notes-file CHANGELOG.md \
+  --notes-file "$NOTES_FILE" \
   dist/*
 log "  ✓ GitHub release created"
 log "  → View at: https://github.com/julius-muller/vcfcache/releases/tag/v$VERSION"
+
+echo ""
+
+# Step 7: Sync GitHub Wiki (optional)
+log "Step 7: Sync GitHub Wiki (optional)"
+log "  → This updates the GitHub Wiki homepage (Home.md) from repo WIKI.md."
+if ask_yn_skip "Sync GitHub Wiki from WIKI.md now?"; then
+  sync_github_wiki_from_file || log "  ⚠ Wiki sync failed (non-fatal)."
+else
+  log "  ⊘ Skipped wiki sync"
+fi
 
 echo ""
 log "================================================"

@@ -4,6 +4,24 @@ Internal release checklist for publishing to PyPI.
 
 ---
 
+## Model (maintainers)
+
+- Develop on `main` (keep it green).
+- Cut releases from immutable git tags (`v<version>`).
+- Keep PyPI + Docker + GitHub Release artifacts aligned to the tag commit.
+
+### Versioning (beta/rc/final)
+
+Use PEP 440 versions:
+- Beta: `0.4.0b0`, `0.4.0b1`, ...
+- Release candidate: `0.4.0rc1`, `0.4.0rc2`, ...
+- Final: `0.4.0`
+
+Tag naming:
+- `v0.4.0b0` / `v0.4.0rc1` / `v0.4.0`
+
+---
+
 ## Quick Reference
 
 **For a new release:**

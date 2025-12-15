@@ -38,7 +38,32 @@ jobs:
       - name: Install dependencies
         run: uv pip install --python .venv/bin/python -e ".[dev]"
 
+      - name: Cache bcftools/htslib install
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.local
+          key: bcftools-${{ env.BCFTOOLS_VERSION }}-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Check cached bcftools
+        id: bcftools
+        run: |
+          set -euo pipefail
+          B="${GITHUB_WORKSPACE}/.local/bin/bcftools"
+          if [[ -x "$B" ]]; then
+            if ver="$("$B" --version 2>/dev/null | head -n1 | awk '{print $2}')"; then
+              echo "Found cached bcftools version: $ver"
+              if [[ "$ver" == "${BCFTOOLS_VERSION}" ]]; then
+                echo "needs_build=false" >> "${GITHUB_OUTPUT}"
+                exit 0
+              fi
+            else
+              echo "Cached bcftools exists but is not runnable; will rebuild."
+            fi
+          fi
+          echo "needs_build=true" >> "${GITHUB_OUTPUT}"
+
       - name: Build bcftools and htslib (>=1.20)
+        if: steps.bcftools.outputs.needs_build == 'true'
         run: |
           set -euo pipefail
 

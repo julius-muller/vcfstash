@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 0.4.0 (Unreleased)
 
+## 0.4.0b1 (2025-12-15)
+
 ### Added
 - Added tag-based GitHub Actions release workflow (`.github/workflows/release.yml`) to build/test, publish to (Test)PyPI, create GitHub Releases, and build/push Docker images.
 - Updated `scripts/release.sh` to support PEP 440 pre-releases (e.g. `0.4.0b0`, `0.4.0rc1`) and mark GitHub releases as pre-release accordingly.
@@ -16,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed dependency on external `md5sum` binary by switching MD5 computation to pure Python (`hashlib`).
 - Made Zenodo sandbox integration test robust to a globally set `VCFCACHE_DIR` by forcing an isolated cache dir under the test HOME.
 - Fixed CI `PATH` handling so system tools remain available while still preferring the locally built `bcftools` binaries.
+- Added retries/fallback URLs for downloading `bcftools`/`htslib` sources in GitHub Actions.
+- Cached built `bcftools`/`htslib` in GitHub Actions to avoid recompiling on every run.
+- Restricted CI to run only on `v*` tags (to avoid expensive builds on frequent pushes).
 
 ## 0.3.6 (2025-12-11)
 
