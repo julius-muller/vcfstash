@@ -13,6 +13,13 @@ import tempfile
 import shutil
 from pathlib import Path
 import hashlib
+from tests.conftest import get_bcftools_cmd
+
+
+# Get bcftools command once (respects VCFCACHE_BCFTOOLS env var for CI)
+def get_bcftools():
+    """Lazy-load bcftools command."""
+    return get_bcftools_cmd()
 
 
 # ============================================================================
@@ -37,10 +44,13 @@ def test_sample_with_hits_and_misses(test_output_dir):
     output_dir.mkdir(parents=True, exist_ok=True)
     test_bcf = output_dir / "test_sample.bcf"
 
+    # Get bcftools command (respects VCFCACHE_BCFTOOLS env var for CI)
+    bcftools = get_bcftools()
+
     # Extract first 4 variants from gnomad_test as our test sample
     # This creates a small, valid BCF for testing
     subprocess.run(
-        ["bcftools", "view", "-H", str(gnomad_test)],
+        [bcftools, "view", "-H", str(gnomad_test)],
         capture_output=True,
         text=True,
         check=True
@@ -48,12 +58,12 @@ def test_sample_with_hits_and_misses(test_output_dir):
 
     # Simply copy and subset gnomad_test
     # Take first 4 variants (small test set)
-    cmd = f"bcftools view {gnomad_test} | head -1000 | bcftools view -Ob -o {test_bcf}"
+    cmd = f"{bcftools} view {gnomad_test} | head -1000 | {bcftools} view -Ob -o {test_bcf}"
     subprocess.run(cmd, shell=True, check=True)
 
     # Index
     subprocess.run(
-        ["bcftools", "index", str(test_bcf)],
+        [bcftools, "index", str(test_bcf)],
         check=True
     )
 
@@ -97,7 +107,7 @@ def test_annotated_cache_exists(test_scenario, annotation_cache_path):
 
     # Verify it's a valid BCF with annotations
     result = subprocess.run(
-        ["bcftools", "view", "-h", str(annotated_bcf)],
+        [get_bcftools(), "view", "-h", str(annotated_bcf)],
         capture_output=True,
         text=True,
         check=True
@@ -273,7 +283,7 @@ def test_blueprint_annotation_workflow(test_scenario, prebuilt_cache, test_outpu
 
     # Check for MOCK_ANNO tag
     header_result = subprocess.run(
-        ["bcftools", "view", "-h", str(output_bcf)],
+        [get_bcftools(), "view", "-h", str(output_bcf)],
         capture_output=True,
         text=True,
         check=True
@@ -305,12 +315,13 @@ def test_vanilla_annotation_workflow(test_scenario, test_output_dir):
 
     # Run the mock annotation directly using bcftools
     # This simulates vcfcache behavior without cache
+    bcftools = get_bcftools()
     cmd = f"""
         echo '##INFO=<ID=MOCK_ANNO,Number=1,Type=String,Description=Mock_annotation_for_testing_purposes>' > {test_output_dir}/newheader.txt
-        bcftools query -f '%CHROM\\t%POS\\ttest\\n' {sample_vcf} > {test_output_dir}/mockanno.txt
+        {bcftools} query -f '%CHROM\\t%POS\\ttest\\n' {sample_vcf} > {test_output_dir}/mockanno.txt
         bgzip -c {test_output_dir}/mockanno.txt > {test_output_dir}/mockanno.txt.gz
         tabix -s 1 -b 2 -e 2 {test_output_dir}/mockanno.txt.gz
-        bcftools annotate \\
+        {bcftools} annotate \\
             -a {test_output_dir}/mockanno.txt.gz \\
             -h {test_output_dir}/newheader.txt \\
             -c CHROM,POS,INFO/MOCK_ANNO \\
@@ -333,7 +344,7 @@ def test_vanilla_annotation_workflow(test_scenario, test_output_dir):
 
     # Verify annotations
     header_result = subprocess.run(
-        ["bcftools", "view", "-h", str(output_bcf)],
+        [get_bcftools(), "view", "-h", str(output_bcf)],
         capture_output=True,
         text=True,
         check=True
@@ -430,12 +441,13 @@ def test_annotation_consistency_across_scenarios(test_scenario, test_output_dir)
         output_bcf = Path(test_output_dir) / "consistency_vanilla.bcf"
         Path(test_output_dir).mkdir(parents=True, exist_ok=True)
 
+        bcftools = get_bcftools()
         cmd = f"""
             echo '##INFO=<ID=MOCK_ANNO,Number=1,Type=String,Description=Mock>' > {test_output_dir}/h.txt
-            bcftools query -f '%CHROM\\t%POS\\ttest\\n' {sample_vcf} > {test_output_dir}/a.txt
+            {bcftools} query -f '%CHROM\\t%POS\\ttest\\n' {sample_vcf} > {test_output_dir}/a.txt
             bgzip -c {test_output_dir}/a.txt > {test_output_dir}/a.txt.gz
             tabix -s 1 -b 2 -e 2 {test_output_dir}/a.txt.gz
-            bcftools annotate \\
+            {bcftools} annotate \\
                 -a {test_output_dir}/a.txt.gz \\
                 -h {test_output_dir}/h.txt \\
                 -c CHROM,POS,INFO/MOCK_ANNO \\

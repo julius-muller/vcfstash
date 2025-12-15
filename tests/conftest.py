@@ -20,6 +20,12 @@ TEST_ANNO_CONFIG = TEST_ROOT / "config" / "test_annotation.yaml"
 VEP_ANNO_CONFIG = get_vcfcache_root() / "vcfcache" / "recipes" / "docker-annotated" / "annotation.yaml"
 
 
+def get_bcftools_cmd():
+    """Get bcftools command, respecting VCFCACHE_BCFTOOLS env var."""
+    from vcfcache.utils.validation import check_bcftools_installed
+    return str(check_bcftools_installed())
+
+
 # ============================================================================
 # Environment Setup
 # ============================================================================
