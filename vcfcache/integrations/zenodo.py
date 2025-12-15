@@ -87,7 +87,8 @@ def search_zenodo_records(
     item_type: str = "blueprints",
     genome: Optional[str] = None,
     source: Optional[str] = None,
-    sandbox: bool = False
+    sandbox: bool = False,
+    min_size_mb: float = 1.0,
 ) -> list:
     """Search Zenodo for vcfcache blueprints or caches.
 
@@ -149,6 +150,11 @@ def search_zenodo_records(
             # Calculate total size
             files = hit.get("files", [])
             total_size = sum(f.get("size", 0) for f in files)
+            size_mb = total_size / (1024 * 1024)
+
+            # Ignore placeholder/empty records (common when experimenting in Zenodo sandbox).
+            if size_mb < min_size_mb:
+                continue
 
             records.append({
                 "title": metadata.get("title", "Unknown"),
@@ -156,7 +162,7 @@ def search_zenodo_records(
                 "created": metadata.get("publication_date", "Unknown"),
                 "description": metadata.get("description", ""),
                 "keywords": metadata.get("keywords", []),
-                "size_mb": total_size / (1024 * 1024),
+                "size_mb": size_mb,
                 "creators": metadata.get("creators", []),
             })
 

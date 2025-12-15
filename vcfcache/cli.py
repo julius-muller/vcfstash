@@ -389,6 +389,17 @@ def main() -> None:
         help="Zenodo DOI (blueprint or cache). If blueprint: requires -a. If cache: forbids -a."
     )
     cache_build_parser.add_argument(
+        "-o",
+        "--output",
+        dest="output",
+        required=False,
+        metavar="DIR",
+        help=(
+            "(optional) Base directory for downloaded caches/blueprints when using --doi "
+            "(overrides VCFCACHE_DIR for this command)."
+        ),
+    )
+    cache_build_parser.add_argument(
         "-n",
         "--name",
         dest="name",
@@ -530,6 +541,14 @@ def main() -> None:
         "--source",
         metavar="SOURCE",
         help="(optional) Filter by data source (e.g., gnomad)",
+    )
+    list_parser.add_argument(
+        "--inspect",
+        metavar="PATH_OR_ALIAS",
+        help=(
+            "(optional) Inspect a local cache/blueprint on disk (no Zenodo query). "
+            "Accepts a path, or a directory name under VCFCACHE_DIR/{caches,blueprints}."
+        ),
     )
 
     # push command
@@ -745,13 +764,17 @@ def main() -> None:
 
                 download_doi(args.doi, tar_path, sandbox=args.debug)
 
-                # Determine cache root from environment variable or default
-                vcfcache_root = os.environ.get("VCFCACHE_DIR")
-                if vcfcache_root:
-                    cache_base = Path(vcfcache_root)
-                    logger.info(f"Using VCFCACHE_DIR: {cache_base}")
+                # Determine cache root (CLI flag > env var > default)
+                if getattr(args, "output", None):
+                    cache_base = Path(args.output).expanduser()
+                    logger.info(f"Using download output directory: {cache_base}")
                 else:
-                    cache_base = Path.home() / ".cache/vcfcache"
+                    vcfcache_root = os.environ.get("VCFCACHE_DIR")
+                    if vcfcache_root:
+                        cache_base = Path(vcfcache_root)
+                        logger.info(f"Using VCFCACHE_DIR: {cache_base}")
+                    else:
+                        cache_base = Path.home() / ".cache/vcfcache"
 
                 # Extract to temporary location to detect type
                 temp_extract = cache_base / "temp"
@@ -876,7 +899,196 @@ def main() -> None:
             vcf_annotator.annotate(uncached=args.uncached, convert_parquet=args.parquet)
 
         elif args.command == "list":
+            def _inspect_local(path_or_alias: str) -> None:
+                import re
+
+                def resolve_path(s: str) -> Path:
+                    p = Path(s).expanduser()
+                    if p.exists():
+                        return p.resolve()
+
+                    cache_base = Path(os.environ.get("VCFCACHE_DIR", "~/.cache/vcfcache")).expanduser()
+                    for sub in ("caches", "blueprints"):
+                        cand = (cache_base / sub / s).expanduser()
+                        if cand.exists():
+                            return cand.resolve()
+                    raise FileNotFoundError(
+                        f"Could not find '{s}'. Provide an existing path, or a name under "
+                        f"{cache_base}/caches or {cache_base}/blueprints."
+                    )
+
+                def is_cache_root(root: Path) -> bool:
+                    return (root / "blueprint" / "vcfcache.bcf").exists() and (root / "cache").is_dir()
+
+                def is_annotation_dir(p: Path) -> bool:
+                    return (p / "annotation.yaml").exists() and (p / "vcfcache_annotated.bcf").exists()
+
+                def parse_required_params(annotation_text: str) -> list[str]:
+                    keys = set(re.findall(r"\$\{params\.([A-Za-z0-9_]+)\}", annotation_text))
+                    return sorted(keys)
+
+                target = resolve_path(path_or_alias)
+
+                # Normalize target into either a cache root or a specific annotation dir
+                cache_root: Path | None = None
+                annotation_dirs: list[Path] = []
+
+                if is_annotation_dir(target):
+                    cache_root = target.parent.parent
+                    annotation_dirs = [target]
+                elif is_cache_root(target):
+                    cache_root = target
+                    cache_dir = cache_root / "cache"
+                    annotation_dirs = [p for p in cache_dir.iterdir() if p.is_dir()]
+                elif (target / "blueprint" / "vcfcache.bcf").exists():
+                    # Blueprint root with no cache/
+                    cache_root = target
+                    annotation_dirs = []
+                else:
+                    raise ValueError(
+                        f"Path does not look like a vcfcache cache/blueprint: {target}"
+                    )
+
+                print("\nVCFcache inspect")
+                print("=" * 80)
+                print(f"Path: {cache_root}")
+
+                blueprint_bcf = cache_root / "blueprint" / "vcfcache.bcf"
+                if blueprint_bcf.exists():
+                    print(f"Blueprint: {blueprint_bcf}")
+
+                if not annotation_dirs:
+                    print("Cache: (none found)")
+                    print("This looks like a blueprint-only directory.")
+                    print("Build a cache with: vcfcache cache-build --db <dir> -a <annotation.yaml> -n <name>")
+                    print("=" * 80)
+                    return
+
+                if len(annotation_dirs) > 1 and not is_annotation_dir(target):
+                    print("Cache annotations:")
+                    for p in sorted(annotation_dirs):
+                        print(f"- {p.name} ({p})")
+                    print("\nInspect a specific annotation dir with:")
+                    print(f"  vcfcache list --inspect {cache_root}/cache/<name>")
+                    print("=" * 80)
+                    return
+
+                anno_dir = annotation_dirs[0]
+                anno_yaml = anno_dir / "annotation.yaml"
+                params_snapshot = anno_dir / "params.snapshot.yaml"
+
+                print(f"Annotation dir: {anno_dir}")
+                if params_snapshot.exists():
+                    print(f"Params snapshot: {params_snapshot}")
+                else:
+                    print("Params snapshot: (missing) params.snapshot.yaml")
+
+                anno_text = anno_yaml.read_text(encoding="utf-8")
+                anno_cfg = yaml.safe_load(anno_text) or {}
+
+                required_keys = parse_required_params(anno_text)
+                params = {}
+                if params_snapshot.exists():
+                    params = yaml.safe_load(params_snapshot.read_text(encoding="utf-8")) or {}
+
+                def get_nested(d: dict, dotted: str):
+                    cur = d
+                    for part in dotted.split("."):
+                        if not isinstance(cur, dict) or part not in cur:
+                            return None
+                        cur = cur[part]
+                    return cur
+
+                print("\nAnnotation requirements")
+                required_tool_version = anno_cfg.get("required_tool_version")
+                must_tag = anno_cfg.get("must_contain_info_tag")
+                if required_tool_version:
+                    print(f"- required_tool_version: {required_tool_version}")
+                if must_tag:
+                    print(f"- must_contain_info_tag: {must_tag}")
+
+                print("\nRequired params.yaml keys referenced by annotation.yaml")
+                if not required_keys:
+                    print("(none)")
+                else:
+                    for k in required_keys:
+                        val = get_nested(params, k)
+                        if val is None:
+                            print(f"- {k}: MISSING")
+                        else:
+                            print(f"- {k}: {val}")
+
+                print("\nMinimal params.yaml template")
+                if required_keys:
+                    print("params:")
+                    for k in required_keys:
+                        print(f"  {k}: {get_nested(params, k) if get_nested(params, k) is not None else '<fill-me>'}")
+                print("=" * 80)
+
+            def _pretty_source(s: str) -> str:
+                if s.lower() == "gnomad":
+                    return "gnomAD"
+                return s
+
+            def _pretty_tool(t: str) -> str:
+                if t.lower() == "vep":
+                    return "VEP"
+                return t
+
+            def _format_release(release: str) -> str:
+                import re
+                m = re.match(r"^(\d+(?:\.\d+)*)(.*)$", release)
+                if not m:
+                    return release
+                version, suffix = m.group(1), m.group(2)
+                if suffix:
+                    suffix = suffix.lstrip("-")
+                    return f"v{version} {suffix}"
+                return f"v{version}"
+
+            def _format_af_filter(filt: str) -> str:
+                # Convention: AF#### where ####/1000 is allele frequency threshold.
+                # Example: AF0100 -> 0.100 (10%)
+                import re
+                m = re.match(r"^AF(\d+)$", filt)
+                if not m:
+                    return filt
+                af = int(m.group(1)) / 1000.0
+                af_str = f"{af:.2f}" if af >= 0.01 else f"{af:.3f}"
+                return f"AF \u2265 {af_str}"
+
+            def _display_title(record: dict, item_type: str) -> str:
+                from vcfcache.naming import CacheName
+
+                keywords = record.get("keywords") or []
+                alias = next((k for k in keywords if isinstance(k, str) and (k.startswith("cache-") or k.startswith("bp-"))), None)
+                if not alias:
+                    return record.get("title", "Unknown")
+                try:
+                    parsed = CacheName.parse(alias)
+                except Exception:
+                    return record.get("title", "Unknown")
+
+                source = _pretty_source(parsed.source)
+                genome = parsed.genome
+                release = _format_release(parsed.release)
+                filt = _format_af_filter(parsed.filt)
+
+                if item_type == "caches" and parsed.is_cache:
+                    tool = _pretty_tool(parsed.tool or "")
+                    tool_version = parsed.tool_version or ""
+                    preset = (parsed.preset or "").strip()
+                    preset_part = f" {preset}" if preset else ""
+                    return f"{source} {release} {genome} {filt} annotated with {tool} {tool_version}{preset_part} annotations".strip()
+
+                # Blueprint (or non-standard record): keep it compact but descriptive.
+                return f"{source} {release} {genome} {filt} blueprint".strip()
+
             item_type = args.item_type
+            if args.inspect:
+                _inspect_local(args.inspect)
+                return
+
             zenodo_env = "sandbox" if args.debug else "production"
             logger.info(f"Searching Zenodo ({zenodo_env}) for vcfcache {item_type}...")
 
@@ -886,6 +1098,7 @@ def main() -> None:
                 genome=args.genome if hasattr(args, "genome") else None,
                 source=args.source if hasattr(args, "source") else None,
                 sandbox=args.debug,
+                min_size_mb=1.0,
             )
 
             if not records:
@@ -898,7 +1111,7 @@ def main() -> None:
             print("=" * 80)
 
             for record in records:
-                title = record.get("title", "Unknown")
+                title = _display_title(record, item_type)
                 doi = record.get("doi", "Unknown")
                 created = record.get("created", "Unknown")
                 size_mb = record.get("size_mb", 0)

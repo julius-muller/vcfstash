@@ -3,7 +3,7 @@
 
 ## * REQUIRED RESOURCES *
 annotation_tool_cmd: "vep"  # Not used during cache init
-tool_version_command: "vep --version | head -1 | awk '{print $2}'"
+tool_version_command: "vep | awk '/ensembl-vep/ {print $NF}'"
 # Bundled bcftools works with Python 3.14/Trixie (GLIBC 2.41)
 bcftools_cmd: "${VCFCACHE_ROOT}/tools/bcftools"
 temp_dir: "/tmp"

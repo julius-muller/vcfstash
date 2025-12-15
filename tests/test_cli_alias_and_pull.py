@@ -65,7 +65,7 @@ def test_cli_list_queries_zenodo(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(
         cli,
         "search_zenodo_records",
-        lambda item_type, genome=None, source=None, sandbox=False: [
+        lambda item_type, genome=None, source=None, sandbox=False, min_size_mb=1.0: [
             {"title": "VCFcache cache: x", "doi": "10.5281/zenodo.fake", "created": "2025-01-01", "size_mb": 0.01}
         ],
     )

@@ -119,6 +119,12 @@ vcfcache annotate \
   --force
 ```
 
+Download a pre-built cache by DOI to a specific location (no env var needed):
+```bash
+vcfcache cache-build --doi <DOI> -o /path/to/vcfcache_cache_dir
+vcfcache annotate -a /path/to/vcfcache_cache_dir/caches/<cache_name> --vcf sample.bcf --output outdir --force
+```
+
 Show recorded annotation command:
 ```bash
 vcfcache annotate -a cache-hg38-gnomad-4.1joint-AF0100-vep-115.2-basic --show-command
@@ -148,7 +154,7 @@ This is useful for:
 ```yaml
 bcftools_cmd: "bcftools"
 annotation_tool_cmd: "vep"
-tool_version_command: "vep --version"
+tool_version_command: "vep | awk '/ensembl-vep/ {print $NF}'"
 temp_dir: "/tmp"
 optional_checks: {}
 ```

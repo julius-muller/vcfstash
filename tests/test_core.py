@@ -154,3 +154,38 @@ def test_list_shows_available_annotations(test_output_dir):
     assert result.returncode == 0, result.stderr
     assert "vep_gnomad" in result.stdout
     assert "custom" in result.stdout
+
+
+def test_list_inspect_reports_required_params(tmp_path: Path):
+    """list --inspect should report params keys referenced by annotation.yaml."""
+    cache_root = tmp_path / "cache_root"
+    (cache_root / "blueprint").mkdir(parents=True)
+    (cache_root / "cache" / "test_anno").mkdir(parents=True)
+
+    # Minimal markers
+    (cache_root / "blueprint" / "vcfcache.bcf").write_text("dummy")
+    (cache_root / "cache" / "test_anno" / "vcfcache_annotated.bcf").write_text("dummy")
+
+    (cache_root / "cache" / "test_anno" / "annotation.yaml").write_text(
+        "annotation_cmd: |\n"
+        "  ${params.bcftools_cmd} view ${INPUT_BCF} | ${params.annotation_tool_cmd} > ${OUTPUT_BCF}\n"
+        "must_contain_info_tag: CSQ\n"
+        "required_tool_version: \"115.2\"\n",
+        encoding="utf-8",
+    )
+    (cache_root / "cache" / "test_anno" / "params.snapshot.yaml").write_text(
+        "params:\n"
+        "  bcftools_cmd: bcftools\n"
+        "  annotation_tool_cmd: vep\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        VCFCACHE_CMD + ["list", "--inspect", str(cache_root)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Required params.yaml keys" in result.stdout
+    assert "bcftools_cmd" in result.stdout
+    assert "annotation_tool_cmd" in result.stdout

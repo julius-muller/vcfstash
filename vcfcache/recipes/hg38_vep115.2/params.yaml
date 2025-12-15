@@ -1,6 +1,6 @@
 ## * REQUIRED RESOURCES *
 annotation_tool_cmd: "vep"
-tool_version_command: "vep --version | head -1 | awk '{print $2}'"
+tool_version_command: "vep | awk '/ensembl-vep/ {print $NF}'"
 bcftools_cmd: "${VCFCACHE_ROOT}/tools/bcftools"
 temp_dir: "/tmp"
 
