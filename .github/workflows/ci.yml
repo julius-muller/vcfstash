@@ -31,8 +31,11 @@ jobs:
         with:
           enable-cache: true
 
+      - name: Create virtual environment
+        run: uv venv .venv
+
       - name: Install dependencies
-        run: uv pip install -e ".[dev]"
+        run: uv pip install --python .venv/bin/python -e ".[dev]"
 
       - name: Ensure bundled bcftools is executable
         run: |
@@ -44,7 +47,7 @@ jobs:
         env:
           # Prefer bundled bcftools to avoid distro-version drift.
           VCFCACHE_BCFTOOLS: ${{ github.workspace }}/tools/bcftools
-        run: python -m pytest -q
+        run: .venv/bin/python -m pytest -q
 
   docker-tests:
     name: pytest (docker test stage)
@@ -57,4 +60,3 @@ jobs:
 
       - name: Run tests in container
         run: docker run --rm vcfcache:test /opt/venv/bin/python -m pytest tests -q
-
