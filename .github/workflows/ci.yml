@@ -76,10 +76,12 @@ jobs:
           "${GITHUB_WORKSPACE}/.local/bin/bgzip" --version
           "${GITHUB_WORKSPACE}/.local/bin/tabix" --version
 
+      - name: Add built tools to PATH
+        run: echo "${GITHUB_WORKSPACE}/.local/bin" >> "${GITHUB_PATH}"
+
       - name: Run tests
         env:
           VCFCACHE_BCFTOOLS: ${{ github.workspace }}/.local/bin/bcftools
-          PATH: ${{ github.workspace }}/.local/bin:${{ env.PATH }}
         run: .venv/bin/python -m pytest -q
 
   docker-tests:

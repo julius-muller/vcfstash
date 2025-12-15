@@ -7,6 +7,7 @@ import shutil
 import pytest
 import random
 from vcfcache.utils.paths import get_vcfcache_root, get_resource_path
+from vcfcache.utils.validation import compute_md5
 
 # Constants
 TEST_ROOT = get_vcfcache_root() / "tests"
@@ -569,10 +570,7 @@ def test_input_not_modified_during_annotation(test_output_dir, params_file, test
     input_copy = input_copy_dir / "sample_copy.bcf"
 
     # Get the MD5 hash of the original input file
-    original_md5 = subprocess.run(
-        ["md5sum", str(TEST_SAMPLE)],
-        capture_output=True, text=True
-    ).stdout.split()[0]
+    original_md5 = compute_md5(TEST_SAMPLE)
 
     # Copy the input file
     import shutil
@@ -592,10 +590,7 @@ def test_input_not_modified_during_annotation(test_output_dir, params_file, test
     print("Verifying input file was not modified...")
 
     # Get the MD5 hash of the input file after annotation
-    after_md5 = subprocess.run(
-        ["md5sum", str(TEST_SAMPLE)],
-        capture_output=True, text=True
-    ).stdout.split()[0]
+    after_md5 = compute_md5(TEST_SAMPLE)
 
     # Compare the hashes
     assert original_md5 == after_md5, "Input file was modified during annotation"

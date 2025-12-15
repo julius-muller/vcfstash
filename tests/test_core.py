@@ -22,22 +22,21 @@ def test_error_handling(test_output_dir, params_file, test_scenario):
     print(f"\n=== Testing error handling (scenario: {test_scenario}) ===")
 
     # Test with non-existent input file
-    init_cmd = [
-        VCFCACHE_CMD,
+    init_cmd = VCFCACHE_CMD + [
         "blueprint-init",
         "-i",
         "nonexistent.bcf",
         "-o",
         test_output_dir,
         "-y",
-        params_file,
+        params_file
     ]
+
     result = subprocess.run(init_cmd, capture_output=True, text=True)
     assert result.returncode != 0, "Should fail with non-existent input"
 
     # Test with invalid output location
-    init_cmd = [
-        VCFCACHE_CMD,
+    init_cmd = VCFCACHE_CMD + [
         "blueprint-init",
         "-i",
         str(TEST_VCF),
@@ -113,8 +112,7 @@ def test_show_command_outputs_annotation_tool_cmd(test_output_dir):
     )
 
     result = subprocess.run(
-        [
-            VCFCACHE_CMD,
+        VCFCACHE_CMD + [
             "annotate",
             "--show-command",
             "-a",
@@ -143,8 +141,7 @@ def test_list_shows_available_annotations(test_output_dir):
     (anno2 / "vcfcache_annotated.bcf").write_text("dummy")
 
     result = subprocess.run(
-        [
-            VCFCACHE_CMD,
+        VCFCACHE_CMD + [
             "annotate",
             "--list",
             "-a",

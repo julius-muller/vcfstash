@@ -315,14 +315,17 @@ def compute_md5(file_path: Path) -> str:
     Example:
         >>> compute_md5(Path('~/projects/vcfcache/tests/data/nodata/dbsnp_test.bcf'))
     """
-    try:
-        print(f"Computing MD5 for {file_path} ...")
-        result = subprocess.run(
-            ["md5sum", file_path], check=True, capture_output=True, text=True
-        )
-        return result.stdout.split()[0]  # The MD5 hash is the first word in the output
-    except subprocess.CalledProcessError as e:
-        sys.exit(f"Error computing MD5 checksum: {e}")
+    import hashlib
+
+    if not file_path.exists():
+        raise FileNotFoundError(str(file_path))
+
+    print(f"Computing MD5 for {file_path} ...")
+    md5_hash = hashlib.md5()
+    with file_path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            md5_hash.update(chunk)
+    return md5_hash.hexdigest()
 
 
 def validate_vcf_format(vcf_path: Path) -> tuple[bool, str | None]:

@@ -103,6 +103,9 @@ def test_push_and_pull_roundtrip_via_sandbox(tmp_path: Path):
             "ZENODO_SANDBOX": "1",
             "ZENODO_TOKEN": token,
             "ZENODO_SANDBOX_TOKEN": token,
+            # Ensure downloads/extraction happen in this test's isolated HOME,
+            # even if the repo .env sets VCFCACHE_DIR globally (e.g. VCFCACHE_DIR=/tmp).
+            "VCFCACHE_DIR": str(home_dir / ".cache" / "vcfcache"),
             "HOME": str(home_dir),
         }
     )
