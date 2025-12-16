@@ -142,9 +142,10 @@ __version__ = "0.3.X"
 
 ```bash
 rm -rf dist/ build/ *.egg-info
-uv pip install -U build hatchling  # preferred
+uv pip install -U build hatchling editables  # preferred (matches pyproject build-system.requires)
 python -m build --no-isolation  # faster; avoids downloading build backend into an isolated env
-python -m build                # fallback (isolated build)
+python -m build --installer uv # fallback (isolated build, faster installs)
+python -m build                # fallback fallback (isolated build with pip)
 
 # Verify contents
 unzip -l dist/vcfcache-*.whl

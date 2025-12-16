@@ -76,12 +76,23 @@ log() { echo "[$(date +%H:%M:%S)] $*"; }
 pip_install() {
   # Prefer uv for speed/caching; fall back to pip.
   local pybin
-  pybin="$(command -v python)"
+  pybin="$(command -v python || true)"
   if command -v uv >/dev/null 2>&1; then
     uv pip install --python "$pybin" "$@" >/dev/null
   else
     python -m pip install -U "$@" >/dev/null
   fi
+}
+
+pyproject_build_requires() {
+  # Print PEP517 build-system.requires entries (space-separated), or empty on failure.
+  python - <<'PY' 2>/dev/null || true
+import tomllib
+from pathlib import Path
+data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+reqs = data.get("build-system", {}).get("requires", [])
+print(" ".join(reqs))
+PY
 }
 
 is_pep440_prerelease() {
@@ -406,13 +417,24 @@ else
     log "  → Building distributions..."
     # Prefer a fast, non-isolated build (avoids pip downloading build backends in an isolated env).
     # Fall back to isolated build if the local environment is missing build requirements.
-    pip_install build hatchling
+    pip_install build
+    build_reqs="$(pyproject_build_requires)"
+    if [[ -n "$build_reqs" ]]; then
+      # shellcheck disable=SC2086
+      pip_install $build_reqs
+    else
+      pip_install hatchling editables
+    fi
 
     if python -m build --no-isolation; then
       log "  ✓ Built package (no isolation)"
     else
       log "  ⚠ No-isolation build failed; retrying with isolated build (may download build deps)..."
-      python -m build
+      if command -v uv >/dev/null 2>&1; then
+        python -m build --installer uv
+      else
+        python -m build
+      fi
       log "  ✓ Built package (isolated)"
     fi
 
