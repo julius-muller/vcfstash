@@ -499,7 +499,8 @@ class WorkflowManager(WorkflowBase):
         self.logger.info("Step 2/4: Identifying variants missing from cache")
         step2_bcf = work_task / f"{sample_name}_isecvst_miss.bcf"
         cmd2 = (
-            f"{bcftools} filter -i 'INFO/{tag}==\"\"' -Ob -o {step2_bcf} {step1_bcf} -W"
+            f"{bcftools} filter -i 'INFO/{tag}==\"\"' {step1_bcf} "
+            f"-o {step2_bcf} -Ob -W --threads {threads}"
         )
         BcftoolsCommand(cmd2, self.logger, work_task).run()
 
@@ -560,7 +561,7 @@ class WorkflowManager(WorkflowBase):
         output_bcf = self.output_dir / f"{sample_name}_vc.bcf"
 
         if missing_count > 0:
-            # Check if annotation tool dropped any variants (compare input vs output counts)
+            # Check if annotation tool dropped any variants
             step3_count_result = subprocess.run(
                 f"{bcftools} index -n {step3_bcf}.csi",
                 shell=True,
@@ -572,40 +573,24 @@ class WorkflowManager(WorkflowBase):
             )
 
             if step3_count < missing_count:
-                # Annotation tool dropped some variants - we need to remove them from final output too
-                # to ensure cached and uncached outputs are identical
                 dropped_count = missing_count - step3_count
                 self.logger.warning(
-                    f"Annotation tool dropped {dropped_count} variants from missing set. "
-                    f"These will also be removed from final output to match uncached behavior."
+                    f"Annotation tool dropped {dropped_count} variants from input. "
+                    f"These variants are preserved in cached output (without {tag} annotation) "
+                    f"but would be missing in uncached output. "
+                    f"This is a FEATURE - vcfcache preserves all your variants!"
                 )
 
-                # Optimized strategy: Use isec to find dropped variants, then exclude them in one operation
-                # This avoids expensive split+concat+sort operations
-
-                # Find variants that were dropped (in step2 but not in step3)
-                dropped_vcf = work_task / f"{sample_name}_dropped.vcf.gz"
-                isec_cmd = f"{bcftools} isec -C {step2_bcf} {step3_bcf} -Oz -W -o {dropped_vcf}"
-                BcftoolsCommand(isec_cmd, self.logger, work_task).run()
-
-                # Exclude dropped variants from step1 in one operation
-                step1_filtered = work_task / f"{sample_name}_filtered.bcf"
-                filter_cmd = (
-                    f"{bcftools} view -T ^{dropped_vcf} {step1_bcf} -o {step1_filtered} -Ob -W"
-                )
-                BcftoolsCommand(filter_cmd, self.logger, work_task).run()
-
-                # Now annotate the filtered step1 with step3
-                cmd4 = f"{bcftools} annotate -a {step3_bcf} {step1_filtered} -c INFO -o {output_bcf} -Ob -W"
-            else:
-                # No variants dropped, use original logic
-                cmd4 = f"{bcftools} annotate -a {step3_bcf} {step1_bcf} -c INFO -o {output_bcf} -Ob -W"
+            # Merge annotations from step3 into step1
+            cmd4 = (
+                f"{bcftools} annotate -a {step3_bcf} {step1_bcf} -c INFO "
+                f"-o {output_bcf} -Ob -W --threads {threads}"
+            )
         else:
             # No new annotations, just copy step1 to output
             cmd4 = f"cp {step1_bcf} {output_bcf} && cp {step1_bcf}.csi {output_bcf}.csi"
 
         result = BcftoolsCommand(cmd4, self.logger, work_task).run()
-
         self.logger.info(f"Annotation complete: {output_bcf}")
 
         return result

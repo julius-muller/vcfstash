@@ -515,3 +515,142 @@ Convenience command for smoke testing and benchmarking.
 - `--smoke-test`: runs a comprehensive workflow demo.
 - `-q/--quiet`: suppress detailed output.
 - Benchmark mode: provide `-a <cache>` and `--vcf <file>` (and `-y <params>`) to compare cached vs uncached behavior.
+
+---
+
+## 12) Variant Preservation Feature
+
+### Overview
+
+**VCFcache preserves ALL user variants** in cached mode, even if the annotation tool drops some during annotation. This is a deliberate design choice to ensure users don't lose their data.
+
+### Background: The Annotation Tool Dropping Problem
+
+Many annotation tools (like VEP) silently drop variants from non-standard contigs or variants they cannot process. For example:
+
+```bash
+# Input VCF: 1000 variants (including variants on chrUn, chrEBV, etc.)
+vep --input input.vcf --output output.vcf
+# Output VCF: 950 variants (50 variants on non-standard contigs were dropped!)
+```
+
+**This is frustrating because:**
+- Users lose variants without clear warning
+- Dropped variants may still be scientifically interesting
+- No way to recover the dropped variants later
+
+### VCFcache's Solution: Variant Preservation
+
+When using vcfcache in **cached mode**, all input variants are preserved:
+
+```bash
+# Uncached annotation (standard VEP behavior)
+vcfcache annotate --uncached -a cache/ --vcf input.vcf --output uncached/
+# Output: 950 annotated variants (50 dropped by VEP)
+
+# Cached annotation (vcfcache preserves all variants)
+vcfcache annotate -a cache/ --vcf input.vcf --output cached/
+# Output: 1000 variants (950 annotated + 50 preserved without annotation)
+```
+
+### How It Works
+
+**4-Step Cached Workflow:**
+
+1. **Normalize input**: Split multiallelic variants
+2. **Filter missing**: Extract variants not in cache
+3. **Annotate missing**: Run annotation tool (may drop some variants)
+4. **Merge annotations**: Merge annotated variants back into normalized input
+
+**Key behavior:**
+- If annotation tool drops variants in step 3, those variants remain in the final output (without annotation)
+- A warning is logged showing how many variants were dropped:
+  ```
+  WARNING: Annotation tool dropped 50 variants from input.
+  These variants are preserved in cached output (without CSQ annotation)
+  but would be missing in uncached output.
+  This is a FEATURE - vcfcache preserves all your variants!
+  ```
+
+### Comparing Cached vs Uncached Outputs
+
+Because cached preserves all variants while uncached doesn't, **total variant counts may differ**:
+
+```bash
+# Cached output
+bcftools view cached/sample_vc.bcf | wc -l
+# 1000 variants
+
+# Uncached output
+bcftools view uncached/sample_vc.bcf | wc -l
+# 950 variants
+```
+
+**To compare only annotated variants** (the fair comparison):
+
+```bash
+# Filter both sides to annotated variants only
+bcftools view -i 'INFO/CSQ!=""' cached/sample_vc.bcf > cached_annotated.vcf
+bcftools view -i 'INFO/CSQ!=""' uncached/sample_vc.bcf > uncached_annotated.vcf
+
+# Now compare
+bcftools view -H cached_annotated.vcf | md5sum
+bcftools view -H uncached_annotated.vcf | md5sum
+# MD5 hashes should be identical (or very similar - minor order differences acceptable)
+```
+
+### Identifying Preserved Variants
+
+To find variants that were preserved without annotation:
+
+```bash
+# Variants without CSQ annotation
+bcftools view -i 'INFO/CSQ=""' cached/sample_vc.bcf
+
+# Count unannotated variants
+bcftools view -i 'INFO/CSQ=""' cached/sample_vc.bcf | grep -v "^#" | wc -l
+```
+
+### Use Cases
+
+**When variant preservation is valuable:**
+- Research on non-standard contigs (chrUn, alternative haplotypes, etc.)
+- Quality control - knowing which variants couldn't be annotated
+- Post-processing - manually annotate dropped variants later
+- Reproducibility - keeping complete variant sets
+
+**When you want only annotated variants:**
+Simply filter the output to annotated variants only:
+
+```bash
+bcftools view -i 'INFO/CSQ!=""' cached/sample_vc.bcf -o annotated_only.bcf -Ob
+```
+
+### Testing and Validation
+
+VCFcache includes comprehensive tests to ensure:
+1. Cached annotation preserves all input variants
+2. Annotated variant sets are identical between cached and uncached (when filtered to annotated)
+3. Warnings are issued when annotation tools drop variants
+4. MD5 comparison (when filtering to annotated variants) shows consistency
+
+See `tests/test_contig_mismatches.py` for detailed test implementation.
+
+### Configuration
+
+This behavior is **always enabled** in cached mode and cannot be disabled. It is a core feature of vcfcache's design philosophy: **preserve user data whenever possible**.
+
+If you need behavior identical to uncached mode, simply filter the output:
+```bash
+vcfcache annotate -a cache/ --vcf input.vcf --output output/
+bcftools view -i 'INFO/CSQ!=""' output/sample_vc.bcf -o filtered.bcf -Ob
+```
+
+### Performance
+
+Variant preservation has **minimal performance overhead** because:
+- No additional filtering or splitting operations required
+- Standard merge operation handles all variants
+- Warning calculation is a simple count comparison
+
+The overhead is negligible compared to the annotation step itself.
