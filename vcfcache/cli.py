@@ -550,6 +550,56 @@ def main() -> None:
             "Accepts a path, or a directory name under VCFCACHE_DIR/{caches,blueprints}."
         ),
     )
+    list_parser.add_argument(
+        "--local",
+        action="store_true",
+        default=False,
+        help=(
+            "(optional) List locally available caches/blueprints instead of querying Zenodo. "
+            "Uses VCFCACHE_DIR by default."
+        ),
+    )
+    list_parser.add_argument(
+        "--path",
+        metavar="DIR",
+        help=(
+            "(optional) Base directory to search when using --local. "
+            "Defaults to VCFCACHE_DIR or ~/.cache/vcfcache."
+        ),
+    )
+
+    # Convenience aliases (so `vcfcache caches --local` works)
+    caches_parser = subparsers.add_parser(
+        "caches",
+        help="List caches (Zenodo or local)",
+        parents=[init_parent_parser],
+        description="Shortcut for: vcfcache list caches",
+    )
+    caches_parser.add_argument("--genome", metavar="GENOME", help="(optional) Filter by genome build")
+    caches_parser.add_argument("--source", metavar="SOURCE", help="(optional) Filter by data source")
+    caches_parser.add_argument("--local", action="store_true", default=False, help="(optional) List local caches")
+    caches_parser.add_argument("--path", metavar="DIR", help="(optional) Base directory for --local")
+    caches_parser.add_argument(
+        "--inspect",
+        metavar="PATH_OR_ALIAS",
+        help="(optional) Inspect a local cache/blueprint on disk (see: vcfcache list --inspect).",
+    )
+
+    blueprints_parser = subparsers.add_parser(
+        "blueprints",
+        help="List blueprints (Zenodo or local)",
+        parents=[init_parent_parser],
+        description="Shortcut for: vcfcache list blueprints",
+    )
+    blueprints_parser.add_argument("--genome", metavar="GENOME", help="(optional) Filter by genome build")
+    blueprints_parser.add_argument("--source", metavar="SOURCE", help="(optional) Filter by data source")
+    blueprints_parser.add_argument("--local", action="store_true", default=False, help="(optional) List local blueprints")
+    blueprints_parser.add_argument("--path", metavar="DIR", help="(optional) Base directory for --local")
+    blueprints_parser.add_argument(
+        "--inspect",
+        metavar="PATH_OR_ALIAS",
+        help="(optional) Inspect a local cache/blueprint on disk (see: vcfcache list --inspect).",
+    )
 
     # push command
     push_parser = subparsers.add_parser(
@@ -898,7 +948,11 @@ def main() -> None:
 
             vcf_annotator.annotate(uncached=args.uncached, convert_parquet=args.parquet)
 
-        elif args.command == "list":
+        elif args.command in ("list", "caches", "blueprints"):
+            item_type = getattr(args, "item_type", None) or args.command
+            if item_type not in ("blueprints", "caches"):
+                item_type = "blueprints"
+
             def _inspect_local(path_or_alias: str) -> None:
                 import re
 
@@ -1025,6 +1079,54 @@ def main() -> None:
                         print(f"  {k}: {get_nested(params, k) if get_nested(params, k) is not None else '<fill-me>'}")
                 print("=" * 80)
 
+            def _dir_size_mb(root: Path) -> float:
+                total = 0
+                for p in root.rglob("*"):
+                    try:
+                        if p.is_file():
+                            total += p.stat().st_size
+                    except FileNotFoundError:
+                        continue
+                return total / (1024 * 1024)
+
+            def _list_local(item_type: str, base_dir: str | None) -> None:
+                base = Path(base_dir or os.environ.get("VCFCACHE_DIR", "~/.cache/vcfcache")).expanduser()
+                search_dir = base
+                if base.name != item_type:
+                    search_dir = base / item_type
+
+                if not search_dir.exists():
+                    print(f"No local {item_type} found at: {search_dir}")
+                    return
+
+                entries = [p for p in sorted(search_dir.iterdir()) if p.is_dir()]
+                if not entries:
+                    print(f"No local {item_type} found at: {search_dir}")
+                    return
+
+                print(f"\nLocal vcfcache {item_type}:")
+                print("=" * 80)
+                for root in entries:
+                    size_mb = _dir_size_mb(root)
+                    mtime = ""
+                    try:
+                        mtime = __import__("datetime").datetime.fromtimestamp(root.stat().st_mtime).date().isoformat()
+                    except Exception:
+                        mtime = "Unknown"
+
+                    title = root.name
+                    # If the directory name is an alias, format it like Zenodo titles.
+                    fake_record = {"title": root.name, "keywords": [root.name]}
+                    title = _display_title(fake_record, "caches" if item_type == "caches" else "blueprints")
+
+                    print(f"\n{title}")
+                    print(f"  Path: {root} | Updated: {mtime} | Size: {size_mb:.1f} MB")
+
+                print(f"\n{'=' * 80}")
+                print(f"Total: {len(entries)} {item_type} found")
+                if item_type == "caches":
+                    print("Inspect: vcfcache list --inspect <path-to-cache-root-or-annotation-dir>")
+
             def _pretty_source(s: str) -> str:
                 if s.lower() == "gnomad":
                     return "gnomAD"
@@ -1084,9 +1186,12 @@ def main() -> None:
                 # Blueprint (or non-standard record): keep it compact but descriptive.
                 return f"{source} {release} {genome} {filt} blueprint".strip()
 
-            item_type = args.item_type
             if args.inspect:
                 _inspect_local(args.inspect)
+                return
+
+            if getattr(args, "local", False):
+                _list_local(item_type, getattr(args, "path", None))
                 return
 
             zenodo_env = "sandbox" if args.debug else "production"

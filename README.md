@@ -4,11 +4,13 @@
 
 Cache common variants once, reuse them for every sample. VCFcache builds a normalized blueprint, annotates it once, and reuses those results so only rare/novel variants are annotated at runtime.
 
+Works with any genome/build (human, mouse, plants, model organisms) as long as your inputs and annotation pipeline use the same reference/contig naming.
+
 ---
 
 ## Quick Start - pip install
 
-Requires: Python >= 3.11, bcftools >= 1.20
+Requires: Python >= 3.11 (earlier versions untested), bcftools >= 1.20
 
 ```bash
 pip install vcfcache
@@ -30,16 +32,16 @@ Install bcftools separately:
 ```bash
 docker pull ghcr.io/julius-muller/vcfcache:latest
 
+# List available public caches
+docker run --rm ghcr.io/julius-muller/vcfcache:latest list caches
+
 # Use a public cache from Zenodo
 docker run --rm -v $(pwd):/work ghcr.io/julius-muller/vcfcache:latest \
   annotate \
     -a cache-hg38-gnomad-4.1joint-AF0100-vep-115.2-basic \
     --vcf /work/sample.vcf.gz \
-    --output /work/out \
-    --force
+    --output /work/out 
 
-# List available public caches
-docker run --rm ghcr.io/julius-muller/vcfcache:latest list caches
 ```
 
 ---

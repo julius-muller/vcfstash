@@ -189,3 +189,22 @@ def test_list_inspect_reports_required_params(tmp_path: Path):
     assert "Required params.yaml keys" in result.stdout
     assert "bcftools_cmd" in result.stdout
     assert "annotation_tool_cmd" in result.stdout
+
+
+def test_caches_local_lists_from_path(tmp_path: Path):
+    base = tmp_path / "vcfcache_dir"
+    cache_root = base / "caches" / "cache-GRCh37-gnomad-4.1joint-AF0100-vep-115.2-basic"
+    (cache_root / "blueprint").mkdir(parents=True)
+    (cache_root / "cache" / "test_anno").mkdir(parents=True)
+    (cache_root / "blueprint" / "vcfcache.bcf").write_text("dummy")
+    (cache_root / "cache" / "test_anno" / "vcfcache_annotated.bcf").write_text("dummy")
+    (cache_root / "cache" / "test_anno" / "annotation.yaml").write_text("annotation_cmd: echo\n", encoding="utf-8")
+
+    result = subprocess.run(
+        VCFCACHE_CMD + ["caches", "--local", "--path", str(base)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Local vcfcache caches" in result.stdout
+    assert "gnomAD v4.1 joint GRCh37" in result.stdout

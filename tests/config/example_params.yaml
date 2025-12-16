@@ -7,8 +7,8 @@ temp_dir: "/tmp"
 annotation_tool_cmd: "docker run --user $(id -u):$(id -g) -i -v /mnt/data:/mnt/data --rm ensemblorg/ensembl-vep:release_115.2 vep"
 # Leave empty if version check is not required
 tool_version_command: "docker run --user $(id -u):$(id -g) -i -v /mnt/data:/mnt/data --rm ensemblorg/ensembl-vep:release_115.2 vep | awk '/ensembl-vep/ {print $NF}'"
-# bcftools * best to leave the default as this is the tested and shipped version v1.20
-bcftools_cmd: "${VCFCACHE_ROOT}/tools/bcftools"
+# bcftools (requires bcftools >= 1.20 on PATH)
+bcftools_cmd: "bcftools"
 
 ## * OPTIONAL RESOURCES *
 # All keys here can be utilized in the annotation.yaml file as ${params.MYKEY}

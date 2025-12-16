@@ -2,6 +2,11 @@
 
 This directory contains utility scripts for working with VCFcache.
 
+## release.sh / release notes
+
+- `scripts/release.sh`: interactive maintainer checklist for building, testing, publishing to (Test)PyPI/PyPI, tagging Docker images, and creating GitHub Releases.
+- `scripts/release_notes_from_changelog.py`: extracts the release-specific section from `CHANGELOG.md` (used to create clean GitHub Release notes).
+
 ## export_gnomad_hail.py
 
 Export gnomAD variants directly from the Hail table to BCF format. This is much more efficient than downloading full VCF files.
@@ -107,7 +112,8 @@ vcfcache blueprint-init \
 vcfcache cache-build \
   --name vep_gnomad \
   --db /path/to/cache \
-  -a annotation.config
+  -a annotation.yaml \
+  -y params.yaml
 
 # Use the cache to annotate samples
 vcfcache annotate \

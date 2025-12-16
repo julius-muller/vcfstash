@@ -13,7 +13,8 @@ import os
 import shutil
 import subprocess
 import tempfile
-from vcfcache.utils.paths import get_vcfcache_root, get_resource_path
+from vcfcache.utils.paths import get_vcfcache_root
+from vcfcache.utils.validation import check_bcftools_installed
 
 # Use Path for better path handling
 TEST_ROOT = Path(os.path.dirname(os.path.abspath(__file__)))
@@ -36,15 +37,12 @@ def normalize_bcf_timestamps(bcf_file):
     # Create a temporary VCF file
     temp_vcf = bcf_file + ".temp.vcf"
 
-    # Get bcftools path
-    bcftools_path = get_resource_path('tools/bcftools')
-    if not bcftools_path.exists():
-        # Fall back to system bcftools if the project-specific one doesn't exist
-        bcftools_path = 'bcftools'
+    # Get bcftools path (respects VCFCACHE_BCFTOOLS, otherwise uses PATH)
+    bcftools_path = str(check_bcftools_installed())
 
     # Convert BCF to VCF
     result = subprocess.run(
-        [str(bcftools_path), "view", bcf_file, "-o", temp_vcf],
+        [bcftools_path, "view", bcf_file, "-o", temp_vcf],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
 
@@ -73,7 +71,7 @@ def normalize_bcf_timestamps(bcf_file):
 
     # Convert back to BCF
     result = subprocess.run(
-        [str(bcftools_path), "view", "-O", "b", "-o", bcf_file, temp_vcf],
+        [bcftools_path, "view", "-O", "b", "-o", bcf_file, temp_vcf],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
 

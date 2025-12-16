@@ -1,8 +1,23 @@
 # VCFcache Test Suite
 
-## Philosophy: One Suite, Three Scenarios
+This file is the canonical test documentation for VCFcache.
 
-The test suite is **scenario‑aware**: the same tests adapt to what’s available (cache, VEP, data). Coverage stays the same; only execution paths change.
+## Quick commands
+
+Host (development):
+```bash
+python -m pytest tests/ -vv --color=yes --disable-warnings -rA
+```
+
+Docker (test stage from `docker/Dockerfile.vcfcache`):
+```bash
+docker build --target test -f docker/Dockerfile.vcfcache -t vcfcache:test .
+docker run --rm vcfcache:test
+```
+
+---
+
+## Philosophy: One suite, scenario-aware
 
 ## The Three Scenarios
 
@@ -11,7 +26,7 @@ The test suite is **scenario‑aware**: the same tests adapt to what’s availab
 
 **What's available:**
 - ✅ Python package with vcfcache installed
-- ✅ bcftools (bundled in `tools/bcftools`)
+- ✅ `bcftools` available on `PATH`
 - ✅ Test data files (`tests/data/`)
 - ❌ NO pre-built cache at `/cache`
 - ❌ NO VEP
@@ -30,7 +45,7 @@ python -m pytest tests/ -vv --color=yes --disable-warnings -rA
 ---
 
 ### 2) Blueprint (data-only image)
-**What it is:** Docker image with pre-built gnomAD cache, no VEP
+**What it is:** Environment with a pre-built cache at `/cache`, but no VEP
 
 **What's available:**
 - ✅ Pre-built cache at `/cache` (gnomAD variants, AF-filtered)
@@ -44,19 +59,22 @@ python -m pytest tests/ -vv --color=yes --disable-warnings -rA
 - Full workflow testing with mock annotation
 - Tests verify cache is production-ready
 
-**Run:**
+**Run (example):**
+Build a custom container/environment that has:
+- VCFcache installed
+- test data available
+- a prebuilt cache mounted at `/cache`
+
+Then run:
 ```bash
-docker run --rm -t \
-  --entrypoint /bin/bash \
-  ghcr.io/julius-muller/vcfcache-blueprint:TAG \
-  -lc 'cd /app && PYTEST_ADDOPTS="--color=yes --disable-warnings -rA --durations=10 -vv --maxfail=1" \
-       python3 -m pytest tests'
+PYTEST_ADDOPTS="--color=yes --disable-warnings -rA --durations=10 -vv --maxfail=1" \
+python -m pytest tests
 ```
 
 ---
 
 ### 3) Annotated (full-stack image)
-**What it is:** Docker image with VEP + pre‑annotated cache
+**What it is:** Environment with VEP available and a pre-built cache at `/cache`
 
 **What's available:**
 - ✅ Pre-built cache at `/cache` (gnomAD + VEP annotations)
@@ -69,17 +87,17 @@ docker run --rm -t \
 - Full workflow testing with annotation
 - Complete integration testing
 
-**Run (remember to mount your VEP cache and override entrypoint):**
+**Run (example):**
+In an environment where:
+- `/cache` exists (prebuilt cache)
+- `vep` is available on `PATH` (optional for some tests)
+
+Run:
 ```bash
-docker run --rm -t \
-  --entrypoint /bin/bash \
-  -v /path/to/vep/cache:/opt/vep/.vep:ro \
-  ghcr.io/julius-muller/vcfcache-annotated:TAG \
-  -lc 'cd /app && PYTEST_ADDOPTS="--color=yes --disable-warnings -rA --durations=10 -vv --maxfail=1" \
-       VCFCACHE_LOGLEVEL=INFO VCFCACHE_FILE_LOGLEVEL=ERROR \
-       python3 -m pytest tests'
+PYTEST_ADDOPTS="--color=yes --disable-warnings -rA --durations=10 -vv --maxfail=1" \
+python -m pytest tests
 ```
-Tip: add `-s` inside `PYTEST_ADDOPTS` if you want to see live print output.
+Tip: add `-s` inside `PYTEST_ADDOPTS` if you want live stdout.
 
 ---
 
@@ -176,17 +194,9 @@ Tests that run full annotation workflows:
 # In development (vanilla)
 pytest tests/ -v
 
-# In blueprint Docker
-docker run --rm ghcr.io/julius-muller/vcfcache-blueprint:latest \
-  --entrypoint /bin/sh -c \
-  'cd /app && export PYTHONPATH=/app/venv/lib/python3.13/site-packages && \
-   python3 -m pytest tests/ -v'
-
-# In annotated Docker
-docker run --rm ghcr.io/julius-muller/vcfcache-annotated:latest \
-  --entrypoint /bin/sh -c \
-  'cd /app && export PYTHONPATH=/app/venv/lib/python3.13/site-packages && \
-   python3 -m pytest tests/ -v'
+# In Docker test stage
+docker build --target test -f docker/Dockerfile.vcfcache -t vcfcache:test .
+docker run --rm vcfcache:test
 ```
 
 ### Run with coverage
@@ -299,9 +309,8 @@ def test_cache_feature(test_scenario):
 - Check PYTHONPATH in Docker: `export PYTHONPATH=/app/venv/lib/python3.13/site-packages`
 
 ### "bcftools not found" errors
-- Bundled bcftools should be at `tools/bcftools`
-- Check `VCFCACHE_ROOT` environment variable
-- In Docker: verify `/app/tools/bcftools` exists and is executable
+- Install `bcftools >= 1.20`, or set `VCFCACHE_BCFTOOLS=/path/to/bcftools`.
+- In Docker, the runtime image installs `bcftools`; in the test stage image, tests run via `docker run --rm vcfcache:test`.
 
 ### Tests hang or timeout
 - Increase timeout in pytest: `pytest --timeout=300`
@@ -310,46 +319,10 @@ def test_cache_feature(test_scenario):
 
 ## CI/CD Integration
 
-### GitHub Actions Example
-```yaml
-name: Test All Scenarios
+### CI note
 
-on: [push, pull_request]
-
-jobs:
-  test-vanilla:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.13'
-      - name: Install dependencies
-        run: pip install -e ".[dev]"
-      - name: Run vanilla tests
-        run: pytest tests/ -v
-
-  test-blueprint:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Test blueprint image
-        run: |
-          docker run --rm ghcr.io/julius-muller/vcfcache-blueprint:latest \
-            --entrypoint /bin/sh -c \
-            'cd /app && export PYTHONPATH=/app/venv/lib/python3.13/site-packages && \
-             python3 -m pytest tests/ -v'
-
-  test-annotated:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Test annotated image
-        run: |
-          docker run --rm ghcr.io/julius-muller/vcfcache-annotated:latest \
-            --entrypoint /bin/sh -c \
-            'cd /app && export PYTHONPATH=/app/venv/lib/python3.13/site-packages && \
-             python3 -m pytest tests/ -v'
-```
+The repository CI workflow lives in `.github/workflows/ci.yml` and runs tests on version tags.
+If you build your own “blueprint/annotated” images with `/cache` and/or VEP available, the same test suite will adapt automatically.
 
 ---
 

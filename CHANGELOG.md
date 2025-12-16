@@ -5,7 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.4.0 (Unreleased)
+## Unreleased
+
+## 0.4.0 (2025-12-16)
+
+### Added
+- Added `vcfcache caches` / `vcfcache blueprints` shortcuts and `--local` listing (with optional `--path`) to discover locally available items.
+- Added `vcfcache list --inspect <path-or-alias>` to show cache details and the exact `${params.*}` keys required by `annotation.yaml`.
+- Improved Zenodo discovery output: formatted cache titles from alias keywords and ignored placeholder records smaller than 1MB.
+- Added `-o/--output` to `vcfcache cache-build --doi ...` to control the download base directory per command.
+- Added helper script to extract release notes from `CHANGELOG.md` (`scripts/release_notes_from_changelog.py`) and use it for GitHub Releases.
+
+### Changed
+- Overhauled user documentation (`WIKI.md`) into a walkthrough + complete CLI reference and clarified genome-agnostic support.
+- Simplified GitHub Actions to a single tag-triggered CI workflow (no automated release/publish workflows).
+- Updated Docker documentation and local build docs to reflect the current single runtime image (`docker/Dockerfile.vcfcache`).
+
+### Fixed
+- Made MD5 computation pure Python (no external `md5sum` dependency) for portability.
+- Improved Zenodo sandbox integration test isolation (avoid interference from global `VCFCACHE_DIR`).
+- Hardened CI builds: retry/fallback downloads for bcftools/htslib and cached the compiled toolchain to avoid rebuilding on every run.
 
 ## 0.4.0b1 (2025-12-15)
 
@@ -82,7 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Comprehensive testing infrastructure with scenario-aware tests (vanilla, blueprint, annotated)
-- Detailed testing documentation in `tests/README.md` and `tests/README_TESTING.md`
+- Detailed testing documentation in `tests/README.md`
 - Annotation workflow integration tests for all three scenarios
 - Benchmark scripts for performance testing on BCF subsets (`tests/run_benchmarks_gnomad.sh`)
 - Support for temporary output directories in benchmark scripts

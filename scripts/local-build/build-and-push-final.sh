@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build and (optionally) push the lean code-only image:
-#  - ghcr.io/julius-muller/vcfcache:latest (CLI + bundled bcftools)
+# Build and (optionally) push the runtime image:
+#  - ghcr.io/julius-muller/vcfcache:latest (CLI + bcftools)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
