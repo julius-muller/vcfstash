@@ -41,6 +41,8 @@ tests/config/old/
 CLAUDE.md
 AGENTS.md
 RELEASE.md
+VARIANT_COUNT_ANALYSIS.md
+TEST_SUMMARY.md
 
 docker/gnomad-data/
 tests/benchmarks/
