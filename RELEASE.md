@@ -142,7 +142,9 @@ __version__ = "0.3.X"
 
 ```bash
 rm -rf dist/ build/ *.egg-info
-python -m build
+uv pip install -U build hatchling  # preferred
+python -m build --no-isolation  # faster; avoids downloading build backend into an isolated env
+python -m build                # fallback (isolated build)
 
 # Verify contents
 unzip -l dist/vcfcache-*.whl

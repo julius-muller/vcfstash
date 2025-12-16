@@ -73,6 +73,17 @@ fi
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
 
+pip_install() {
+  # Prefer uv for speed/caching; fall back to pip.
+  local pybin
+  pybin="$(command -v python)"
+  if command -v uv >/dev/null 2>&1; then
+    uv pip install --python "$pybin" "$@" >/dev/null
+  else
+    python -m pip install -U "$@" >/dev/null
+  fi
+}
+
 is_pep440_prerelease() {
   # Prefer a real PEP 440 check (packaging); fall back to a heuristic.
   local v="$1"
@@ -392,8 +403,18 @@ if [[ -f "dist/vcfcache-${VERSION}-py3-none-any.whl" ]] && [[ -f "dist/vcfcache-
 else
   if ask_yn_skip "Build package v$VERSION and run tests?"; then
     rm -rf dist/ build/ *.egg-info
-    python -m build
-    log "  ✓ Built package"
+    log "  → Building distributions..."
+    # Prefer a fast, non-isolated build (avoids pip downloading build backends in an isolated env).
+    # Fall back to isolated build if the local environment is missing build requirements.
+    pip_install build hatchling
+
+    if python -m build --no-isolation; then
+      log "  ✓ Built package (no isolation)"
+    else
+      log "  ⚠ No-isolation build failed; retrying with isolated build (may download build deps)..."
+      python -m build
+      log "  ✓ Built package (isolated)"
+    fi
 
     log "  → Installing in temporary venv and running tests..."
     uv venv /tmp/vcfcache-release-test
