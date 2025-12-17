@@ -462,6 +462,35 @@ class WorkflowManager(WorkflowBase):
 
         Returns:
             subprocess.CompletedProcess with results
+
+        Example and Debug:
+          ROOT = Path("/home/j380r/projects/vcfcache").resolve()  # or Path.cwd() if you're in repo root
+          TEST_DATA = ROOT / "tests" / "data" / "nodata"
+
+          sample_bcf   = TEST_DATA / "sample4.bcf"       # toy sample to annotate
+          blueprint_bcf = TEST_DATA / "gnomad_test.bcf"  # toy “blueprint” to turn into an annotated cache
+
+          params = ROOT / "tests" / "config" / "test_params.yaml"
+          anno   = ROOT / "tests" / "config" / "test_annotation.yaml"  # adds INFO/MOCK_ANNO
+
+          scratch = Path(tempfile.mkdtemp(prefix="vcfcache_dbg_"))
+          cache_dir = scratch / "cache"
+          out_dir   = scratch / "annot_out"
+          cache_dir.mkdir(parents=True, exist_ok=True)
+          out_dir.mkdir(parents=True, exist_ok=True)
+
+          # 1) Build a tiny annotated cache BCF (creates cache_dir/vcfcache_annotated.bcf in tmp)
+          self = WorkflowManager(
+              input_file=sample_bcf,
+              output_dir=cache_dir,
+              name="dbg_cache",
+              anno_config_file=anno,
+              params_file=params,
+              verbosity=2,
+          )
+                  # Create work directory
+          self._create_work_dir(self.output_dir, dirname="work")
+          db_bcf=blueprint_bcf
         """
         self.logger.info("Annotating sample using cache (4-step process)")
 

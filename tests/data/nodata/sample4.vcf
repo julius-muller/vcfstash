@@ -1,17 +1,22 @@
 ##fileformat=VCFv4.2
-##contig=<ID=1,length=248956422>
-##contig=<ID=4,length=248956422>
-##contig=<ID=9,length=248956422>
-##contig=<ID=11,length=248956422>
-##contig=<ID=22,length=248956422>
-##contig=<ID=MT,length=248956422>
+##contig=<ID=chr1,length=40>
+##contig=<ID=chr2,length=40>
+##contig=<ID=chr4,length=40>
+##contig=<ID=chr9,length=40>
+##contig=<ID=chr11,length=40>
+##contig=<ID=chr22,length=40>
+##contig=<ID=chrM,length=40>
 ##contig=<ID=samplecontig,length=248956422>
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele Frequency">
+##INFO=<ID=AC,Number=A,Type=Integer,Description="Allele Count">
+##INFO=<ID=AN,Number=1,Type=Integer,Description="Total number of alleles">
 ##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
-1	1	.	G	A	100	PASS	DP=50
-4	2	.	T	C	100	PASS	DP=45
-9	2	.	T	C	100	PASS	DP=45
-11	2	.	T	C	100	PASS	DP=45
-22	2	.	T	C	100	PASS	DP=45
-MT	2	.	T	C	100	PASS	DP=45
-samplecontig	1	.	G	A	100	PASS	DP=50
+chr1	5	testvar1	C	G	100	PASS	AF=0.1;AC=12;AN=120;DP=500
+chr1	7	testvar2a	GC	G	.	PASS	AF=0.2;AC=10;AN=124;DP=510
+chr1	8	testvar2	CT	C	100	PASS	AF=0.05;AC=6;AN=120;DP=450
+chr2	2	testvar3	A	G,T	100	PASS	AF=0.2,0.1;AC=24,12;AN=120;DP=600
+chr2	4	testvar4	G	A	100	PASS	AF=0.05;AC=6;AN=120;DP=450
+chr2	10	testvar5	ACGT	A	100	PASS	AF=0.15;AC=18;AN=120;DP=480
+chr9	5	testvar6	T	TAC,TA,TACC	100	PASS	AF=0.05,0.04,0.04;AC=5,4,4;AN=110;DP=420
+samplecontig	5	testvar1x	C	G	100	PASS	AF=0.1;AC=12;AN=120;DP=500
