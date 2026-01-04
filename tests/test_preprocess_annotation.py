@@ -135,11 +135,11 @@ must_contain_info_tag: CSQ
 
         # First, cleanup double backslashes
         cleanup_patterns = [
-            (r'\\+\$\{INPUT_BCF', '\\${INPUT_BCF'),
+            (r'\\+\$\{INPUT_BCF\}', '\\${INPUT_BCF}'),
             (r'\\+\$INPUT_BCF(?![_{])', '\\$INPUT_BCF'),
-            (r'\\+\$\{OUTPUT_BCF', '\\${OUTPUT_BCF'),
+            (r'\\+\$\{OUTPUT_BCF\}', '\\${OUTPUT_BCF}'),
             (r'\\+\$OUTPUT_BCF(?![_{])', '\\$OUTPUT_BCF'),
-            (r'\\+\$\{AUXILIARY_DIR', '\\${AUXILIARY_DIR'),
+            (r'\\+\$\{AUXILIARY_DIR\}', '\\${AUXILIARY_DIR}'),
             (r'\\+\$AUXILIARY_DIR(?![_{])', '\\$AUXILIARY_DIR'),
         ]
 

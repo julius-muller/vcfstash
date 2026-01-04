@@ -146,33 +146,45 @@ class DatabaseAnnotator(VCFDatabase):
 
         # First, fix any double (or more) backslashes before variables (from old buggy code)
         cleanup_patterns = [
-            (r'\\+\$\{INPUT_BCF', '\\${INPUT_BCF'),  # Replace \\+${...} with \${...}
+            (r'\\+\$\{INPUT_BCF\}', '\\${INPUT_BCF}'),  # Replace \\+${...} with \${...}
             (r'\\+\$INPUT_BCF(?![_{])', '\\$INPUT_BCF'),
-            (r'\\+\$\{OUTPUT_BCF', '\\${OUTPUT_BCF'),
+            (r'\\+\$\{OUTPUT_BCF\}', '\\${OUTPUT_BCF}'),
             (r'\\+\$OUTPUT_BCF(?![_{])', '\\$OUTPUT_BCF'),
-            (r'\\+\$\{AUXILIARY_DIR', '\\${AUXILIARY_DIR'),
+            (r'\\+\$\{AUXILIARY_DIR\}', '\\${AUXILIARY_DIR}'),
             (r'\\+\$AUXILIARY_DIR(?![_{])', '\\$AUXILIARY_DIR'),
         ]
 
         modified_content = content
         for pattern, replacement in cleanup_patterns:
+            before = modified_content
             modified_content = re.sub(pattern, replacement, modified_content)
+            if before != modified_content and self.logger:
+                self.logger.debug(f"Cleanup: Fixed double backslashes for pattern: {pattern}")
 
         # Then, add backslashes where missing (for unescaped variables)
         # Pattern explanation: negative lookbehind (?<!\\) ensures we don't match if backslash already present
         # Note: Use regular strings for replacements, not raw strings, so \\$ = one backslash
         add_escape_patterns = [
-            (r'(?<!\\)\$\{INPUT_BCF', '\\${INPUT_BCF'),
+            (r'(?<!\\)\$\{INPUT_BCF\}', '\\${INPUT_BCF}'),
             (r'(?<!\\)\$INPUT_BCF(?![_{])', '\\$INPUT_BCF'),  # Don't match if followed by _ or {
-            (r'(?<!\\)\$\{OUTPUT_BCF', '\\${OUTPUT_BCF'),
+            (r'(?<!\\)\$\{OUTPUT_BCF\}', '\\${OUTPUT_BCF}'),
             (r'(?<!\\)\$OUTPUT_BCF(?![_{])', '\\$OUTPUT_BCF'),
-            (r'(?<!\\)\$\{AUXILIARY_DIR', '\\${AUXILIARY_DIR'),
+            (r'(?<!\\)\$\{AUXILIARY_DIR\}', '\\${AUXILIARY_DIR}'),
             (r'(?<!\\)\$AUXILIARY_DIR(?![_{])', '\\$AUXILIARY_DIR'),
         ]
 
         # Apply each regex replacement
         for pattern, replacement in add_escape_patterns:
+            before = modified_content
             modified_content = re.sub(pattern, replacement, modified_content)
+            if before != modified_content and self.logger:
+                self.logger.debug(f"Add escape: Added backslash for pattern: {pattern}")
+
+        if self.logger:
+            # Debug: Check final state of variables in the preprocessed content
+            import_bcf_count = modified_content.count('\\${INPUT_BCF}')
+            double_backslash_count = modified_content.count('\\\\${INPUT_BCF}')
+            self.logger.debug(f"Preprocessing result: \\${{INPUT_BCF}} count={import_bcf_count}, \\\\${{INPUT_BCF}} count={double_backslash_count}")
 
         output_cfg = self.output_dir / "annotation.yaml"
         with open(output_cfg, "w") as f:
