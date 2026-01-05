@@ -11,6 +11,7 @@ import warnings
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+MAXCHAR_CACHENAME = 50 # maximum amount of characters allowed for a cachename, to keep organization somewhat tidy
 
 class BaseOutput(ABC):
     """Partially abstract base for output structures.
@@ -44,9 +45,9 @@ class BaseOutput(ABC):
     @staticmethod
     def validate_label(label: str) -> None:
         """Validates that the label is valid in this context."""
-        if len(label) > 30:
+        if len(label) > MAXCHAR_CACHENAME:
             raise ValueError(
-                f"Annotation name must be less than 30 characters, but has {len(label)}: {label}"
+                f"Annotation name must be less than {MAXCHAR_CACHENAME} characters, but has {len(label)}: {label}"
             )
         if " " in label:
             raise ValueError(f"Annotation name must not contain white spaces: {label}")

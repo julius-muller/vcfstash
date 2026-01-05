@@ -140,11 +140,6 @@ class DatabaseAnnotator(VCFDatabase):
         with open(user_config, "r") as f:
             content = f.read()
 
-        # DEBUG: Print to see if preprocessing is running
-        print(f"[PREPROCESS DEBUG] Reading from: {user_config}")
-        print(f"[PREPROCESS DEBUG] Input has \\${{INPUT_BCF}}: {'\\${INPUT_BCF}' in content}")
-        print(f"[PREPROCESS DEBUG] Input has \\\\${{INPUT_BCF}}: {'\\\\${INPUT_BCF}' in content}")
-
         # Use regex to ensure exactly one backslash before variables
         # This fixes files from old buggy code that may have double backslashes
         import re
@@ -184,11 +179,6 @@ class DatabaseAnnotator(VCFDatabase):
             modified_content = re.sub(pattern, replacement, modified_content)
             if before != modified_content and self.logger:
                 self.logger.debug(f"Add escape: Added backslash for pattern: {pattern}")
-
-        # DEBUG: Print final state
-        print(f"[PREPROCESS DEBUG] Output has \\${{INPUT_BCF}}: {'\\${INPUT_BCF}' in modified_content}")
-        print(f"[PREPROCESS DEBUG] Output has \\\\${{INPUT_BCF}}: {'\\\\${INPUT_BCF}' in modified_content}")
-        print(f"[PREPROCESS DEBUG] Writing to: {self.output_dir / 'annotation.yaml'}")
 
         if self.logger:
             # Debug: Check final state of variables in the preprocessed content

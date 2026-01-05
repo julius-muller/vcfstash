@@ -7,7 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-## 0.4.0 (2025-12-16)
+## 0.4.0 (TBD)
+
+### Added
+- Added detailed timing breakdown to `blueprint-init`, `blueprint-extend`, `cache-build`, and `annotate` commands when `--debug` flag is provided (similar to `demo --smoke-test` output)
+- Added comprehensive performance model documentation to WIKI.md explaining runtime efficiency, cache lookup mechanics, and expected speed-ups (2-10× for typical samples with 60-90% cache hits)
+- Added brief performance summary to README.md with link to detailed model
+- Added caveat section explaining when caching provides less benefit (small datasets, fast pipelines)
+- Added troubleshooting note about VEP non-deterministic output in recent versions (ensembl-vep#1959)
+
+### Changed
+- Simplified `list` command interface:
+  - Removed `vcfcache caches` and `vcfcache blueprints` convenience aliases (use `vcfcache list caches` and `vcfcache list blueprints` instead)
+  - Made selector (`blueprints`/`caches`) a required positional argument
+  - Simplified options: `--local [PATH]` now optionally takes a path directly
+- Improved `demo` command help text to clearly distinguish smoke test mode vs benchmark mode
+- `vcfcache demo` and `vcfcache list` now show compressed help when run without required arguments (full help available with `--help`)
+- Updated all documentation to reflect new CLI interface and performance model
+
+## 0.4.0b2 (2025-12-16)
 
 ### Added
 - Added `vcfcache caches` / `vcfcache blueprints` shortcuts and `--local` listing (with optional `--path`) to discover locally available items.

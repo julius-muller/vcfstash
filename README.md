@@ -4,6 +4,8 @@
 
 Cache common variants once, reuse them for every sample. VCFcache builds a normalized blueprint, annotates it once, and reuses those results so only rare/novel variants are annotated at runtime.
 
+**Performance**: With 60-90% cache hit rates on typical samples, VCFcache achieves 2-10× speed-ups compared to standard annotation pipelines. Cache lookups are constant-time operations regardless of cache size, making the tool highly scalable. See [WIKI.md](WIKI.md#performance-model) for the detailed runtime efficiency model.
+
 Works with any genome/build (human, mouse, plants, model organisms) as long as your inputs and annotation pipeline use the same reference/contig naming.
 
 ---

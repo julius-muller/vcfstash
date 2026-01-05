@@ -73,6 +73,51 @@ def _load_dotenv() -> None:
                 os.environ[key] = val
 
 
+def _show_detailed_timings(workflow_log: Path) -> None:
+    """Display detailed timing information from workflow log.
+
+    Args:
+        workflow_log: Path to workflow.log file
+    """
+    import re
+
+    if not workflow_log.exists():
+        return
+
+    timing_pattern = re.compile(r'Command completed in ([\d.]+)s: (.+)')
+    operations = []
+
+    with workflow_log.open() as f:
+        for line in f:
+            match = timing_pattern.search(line)
+            if match:
+                duration = float(match.group(1))
+                cmd = match.group(2).strip()
+                operations.append((cmd, duration))
+
+    if operations:
+        print("\n  Detailed timing:")
+        total = sum(dur for _, dur in operations)
+        for cmd, duration in operations:
+            pct = (duration / total * 100) if total > 0 else 0
+            minutes = int(duration // 60)
+            secs = duration % 60
+            if minutes > 0:
+                time_str = f"{minutes}m {secs:.3f}s"
+            else:
+                time_str = f"{secs:.3f}s"
+            print(f"    • {cmd:30s}: {time_str:>10s}  ({pct:5.1f}%)")
+        print(f"    {'─' * 55}")
+        # Format total time
+        total_minutes = int(total // 60)
+        total_secs = total % 60
+        if total_minutes > 0:
+            total_str = f"{total_minutes}m {total_secs:.3f}s"
+        else:
+            total_str = f"{total_secs:.3f}s"
+        print(f"    {'Total':30s}: {total_str:>10s}")
+
+
 def _print_annotation_command(path_hint: Path) -> None:
     """Print the stored annotation_tool_cmd from an annotation cache.
 
@@ -203,7 +248,7 @@ def main() -> None:
         "--verbose",
         action="count",
         default=1,
-        help="Increase verbosity: default is INFO, -v for DEBUG (formerly -vv)",
+        help="Increase verbosity: default is INFO, -v for DEBUG",
     )
     parent_parser.add_argument(
         "-q",
@@ -240,7 +285,7 @@ def main() -> None:
         dest="verbose",
         action="count",
         default=1,
-        help="(optional) Increase verbosity: default is INFO, -v for DEBUG (formerly -vv)",
+        help="(optional) Increase verbosity: default is INFO, -v for DEBUG",
     )
     init_parent_parser.add_argument(
         "-q",
@@ -505,7 +550,7 @@ def main() -> None:
         "--preserve-unannotated",
         action="store_true",
         default=False,
-        help="(optional) Preserve variants without annotation in output. By default, vcfcache mirrors annotation tool behavior by removing unannotated variants (default: False)",
+        help="(optional) Preserve variants without annotation in output. By default, vcfcache mirrors annotation tool behavior (default: False)",
     )
     vcf_parser.add_argument(
         "--skip-split-multiallelic",
@@ -550,18 +595,17 @@ def main() -> None:
 
     list_parser = subparsers.add_parser(
         "list",
-        help="List available blueprints and caches from Zenodo",
+        help="List or inspect blueprints and caches",
         parents=[init_parent_parser],
-        description="Query Zenodo to discover available vcfcache blueprints and caches.",
+        description=(
+            "List available vcfcache blueprints and caches from Zenodo or local storage. "
+            "Can also inspect individual items for detailed information."
+        ),
     )
     list_parser.add_argument(
         "selector",
-        nargs="?",
-        default="blueprints",
-        help=(
-            "What to list. Use 'blueprints' or 'caches' (default: blueprints). "
-            "With --local, you can also pass a path here (equivalent to --path)."
-        ),
+        choices=["blueprints", "caches"],
+        help="What to list: 'blueprints' or 'caches'",
     )
     list_parser.add_argument(
         "--genome",
@@ -574,72 +618,23 @@ def main() -> None:
         help="(optional) Filter by data source (e.g., gnomad)",
     )
     list_parser.add_argument(
-        "--inspect",
-        metavar="PATH_OR_ALIAS",
-        help=(
-            "(optional) Inspect a local cache/blueprint on disk (no Zenodo query). "
-            "Accepts a path, or a directory name under VCFCACHE_DIR/{caches,blueprints}."
-        ),
-    )
-    list_parser.add_argument(
-        "-l",
         "--local",
-        action="store_true",
-        default=False,
-        help=(
-            "(optional) List locally available caches/blueprints instead of querying Zenodo. "
-            "Uses VCFCACHE_DIR by default."
-        ),
-    )
-    list_parser.add_argument(
-        "local_path",
         nargs="?",
+        const="",
+        default=None,
         metavar="PATH",
-        help="(optional) For --local: path to search (equivalent to --path).",
-    )
-    list_parser.add_argument(
-        "-p",
-        "--path",
-        metavar="DIR",
         help=(
-            "(optional) Base directory to search when using --local. "
-            "Defaults to VCFCACHE_DIR or ~/.cache/vcfcache."
+            "(optional) List locally available items instead of querying Zenodo. "
+            "Optionally specify a custom path (default: VCFCACHE_DIR or ~/.cache/vcfcache)."
         ),
     )
-
-    # Convenience aliases (so `vcfcache caches --local` works)
-    caches_parser = subparsers.add_parser(
-        "caches",
-        help="List caches (Zenodo or local)",
-        parents=[init_parent_parser],
-        description="Shortcut for: vcfcache list caches",
-    )
-    caches_parser.add_argument("--genome", metavar="GENOME", help="(optional) Filter by genome build")
-    caches_parser.add_argument("--source", metavar="SOURCE", help="(optional) Filter by data source")
-    caches_parser.add_argument("-l", "--local", action="store_true", default=False, help="(optional) List local caches")
-    caches_parser.add_argument("local_path", nargs="?", metavar="PATH", help="(optional) For --local: path to search")
-    caches_parser.add_argument("-p", "--path", metavar="DIR", help="(optional) Base directory for --local")
-    caches_parser.add_argument(
+    list_parser.add_argument(
         "--inspect",
-        metavar="PATH_OR_ALIAS",
-        help="(optional) Inspect a local cache/blueprint on disk (see: vcfcache list --inspect).",
-    )
-
-    blueprints_parser = subparsers.add_parser(
-        "blueprints",
-        help="List blueprints (Zenodo or local)",
-        parents=[init_parent_parser],
-        description="Shortcut for: vcfcache list blueprints",
-    )
-    blueprints_parser.add_argument("--genome", metavar="GENOME", help="(optional) Filter by genome build")
-    blueprints_parser.add_argument("--source", metavar="SOURCE", help="(optional) Filter by data source")
-    blueprints_parser.add_argument("-l", "--local", action="store_true", default=False, help="(optional) List local blueprints")
-    blueprints_parser.add_argument("local_path", nargs="?", metavar="PATH", help="(optional) For --local: path to search")
-    blueprints_parser.add_argument("-p", "--path", metavar="DIR", help="(optional) Base directory for --local")
-    blueprints_parser.add_argument(
-        "--inspect",
-        metavar="PATH_OR_ALIAS",
-        help="(optional) Inspect a local cache/blueprint on disk (see: vcfcache list --inspect).",
+        metavar="PATH",
+        help=(
+            "(optional) Inspect a specific local cache/blueprint. "
+            "Accepts a filesystem path or a name under VCFCACHE_DIR/{caches,blueprints}."
+        ),
     )
 
     # push command
@@ -701,27 +696,37 @@ def main() -> None:
         "demo",
         help="Run demo workflow or benchmark cached vs uncached annotation",
         parents=[parent_parser],
+        description=(
+            "Run vcfcache demonstration workflows.\n\n"
+            "Two modes:\n"
+            "1. Smoke test mode (--smoke-test): Runs all 4 commands on demo data to verify installation.\n"
+            "2. Benchmark mode (-a + --vcf + -y): Compares cached vs uncached annotation performance.\n\n"
+            "Examples:\n"
+            "  vcfcache demo --smoke-test\n"
+            "  vcfcache demo -a /path/to/cache --vcf sample.vcf -y params.yaml"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     demo_parser.add_argument(
         "--smoke-test",
         action="store_true",
-        help="Run comprehensive smoke test of all 4 commands (blueprint-init, blueprint-extend, cache-build, annotate)",
+        help="Smoke test mode: Run comprehensive test of all 4 commands using bundled demo data",
     )
     demo_parser.add_argument(
         "-a",
         "--annotation_db",
         type=str,
-        help="Path to annotation cache directory (for benchmark mode)",
+        help="Benchmark mode: Path to annotation cache directory (requires --vcf and -y)",
     )
     demo_parser.add_argument(
         "--vcf",
         type=str,
-        help="Path to VCF/BCF file to annotate (for benchmark mode)",
+        help="Benchmark mode: Path to VCF/BCF file to annotate (requires -a and -y)",
     )
     demo_parser.add_argument(
         "--output",
         type=str,
-        help="Output directory for benchmark results (default: temporary directory in /tmp)",
+        help="Benchmark mode: Output directory for results (default: temporary directory in /tmp)",
     )
     # Note: -y/--params and --debug inherited from parent_parser
 
@@ -794,6 +799,11 @@ def main() -> None:
                 )
                 initializer.initialize()
 
+                # Show detailed timing if --debug is enabled
+                if args.debug:
+                    workflow_log = Path(args.output) / "blueprint" / "workflow.log"
+                    _show_detailed_timings(workflow_log)
+
         elif args.command == "blueprint-extend":
             logger.debug(f"Adding to blueprint: {args.db}")
             updater = DatabaseUpdater(
@@ -807,6 +817,11 @@ def main() -> None:
                 normalize=args.normalize,
             )
             updater.add()
+
+            # Show detailed timing if --debug is enabled
+            if args.debug:
+                workflow_log = Path(args.db) / "blueprint" / "workflow.log"
+                _show_detailed_timings(workflow_log)
 
         elif args.command == "cache-build":
             # Helper to detect if directory is blueprint or cache
@@ -950,6 +965,11 @@ def main() -> None:
             )
             annotator.annotate()
 
+            # Show detailed timing if --debug is enabled
+            if args.debug:
+                workflow_log = Path(db_path) / "cache" / args.name / "workflow.log"
+                _show_detailed_timings(workflow_log)
+
         elif args.command == "annotate":
             if args.show_command:
                 _print_annotation_command(Path(args.a))
@@ -990,26 +1010,14 @@ def main() -> None:
                 skip_split_multiallelic=skip_split_multiallelic
             )
 
-        elif args.command in ("list", "caches", "blueprints"):
-            # Determine what to list.
-            selector = getattr(args, "selector", None)
-            if selector is None:
-                selector = args.command
+            # Show detailed timing if --debug is enabled
+            if args.debug:
+                workflow_log = Path(args.output) / "workflow.log"
+                _show_detailed_timings(workflow_log)
 
-            local_path = getattr(args, "path", None) or getattr(args, "local_path", None)
-
-            if selector in ("blueprints", "caches"):
-                item_type = selector
-            else:
-                # Convenience: with --local, accept a path in place of the selector.
-                if getattr(args, "local", False):
-                    item_type = "blueprints"
-                    local_path = selector
-                else:
-                    raise ValueError(
-                        f"Invalid item type: {selector}. Choose 'blueprints' or 'caches', "
-                        "or use --local with a path."
-                    )
+        elif args.command == "list":
+            # Get selector (required positional argument)
+            item_type = args.selector
 
             def _inspect_local(path_or_alias: str) -> None:
                 import re
@@ -1320,11 +1328,15 @@ def main() -> None:
                 # Blueprint (or non-standard record): keep it compact but descriptive.
                 return f"{source} {release} {genome} {filt} blueprint".strip()
 
+            # Handle --inspect mode
             if args.inspect:
                 _inspect_local(args.inspect)
                 return
 
-            if getattr(args, "local", False):
+            # Handle --local mode
+            if args.local is not None:
+                # --local was provided, with optional path argument
+                local_path = args.local if args.local else None
                 _list_local(item_type, local_path)
                 return
 
@@ -1545,8 +1557,18 @@ def main() -> None:
                 sys.exit(exit_code)
 
             else:
-                # No mode selected, show help
-                demo_parser.print_help()
+                # No mode selected, show compressed help
+                print("Usage: vcfcache demo <mode> [options]")
+                print()
+                print("Available modes:")
+                print("  --smoke-test                Run comprehensive smoke test of all commands")
+                print("  -a/--annotation_db <cache>  Run benchmark mode (requires --vcf and -y)")
+                print()
+                print("Examples:")
+                print("  vcfcache demo --smoke-test")
+                print("  vcfcache demo -a <cache> --vcf <file> -y <params>")
+                print()
+                print("For full help: vcfcache demo --help")
                 sys.exit(0)
 
     except ZenodoError as e:
