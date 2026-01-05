@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (c) 2024-2026 Julius Müller
+
 """Archiving helpers for VCFcache caches.
 
 This module bundles cache directories into tarballs and extracts them back.

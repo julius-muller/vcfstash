@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (c) 2024-2026 Julius Müller
+
 """Validation utilities for the vcfcache package.
 
 This module provides functions for validating VCF/BCF files, checking dependencies,

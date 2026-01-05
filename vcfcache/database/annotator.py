@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (c) 2024-2026 Julius Müller
+
 """Database annotation module for the vcfcache package.
 
 This module provides classes for annotating the variant database and for annotating

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (c) 2024-2026 Julius Müller
+
 """Pure Python workflow manager for VCFcache operations.
 
 This module implements a pure Python alternative to the Nextflow-based workflow

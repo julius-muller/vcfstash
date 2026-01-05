@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (c) 2024-2026 Julius Müller
+
 """Naming helpers for blueprint/cache aliases.
 
 This centralises the alias formats we use across manifests, Docker tags, and
