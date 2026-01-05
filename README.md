@@ -1,11 +1,9 @@
 [![DOI](https://zenodo.org/badge/947952659.svg)](https://zenodo.org/badge/latestdoi/947952659)
-[![CI](https://github.com/julius-muller/vcfcache/actions/workflows/ci.yml/badge.svg)](
-https://github.com/julius-muller/vcfcache/actions/workflows/ci.yml)
-![License](https://img.shields.io/github/license/julius-muller/vcfcache)
-![GitHub release](https://img.shields.io/github/v/release/julius-muller/vcfcache)
-![PyPI](https://img.shields.io/pypi/v/vcfcache)
-![GHCR](https://img.shields.io/github/v/release/julius-muller/vcfcache?label=ghcr)
+[![CI](https://github.com/julius-muller/vcfcache/actions/workflows/ci.yml/badge.svg)](https://github.com/julius-muller/vcfcache/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/julius-muller/vcfcache)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/vcfcache)](https://pypi.org/project/vcfcache/)
 [![Cite](https://img.shields.io/badge/Cite-CITATION.cff-blue)](CITATION.cff)
+
 
 
 # VCFcache – Cache once, annotate fast
