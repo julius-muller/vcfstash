@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (c) 2024-2026 Julius Müller
+
 """Comprehensive demo of vcfcache workflow.
 
 This module demonstrates the complete vcfcache workflow with all 5 steps:
