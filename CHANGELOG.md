@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-## 0.4.0 (TBD)
+## 0.4.0 (2026-01-05)
 
 ### Added
 - Added detailed timing breakdown to `blueprint-init`, `blueprint-extend`, `cache-build`, and `annotate` commands when `--debug` flag is provided (similar to `demo --smoke-test` output)
