@@ -29,3 +29,6 @@ build/
 
 # Exclude documentation build artifacts
 docs/_build/
+!/VARIANT_PRESERVATION_SUMMARY.md
+!/CLAUDE.md
+!/AGENTS.md
