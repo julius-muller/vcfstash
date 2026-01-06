@@ -15,18 +15,20 @@ WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY vcfcache ./vcfcache
 COPY resources ./resources
-COPY tests ./tests
 
-# Runtime env: lean install
-RUN python -m venv /opt/venv && \
+# Runtime env: lean install (no tests needed here)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m venv /opt/venv && \
     /opt/venv/bin/pip install --upgrade pip && \
-    /opt/venv/bin/pip install --no-cache-dir .
+    /opt/venv/bin/pip install .
 
 ENV PATH="/opt/venv/bin:${PATH}"
 
 ########## Test stage (optional, dev deps only in this stage) ##########
 FROM base AS test
-RUN /opt/venv/bin/pip install --no-cache-dir ".[dev]"
+COPY tests ./tests
+RUN --mount=type=cache,target=/root/.cache/pip \
+    /opt/venv/bin/pip install ".[dev]"
 CMD ["/opt/venv/bin/python", "-m", "pytest", "tests", "-q"]
 
 ########## Final minimal image ##########
