@@ -74,6 +74,7 @@ markers = [
 
 [tool.coverage.run]
 source = ["vcfcache"]
+omit = ["vcfcache/demo.py"]
 
 [tool.hatch.build.targets.sdist]
 include = ["vcfcache/**", "tests/**"]

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+- Added formal YAML schema validation system (`vcfcache/utils/schemas.py`)
+  - `ParamsYAMLSchema` class validates params.yaml structure with required/optional/forbidden fields
+  - `AnnotationYAMLSchema` class validates annotation.yaml structure with required/optional/forbidden fields
+  - Schema validation integrated into workflow loading with clear error messages
+  - Detects when wrong YAML file type is provided (e.g., annotation.yaml passed to `-y` flag)
+- Added comprehensive schema validation test suite (`tests/test_schemas.py`) with 23 tests covering all validation scenarios
+- Added informative message when `vcfcache annotate` uses default params.snapshot.yaml from cache (when `-y` not provided)
+- Added `threads` as required field in params.yaml (must be integer >= 1)
+- Required fields in params.yaml: `annotation_tool_cmd`, `bcftools_cmd`, `temp_dir`, `threads`, `optional_checks`
+- Required fields in annotation.yaml: `annotation_cmd`, `must_contain_info_tag`, `required_tool_version`, `optional_checks`
+
+### Changed
+- Moved `threads` configuration from CLI option (`-t/--threads`) to required field in params.yaml
+  - Removed `-t/--threads` from `blueprint-init`, `blueprint-extend`, and `cache-build` commands
+  - Auto-generated params files now include `threads: 1` as default
+  - Ensures consistent configuration through params.yaml with schema validation
+- Updated `-a` help text in `vcfcache annotate` to clarify it requires specific cache directory, not cache root
+- Updated `-y` help text to explicitly mention default behavior (uses cache's params.snapshot.yaml if not provided)
+
+### Fixed
+- Fixed bug where accidentally providing annotation.yaml via `-y` flag (instead of params.yaml) would cause uncached annotation to run without proper validation
+- Schema validation now provides helpful error messages when wrong YAML type is detected (e.g., "Did you accidentally provide annotation.yaml instead of params.yaml?")
+- Fixed test fixtures in `test_contig_mismatches.py` to include all required schema fields for params.yaml and annotation.yaml
+
 ## 0.4.0 (2026-01-05)
 
 ### Added
