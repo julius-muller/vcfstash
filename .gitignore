@@ -49,3 +49,4 @@ tests/benchmarks/
 !/VARIANT_PRESERVATION_SUMMARY.md
 /VARIANT_PRESERVATION_SUMMARY.md
 /coverage.xml
+/junit.xml

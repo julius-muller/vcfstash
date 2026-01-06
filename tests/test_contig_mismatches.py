@@ -208,6 +208,10 @@ def test_contig_compatibility_chr_prefix_mismatch(
     renamed_cache = cache_variants_dir / "vcfcache_annotated_nochr.bcf"
     assert renamed_cache.exists(), "Renamed cache file not created"
 
+    # Verify index was created for renamed cache
+    renamed_cache_index = Path(f"{renamed_cache}.csi")
+    assert renamed_cache_index.exists(), f"Renamed cache index not created: {renamed_cache_index}"
+
     # 5. Verify output exists and has reasonable variant count
     output_bcf = output_dir / "sample5_vc.bcf"
     assert output_bcf.exists(), f"Output BCF not created: {output_bcf}"

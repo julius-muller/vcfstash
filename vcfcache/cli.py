@@ -668,41 +668,47 @@ def main() -> None:
     # demo command
     demo_parser = subparsers.add_parser(
         "demo",
-        help="Run demo workflow or benchmark cached vs uncached annotation",
+        help="Run comprehensive smoke test of all vcfcache commands",
         parents=[parent_parser],
         description=(
-            "Run vcfcache demonstration workflows.\n\n"
-            "Two modes:\n"
-            "1. Smoke test mode (--smoke-test): Runs all 4 commands on demo data to verify installation.\n"
-            "2. Benchmark mode (-a + --vcf + -y): Compares cached vs uncached annotation performance.\n\n"
+            "Run vcfcache smoke test to verify installation.\n\n"
+            "This command tests all 4 main commands (blueprint-init, blueprint-extend,\n"
+            "cache-build, annotate) using bundled demo data and verifies that cached\n"
+            "and uncached annotation produce identical results.\n\n"
+            "For comparing existing annotation runs, use 'vcfcache compare' instead.\n\n"
             "Examples:\n"
-            "  vcfcache demo --smoke-test\n"
-            "  vcfcache demo -a /path/to/cache --vcf sample.vcf -y params.yaml"
+            "  vcfcache demo              # Run smoke test\n"
+            "  vcfcache demo --debug      # Keep temporary files for inspection\n"
+            "  vcfcache demo -q           # Quiet mode (minimal output)"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    demo_parser.add_argument(
-        "--smoke-test",
-        action="store_true",
-        help="Smoke test mode: Run comprehensive test of all 4 commands using bundled demo data",
+    # Note: --debug and -q inherited from parent_parser
+
+    # ===== compare command =====
+    compare_parser = subparsers.add_parser(
+        "compare",
+        help="Compare two vcfcache annotate runs (e.g., cached vs uncached)",
+        description=(
+            "Compare two successful vcfcache annotate runs and display performance metrics.\n\n"
+            "This command requires completion flags (.vcfcache_complete) in both output directories,\n"
+            "which are automatically created by vcfcache annotate in version 0.4.2+.\n\n"
+            "Examples:\n"
+            "  vcfcache compare run1/uncached run1/cached\n"
+            "  vcfcache compare /path/to/output1 /path/to/output2"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    demo_parser.add_argument(
-        "-a",
-        "--annotation_db",
+    compare_parser.add_argument(
+        "dir1",
         type=str,
-        help="Benchmark mode: Path to annotation cache directory (requires --vcf and -y)",
+        help="First annotate output directory",
     )
-    demo_parser.add_argument(
-        "--vcf",
+    compare_parser.add_argument(
+        "dir2",
         type=str,
-        help="Benchmark mode: Path to VCF/BCF file to annotate (requires -a and -y)",
+        help="Second annotate output directory",
     )
-    demo_parser.add_argument(
-        "--output",
-        type=str,
-        help="Benchmark mode: Output directory for results (default: temporary directory in /tmp)",
-    )
-    # Note: -y/--params and --debug inherited from parent_parser
 
     args = parser.parse_args(args=None if sys.argv[1:] else ["--help"])
 
@@ -1490,58 +1496,22 @@ def main() -> None:
             )
 
         elif args.command == "demo":
-            from vcfcache.demo import run_smoke_test, run_benchmark
+            from vcfcache.demo import run_smoke_test
 
-            # Validate mode selection
-            if args.smoke_test:
-                # Smoke test mode
-                # Derive quiet mode from verbosity: quiet when verbosity is 0 (via -q flag)
-                quiet = (args.verbose == 0)
-                exit_code = run_smoke_test(keep_files=args.debug, quiet=quiet)
-                sys.exit(exit_code)
+            # Run smoke test (only mode now)
+            # Derive quiet mode from verbosity: quiet when verbosity is 0 (via -q flag)
+            quiet = (args.verbose == 0)
+            exit_code = run_smoke_test(keep_files=args.debug, quiet=quiet)
+            sys.exit(exit_code)
 
-            elif args.annotation_db or args.vcf:
-                # Benchmark mode - validate required arguments
-                if not args.annotation_db:
-                    print("Error: -a/--annotation_db is required when using --vcf")
-                    print("Usage: vcfcache demo -a <cache> --vcf <file> -y <params> [--output <dir>] [--debug]")
-                    sys.exit(1)
-                if not args.vcf:
-                    print("Error: --vcf is required when using -a/--annotation_db")
-                    print("Usage: vcfcache demo -a <cache> --vcf <file> -y <params> [--output <dir>] [--debug]")
-                    sys.exit(1)
-                if not args.params:
-                    print("Error: --params (-y) is required for benchmark mode")
-                    print("Usage: vcfcache demo -a <cache> --vcf <file> -y <params> [--output <dir>] [--debug]")
-                    sys.exit(1)
+        elif args.command == "compare":
+            from vcfcache.compare import compare_runs
 
-                # All required arguments provided, run benchmark
-                # Derive quiet mode from verbosity: quiet when verbosity is 0 (via -q flag)
-                quiet = (args.verbose == 0)
-                exit_code = run_benchmark(
-                    cache_dir=args.annotation_db,
-                    vcf_file=args.vcf,
-                    params_file=args.params,
-                    output_dir=args.output,
-                    keep_files=args.debug,
-                    quiet=quiet,
-                )
-                sys.exit(exit_code)
-
-            else:
-                # No mode selected, show compressed help
-                print("Usage: vcfcache demo <mode> [options]")
-                print()
-                print("Available modes:")
-                print("  --smoke-test                Run comprehensive smoke test of all commands")
-                print("  -a/--annotation_db <cache>  Run benchmark mode (requires --vcf and -y)")
-                print()
-                print("Examples:")
-                print("  vcfcache demo --smoke-test")
-                print("  vcfcache demo -a <cache> --vcf <file> -y <params>")
-                print()
-                print("For full help: vcfcache demo --help")
-                sys.exit(0)
+            try:
+                compare_runs(Path(args.dir1), Path(args.dir2))
+            except (FileNotFoundError, ValueError) as e:
+                print(f"Error: {e}")
+                sys.exit(1)
 
     except ZenodoError as e:
         logger.error(str(e))

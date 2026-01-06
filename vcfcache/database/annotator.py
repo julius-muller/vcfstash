@@ -254,6 +254,14 @@ class DatabaseAnnotator(VCFDatabase):
                     f"Annotation to {self.output_dir} completed in {duration.total_seconds():.2f} seconds"
                 )
 
+            # Write completion flag
+            from vcfcache.utils.completion import write_completion_flag
+            write_completion_flag(
+                output_dir=self.cached_annotations.root_dir,
+                command="cache-build",
+                mode="cache-build"
+            )
+
         except subprocess.CalledProcessError as e:
             if self.logger:
                 self.logger.error(f"Workflow execution failed: {e.stderr}")
@@ -572,6 +580,38 @@ class VCFAnnotator(VCFDatabase):
                 )
                 subprocess.run(cmd, shell=True, check=True, capture_output=True)
 
+                # Validate the renamed cache was created successfully
+                if not renamed_cache.exists():
+                    raise FileNotFoundError(
+                        f"Failed to create renamed cache file: {renamed_cache}"
+                    )
+
+                renamed_cache_index = Path(f"{renamed_cache}.csi")
+                if not renamed_cache_index.exists():
+                    raise FileNotFoundError(
+                        f"Failed to create index for renamed cache file: {renamed_cache_index}. "
+                        f"The bcftools command may have been interrupted. "
+                        f"Remove {renamed_cache} and try again."
+                    )
+
+                # Verify the file is not truncated by trying to read it
+                try:
+                    result = subprocess.run(
+                        f"{self.bcftools_path} view -h {renamed_cache}",
+                        shell=True,
+                        check=True,
+                        capture_output=True
+                    )
+                except subprocess.CalledProcessError as e:
+                    stderr = e.stderr.decode() if e.stderr else ""
+                    if "BGZF EOF marker" in stderr or "truncated" in stderr:
+                        raise RuntimeError(
+                            f"Renamed cache file appears truncated: {renamed_cache}. "
+                            f"The file creation may have been interrupted. "
+                            f"Remove {cache_variants_dir} and try again."
+                        )
+                    raise
+
             # Use renamed cache for annotation
             self.cache_file = renamed_cache
 
@@ -864,6 +904,15 @@ class VCFAnnotator(VCFDatabase):
             duration = time.time() - start_time
             # Always show completion (even in default mode)
             print(f"Annotation completed in {duration:.1f}s")
+
+            # Write completion flag
+            from vcfcache.utils.completion import write_completion_flag
+            mode = "uncached" if uncached else "cached"
+            write_completion_flag(
+                output_dir=self.output_annotations.root_dir,
+                command="annotate",
+                mode=mode
+            )
 
         except Exception:
             if self.logger:

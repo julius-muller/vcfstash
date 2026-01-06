@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+- **NEW COMMAND:** Added `vcfcache compare` to compare two annotate runs and display performance metrics
+  - Compares cached vs uncached runs or any two successful annotate outputs
+  - Shows timing comparison, speedup, time saved, and MD5 verification
+  - Requires completion flags which are automatically created in annotate outputs
+  - Replaces the benchmark mode that was previously in `vcfcache demo`
+- Added completion flag system (`.vcfcache_complete`) for all successful runs
+  - Tracks command, mode (cached/uncached), version, git commit hash, and timestamp
+  - Enables intelligent comparison and compatibility validation
+  - Written automatically by all 4 main commands: `annotate`, `cache-build`, `blueprint-init`, `blueprint-extend`
+  - Prevents using incomplete/corrupted runs for comparison
+- Added index validation in contig mismatch tests to verify `.csi` files are created for renamed caches
+
+### Changed
+- **BREAKING:** Refactored `vcfcache demo` to only run smoke test (comprehensive test of all 4 commands)
+  - Removed benchmark mode (`-a`, `--vcf`, `-y` options) - use `vcfcache compare` instead
+  - Simplified command: just run `vcfcache demo` (no --smoke-test flag needed)
+  - For comparing existing runs, use: `vcfcache compare dir1 dir2`
+- CI workflow now runs on both tag pushes and main branch pushes (for codecov badge updates)
+- Dockerfile optimizations: moved tests to test stage only, added pip cache mounts for faster builds
+
+### Fixed
+- **CRITICAL:** Added validation after creating renamed cache files (chr prefix mismatches) to detect incomplete/truncated files from interrupted bcftools processes. Previously, if the bcftools command was killed externally (signal, timeout, system issue), the incomplete file would be left without an index and cause subsequent cached annotations to fail. Now detects missing index and truncated files immediately with clear error messages.
+
 ## 0.4.1 (2026-01-06)
 
 ### Added

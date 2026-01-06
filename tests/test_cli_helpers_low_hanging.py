@@ -595,75 +595,22 @@ def test_main_push_invalid_cache_dir(monkeypatch, tmp_path):
 
 
 def test_main_demo_smoke(monkeypatch):
-    called = {}
+    """Test that demo command runs smoke test successfully."""
     monkeypatch.setattr(cli, "setup_logging", lambda *_args, **_kwargs: type("L", (), {"debug": lambda *_: None, "info": lambda *_: None, "error": lambda *_: None})())
     monkeypatch.setattr(cli, "log_command", lambda *_args, **_kwargs: None)
 
     demo_mod = type(
         "D",
         (),
-        {"run_smoke_test": lambda *a, **_k: 0, "run_benchmark": lambda *a, **_k: 0},
+        {"run_smoke_test": lambda *a, **_k: 0},  # Only smoke test now
     )()
     monkeypatch.setitem(sys.modules, "vcfcache.demo", demo_mod)
 
-    monkeypatch.setattr(cli.sys, "argv", ["vcfcache", "demo", "--smoke-test"])
+    # Demo now always runs smoke test (no --smoke-test flag needed)
+    monkeypatch.setattr(cli.sys, "argv", ["vcfcache", "demo"])
     with pytest.raises(SystemExit) as exc:
         cli.main()
     assert exc.value.code == 0
-
-
-def test_main_demo_benchmark_missing_args(monkeypatch, capsys):
-    monkeypatch.setattr(cli, "setup_logging", lambda *_args, **_kwargs: type("L", (), {"debug": lambda *_: None, "info": lambda *_: None, "error": lambda *_: None})())
-    monkeypatch.setattr(cli, "log_command", lambda *_args, **_kwargs: None)
-    demo_mod = type(
-        "D",
-        (),
-        {"run_smoke_test": lambda *a, **_k: 0, "run_benchmark": lambda *a, **_k: 0},
-    )()
-    monkeypatch.setitem(sys.modules, "vcfcache.demo", demo_mod)
-
-    monkeypatch.setattr(cli.sys, "argv", ["vcfcache", "demo", "-a", "cache"])
-    with pytest.raises(SystemExit) as exc:
-        cli.main()
-    assert exc.value.code == 1
-    out = capsys.readouterr().out
-    assert "Error:" in out
-
-
-def test_main_demo_benchmark_success(monkeypatch):
-    called = {}
-    monkeypatch.setattr(cli, "setup_logging", lambda *_args, **_kwargs: type("L", (), {"debug": lambda *_: None, "info": lambda *_: None, "error": lambda *_: None})())
-    monkeypatch.setattr(cli, "log_command", lambda *_args, **_kwargs: None)
-
-    class _Demo:
-        @staticmethod
-        def run_smoke_test(**_k):
-            return 0
-
-        @staticmethod
-        def run_benchmark(**_k):
-            called["ok"] = True
-            return 0
-
-    monkeypatch.setitem(sys.modules, "vcfcache.demo", _Demo)
-    monkeypatch.setattr(
-        cli.sys,
-        "argv",
-        [
-            "vcfcache",
-            "demo",
-            "-a",
-            "cache",
-            "--vcf",
-            "input.bcf",
-            "-y",
-            "params.yaml",
-        ],
-    )
-    with pytest.raises(SystemExit) as exc:
-        cli.main()
-    assert exc.value.code == 0
-    assert called.get("ok") is True
 
 
 def test_main_cache_build_doi_missing_name(monkeypatch, tmp_path):

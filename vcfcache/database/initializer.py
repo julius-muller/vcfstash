@@ -274,6 +274,14 @@ class DatabaseInitializer(VCFDatabase):
                 self.logger.info(f"- Input MD5: {input_md5}")
                 self.logger.info(f"- Processing time: {duration.total_seconds():.2f}s")
 
+            # Write completion flag
+            from vcfcache.utils.completion import write_completion_flag
+            write_completion_flag(
+                output_dir=self.cached_output.root_dir,
+                command="blueprint-init",
+                mode="blueprint-init"
+            )
+
             if not self.debug:
                 self.nx_workflow.cleanup_work_dir()
 
