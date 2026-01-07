@@ -436,12 +436,19 @@ def test_main_list_inspect_blueprint_only(monkeypatch, tmp_path, capsys):
 def test_main_list_local_blueprints(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(cli, "setup_logging", lambda *_args, **_kwargs: type("L", (), {"debug": lambda *_: None, "info": lambda *_: None})())
     monkeypatch.setattr(cli, "log_command", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("vcfcache.utils.validation.find_bcftools", lambda: "/usr/bin/bcftools")
+
+    def _run(*_args, **_kwargs):
+        return type("R", (), {"stdout": "5\n", "returncode": 0})()
+
+    monkeypatch.setattr("subprocess.run", _run)
 
     base = tmp_path / "vcfcache"
     blueprints = base / "blueprints" / "bp1"
     (blueprints / "blueprint").mkdir(parents=True)
     (blueprints / "blueprint" / "vcfcache.bcf").write_bytes(b"x" * (1024 * 1024 + 10))
     (blueprints / "blueprint" / "sources.info").write_text("{}")
+    (blueprints / ".vcfcache_complete").write_text("completed: true\nmode: blueprint-init\n")
 
     monkeypatch.setattr(
         cli.sys,
@@ -457,11 +464,18 @@ def test_main_list_local_blueprints(monkeypatch, tmp_path, capsys):
     cli.main()
     out = capsys.readouterr().out
     assert "Local vcfcache blueprints" in out
+    assert "Variants:" in out
 
 
 def test_main_list_local_caches(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(cli, "setup_logging", lambda *_args, **_kwargs: type("L", (), {"debug": lambda *_: None, "info": lambda *_: None})())
     monkeypatch.setattr(cli, "log_command", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("vcfcache.utils.validation.find_bcftools", lambda: "/usr/bin/bcftools")
+
+    def _run(*_args, **_kwargs):
+        return type("R", (), {"stdout": "7\n", "returncode": 0})()
+
+    monkeypatch.setattr("subprocess.run", _run)
 
     base = tmp_path / "vcfcache"
     cache_root = base / "caches" / "cache1"
@@ -471,6 +485,7 @@ def test_main_list_local_caches(monkeypatch, tmp_path, capsys):
     anno = cache_root / "cache" / "anno1"
     anno.mkdir(parents=True)
     (anno / "vcfcache_annotated.bcf").write_bytes(b"x" * (1024 * 1024 + 10))
+    (anno / ".vcfcache_complete").write_text("completed: true\nmode: cache-build\n")
     (anno / "annotation.yaml").write_text(
         "annotation_cmd: echo ok\n"
         "must_contain_info_tag: MOCK\n"

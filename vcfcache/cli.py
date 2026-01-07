@@ -22,6 +22,7 @@ Date: 16-03-2025
 import argparse
 import os
 import sys
+import subprocess
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 
@@ -1291,6 +1292,60 @@ def main() -> None:
                         continue
                 return total / (1024 * 1024)
 
+            def _blueprint_variant_count(root: Path) -> int | None:
+                from vcfcache.utils.validation import find_bcftools
+                bcftools = find_bcftools()
+                if not bcftools:
+                    return None
+
+            def _cache_dir_size_mb(root: Path) -> float:
+                cache_dir = root / "cache"
+                if cache_dir.is_dir():
+                    return _dir_size_mb(cache_dir)
+                return 0.0
+
+            def _cache_variant_count(root: Path) -> int | None:
+                from vcfcache.utils.validation import find_bcftools
+                bcftools = find_bcftools()
+                if not bcftools:
+                    return None
+                cache_dir = root / "cache"
+                if not cache_dir.is_dir():
+                    return None
+                total = 0
+                any_found = False
+                for p in cache_dir.iterdir():
+                    if not p.is_dir():
+                        continue
+                    bcf = p / "vcfcache_annotated.bcf"
+                    if not bcf.exists():
+                        continue
+                    try:
+                        result = subprocess.run(
+                            [bcftools, "index", "-n", str(bcf)],
+                            capture_output=True,
+                            text=True,
+                            check=True,
+                        )
+                        total += int(result.stdout.strip())
+                        any_found = True
+                    except Exception:
+                        continue
+                return total if any_found else None
+                bcf = root / "blueprint" / "vcfcache.bcf"
+                if not bcf.exists():
+                    return None
+                try:
+                    result = subprocess.run(
+                        [bcftools, "index", "-n", str(bcf)],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    )
+                    return int(result.stdout.strip())
+                except Exception:
+                    return None
+
             def _list_local(item_type: str, base_dir: str | None, genome_filter: str | None = None, source_filter: str | None = None) -> None:
                 default_base = Path(os.environ.get("VCFCACHE_DIR", "~/.cache/vcfcache")).expanduser()
                 base = Path(base_dir).expanduser() if base_dir else default_base
@@ -1329,7 +1384,10 @@ def main() -> None:
                     if not _matches_filters(root, item_type, genome_filter, source_filter):
                         continue
 
-                    size_mb = _cache_relevant_size_mb(root)
+                    if item_type == "blueprints":
+                        size_mb = _dir_size_mb(root)
+                    else:
+                        size_mb = _cache_dir_size_mb(root)
                     if size_mb < 1.0:
                         continue
                     entries.append(root)
@@ -1348,7 +1406,10 @@ def main() -> None:
                 print(f"\nLocal vcfcache {item_type}:")
                 print("=" * 80)
                 for root in entries:
-                    size_mb = _cache_relevant_size_mb(root)
+                    if item_type == "blueprints":
+                        size_mb = _dir_size_mb(root)
+                    else:
+                        size_mb = _cache_dir_size_mb(root)
                     mtime = ""
                     try:
                         mtime = __import__("datetime").datetime.fromtimestamp(root.stat().st_mtime).date().isoformat()
@@ -1361,7 +1422,14 @@ def main() -> None:
                     title = _display_title(fake_record, "caches" if item_type == "caches" else "blueprints")
 
                     print(f"\n{title}")
-                    print(f"  Path: {root} | Updated: {mtime} | Size: {size_mb:.1f} MB")
+                    if item_type == "blueprints":
+                        variants = _blueprint_variant_count(root)
+                        variants_str = f"{variants:,}" if variants is not None else "N/A"
+                        print(f"  Path: {root} | Updated: {mtime} | Size: {size_mb:.1f} MB | Variants: {variants_str}")
+                    else:
+                        variants = _cache_variant_count(root)
+                        variants_str = f"{variants:,}" if variants is not None else "N/A"
+                        print(f"  Path: {root} | Updated: {mtime} | Size: {size_mb:.1f} MB | Variants: {variants_str}")
 
                 print(f"\n{'=' * 80}")
                 print(f"Total: {len(entries)} {item_type} found")
