@@ -375,7 +375,7 @@ def generate_test_command(
     yaml_path="${VCFCACHE_ROOT}/tests/config/example_params.yaml",
     annotation_config="${VCFCACHE_ROOT}/tests/config/example_annotation.config",
     add_vcf_path="${VCFCACHE_ROOT}/tests/data/nodata/crayz_db2.bcf",
-    input_vcf_path="${VCFCACHE_ROOT}/tests/data/nodata/sample5.bcf",
+    input_vcf_path="${VCFCACHE_ROOT}/tests/data/nodata/sample4.bcf",
     annotate_name="testor",
     annotation_db="/tmp/vcfcache/test_cache/cache/testor",
     annotation_output="/tmp/vcfcache/aout",
@@ -450,14 +450,14 @@ alias stx="{full_cmd}"
 # ~/projects/vcfcache/vcfcache.py blueprint-init --vcf ~/projects/vcfcache/tests/data/nodata/crayz_db.bcf --output ~/tmp/vcfcache/test_cache -c ~/projects/vcfcache/tests/config/env_test.config -f
 # ~/projects/vcfcache/vcfcache.py blueprint-extend --db /home/j380r/tmp/test/test_out -i ~/projects/vcfcache/tests/data/nodata/crayz_db2.bcf
 # ~/projects/vcfcache/vcfcache.py cache-build --name testor --db test_out/nftest --test -vv -f
-# ~/projects/vcfcache/vcfcache.py annotate --a ~/tmp/test/test_out/nftest/cache/testor --vcf ~/projects/vcfcache/tests/data/nodata/sample5.bcf --output ~/tmp/test/aout --test -f
+# ~/projects/vcfcache/vcfcache.py annotate --a ~/tmp/test/test_out/nftest/cache/testor --vcf ~/projects/vcfcache/tests/data/nodata/sample4.bcf --output ~/tmp/test/aout --test -f
 
 # as one:
 cmd = """alias stx="
 ~/projects/vcfcache/vcfcache.py blueprint-init --vcf ~/projects/vcfcache/tests/data/nodata/crayz_db.bcf --output ~/tmp/vcfcache/test_cache -y ~/projects/vcfcache/tests/config/example_params.yaml -f;
 ~/projects/vcfcache/vcfcache.py blueprint-extend --db ~/tmp/vcfcache/test_cache/ -i ~/projects/vcfcache/tests/data/nodata/crayz_db2.bcf ; 
 ~/projects/vcfcache/vcfcache.py cache-build --name testor -a ~/projects/vcfcache/tests/config/example_annotation.config --db ~/tmp/vcfcache/test_cache -f;
-~/projects/vcfcache/vcfcache.py annotate -a ~/tmp/vcfcache/test_cache/cache/testor --vcf ~/projects/vcfcache/tests/data/nodata/sample5.bcf --output ~/tmp/vcfcache/aout -f
+~/projects/vcfcache/vcfcache.py annotate -a ~/tmp/vcfcache/test_cache/cache/testor --vcf ~/projects/vcfcache/tests/data/nodata/sample4.bcf --output ~/tmp/vcfcache/aout -f
 """
 
 

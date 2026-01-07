@@ -29,6 +29,9 @@ must_contain_info_tag: MOCK_ANNO
 # Used to verify tool version matches expectations
 required_tool_version: "1.22+htslib-1.22"
 
+# genome_build: Genome build label that must match params.yaml
+genome_build: "GRCh38"
+
 # optional_checks: Optional parameters to verify cache and input use same annotation settings
 # These values are locked after cache-build and must match exactly
 optional_checks: {}

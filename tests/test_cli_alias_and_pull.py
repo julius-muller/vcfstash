@@ -19,8 +19,19 @@ def make_dummy_cache(tmp_path: Path, alias: str) -> Path:
 
     # Minimal required files
     (cache_dir / "vcfcache_annotated.bcf").write_bytes(b"dummy")
-    (workflow_dir / "init.yaml").write_text("bcftools_cmd: echo\n")
-    (cache_dir / "annotation.yaml").write_text("annotation_tool_cmd: echo annotate\n")
+    (workflow_dir / "init.yaml").write_text(
+        "annotation_tool_cmd: echo\n"
+        "bcftools_cmd: echo\n"
+        "temp_dir: /tmp\n"
+        "threads: 1\n"
+        "genome_build: GRCh38\n"
+    )
+    (cache_dir / "annotation.yaml").write_text(
+        "annotation_cmd: echo annotate\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
     return cache_root
 
 

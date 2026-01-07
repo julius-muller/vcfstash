@@ -2,6 +2,7 @@
 # Minimal configuration for demonstration purposes
 
 ## REQUIRED RESOURCES
+genome_build: "GRCh38"
 temp_dir: "/tmp"
 annotation_tool_cmd: "bcftools"
 tool_version_command: "bcftools --version-only"

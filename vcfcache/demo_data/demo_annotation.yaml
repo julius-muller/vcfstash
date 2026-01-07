@@ -2,6 +2,7 @@
 # Uses bcftools to add a mock VEP-style CSQ annotation for demonstration
 
 # Annotation command: adds CSQ tag mimicking VEP output
+genome_build: "GRCh38"
 annotation_cmd: |
   echo '##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT|SYMBOL|Gene|Feature_type|Feature|BIOTYPE|EXON|INTRON|HGVSc|HGVSp|cDNA_position|CDS_position|Protein_position">' > newheader.txt
 

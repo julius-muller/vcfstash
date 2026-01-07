@@ -65,6 +65,7 @@ class DatabaseAnnotator(VCFDatabase):
         verbosity: int = 0,
         force: bool = False,
         debug: bool = False,
+        read_only: bool = False,
     ):
         """Initialize database annotator.
 
@@ -75,6 +76,7 @@ class DatabaseAnnotator(VCFDatabase):
             db_path: Path to the database
             params_file: Optional parameters file
             verbosity: Logging verbosity level (0=WARNING, 1=INFO, 2=DEBUG)
+            read_only: If True, skip cache setup (for operating on existing cache)
         """
         super().__init__(
             Path(db_path) if isinstance(db_path, str) else db_path, verbosity, debug, bcftools_path
@@ -86,7 +88,10 @@ class DatabaseAnnotator(VCFDatabase):
         self.cached_annotations.validate_label(annotation_name)
         self.annotation_name = annotation_name
         self.logger: Logger = self.connect_loggers()
-        self._setup_annotation_cache(force)
+
+        # Only setup cache if not read-only mode
+        if not read_only:
+            self._setup_annotation_cache(force)
         self.output_dir = self.cached_annotations.annotation_dir
 
         self.info_snapshot_file = self.output_dir / "blueprint_snapshot.info"
@@ -354,7 +359,6 @@ class VCFAnnotator(VCFDatabase):
             )
         self.annotation_db_path = self.cached_annotations.annotation_dir
         self.annotation_name = self.cached_annotations.name
-        self.contig_map_file: Optional[Path] = None
         super().__init__(
             self.cached_annotations.cache_output.root_dir, verbosity, debug, bcftools_path
         )
@@ -402,9 +406,6 @@ class VCFAnnotator(VCFDatabase):
         if not self.cache_file.exists():
             raise FileNotFoundError(f"Cache file not found: {self.cache_file}")
 
-        # Ensure contig compatibility before wiring the workflow
-        self._ensure_contig_compatibility()
-
         # Initialize workflow backend (pure Python)
         from vcfcache.database.base import create_workflow
         self.nx_workflow = create_workflow(
@@ -414,7 +415,6 @@ class VCFAnnotator(VCFDatabase):
             anno_config_file=self.anno_config_file,
             params_file=self.params_file,
             verbosity=self.verbosity,
-            contig_map=self.contig_map_file,
         )
 
         self._validate_inputs()
@@ -424,244 +424,36 @@ class VCFAnnotator(VCFDatabase):
             self.logger.info(f"Initializing annotation of {self.input_vcf.name}")
             self.logger.debug(f"Cache file: {self.cache_file}")
 
-    def _ensure_index(self, bcf: Path) -> None:
-        """Ensure an index exists for the given BCF/VCF."""
-        csi = Path(f"{bcf}.csi")
-        tbi = Path(f"{bcf}.tbi")
-        if csi.exists() or tbi.exists():
-            return
-        subprocess.run(
-            [str(self.bcftools_path), "index", str(bcf)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-
-    def _list_contigs(self, bcf: Path) -> list[str]:
-        """List contigs using bcftools index -s."""
-        self._ensure_index(bcf)
-        res = subprocess.run(
-            [str(self.bcftools_path), "index", "-s", str(bcf)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        return [line.split()[0] for line in res.stdout.splitlines() if line.strip()]
-
-    @staticmethod
-    def _canonical_contig(name: str) -> str:
-        """Normalize contig names for comparison."""
-        n = name.lower()
-        if n.startswith("chr"):
-            n = n[3:]
-        if n in ("m", "mt", "chrm"):
-            return "mt"
-        return n
-
-    def _check_contig_compatibility(self) -> tuple[bool, bool]:
-        """Check if contig names between cache and input are compatible.
-
-        Returns:
-            (compatible, needs_cache_rename):
-                - compatible: True if there's overlap between cache and input contigs
-                - needs_cache_rename: True if cache needs "chr" prefix to match input
-        """
+    def _log_contig_overlap(self) -> None:
+        """Log contig overlap between cache and input, and error on no overlap."""
         cache_contigs = self._list_contigs(self.cache_file)
         input_contigs = self._list_contigs(self.input_vcf)
-
         cache_set = set(cache_contigs)
         input_set = set(input_contigs)
+        overlap = sorted(cache_set & input_set)
 
-        # Perfect match - no renaming needed
-        if cache_set == input_set:
-            return (True, False)
-
-        # Check overlap without any prefix changes
-        direct_overlap = cache_set & input_set
-
-        # Always try both chr transformations to handle mixed contig naming
-        # (e.g., "1,2,3,X,Y,MT,GL000191.1" vs "chr1,chr2,chr3,chrX,chrY,chrM,GL000191.1")
-
-        # Try removing "chr" prefix from cache contigs
-        cache_without_chr = {c[3:] if c.startswith("chr") else c for c in cache_contigs}
-        no_chr_overlap = cache_without_chr & input_set
-
-        # Try adding "chr" prefix to cache contigs (only to short names)
-        cache_with_chr = {f"chr{c}" if len(c) <= 2 else c for c in cache_contigs}
-        chr_overlap = cache_with_chr & input_set
-
-        # Choose the transformation that gives the best overlap
-        needs_rename = False
-        rename_type = None
-        overlap_count = len(direct_overlap)
-
-        if len(no_chr_overlap) > overlap_count:
-            # Removing "chr" gives better overlap
-            needs_rename = True
-            rename_type = "remove_chr"
-            overlap_count = len(no_chr_overlap)
-        elif len(chr_overlap) > overlap_count:
-            # Adding "chr" gives better overlap
-            needs_rename = True
-            rename_type = "add_chr"
-            overlap_count = len(chr_overlap)
-
-        if overlap_count == 0:
-            raise RuntimeError(
-                "Contig names between cache and input are completely incompatible.\n"
-                f"Cache contigs: {sorted(list(cache_set))[:10]}\n"
-                f"Input contigs: {sorted(list(input_set))[:10]}\n"
-                "No overlap found."
-            )
-
-        # Log info about contigs
-        if needs_rename:
-            action = "add 'chr' prefix" if rename_type == "add_chr" else "remove 'chr' prefix"
-            msg = f"Will {action} to cache contigs to match input"
-        else:
-            msg = f"Found {overlap_count} overlapping contig(s) between cache and input"
-
+        msg = (
+            f"Contig overlap: cache={len(cache_set)} input={len(input_set)} "
+            f"overlap={len(overlap)}"
+        )
         if self.logger:
             self.logger.info(msg)
         else:
             print(msg)
 
-        return (True, (needs_rename, rename_type))
+        if overlap:
+            preview = ", ".join(overlap[:10])
+            preview_msg = f"Overlapping contigs (first 10): {preview}"
+            if self.logger:
+                self.logger.info(preview_msg)
+            else:
+                print(preview_msg)
+            return
 
-    def _ensure_contig_compatibility(self) -> None:
-        """Ensure contigs between input and cache are compatible.
-
-        IMPORTANT: Input contig names are NEVER altered. Only cache may be renamed.
-        """
-        self._ensure_index(self.cache_file)
-        self._ensure_index(self.input_vcf)
-
-        compatible, rename_info = self._check_contig_compatibility()
-
-        if not compatible:
-            raise RuntimeError("Cache and input contigs are not compatible")
-
-        needs_cache_rename, rename_type = rename_info
-        if needs_cache_rename:
-            # Create a renamed copy of the cache in a subdirectory
-            # This is reused for subsequent annotations to avoid re-creating it
-            suffix = "chrprefixed" if rename_type == "add_chr" else "nochr"
-            cache_variants_dir = self.cache_file.parent / ".cache_variants"
-            cache_variants_dir.mkdir(exist_ok=True)
-            renamed_cache = cache_variants_dir / f"{self.cache_file.stem}_{suffix}.bcf"
-
-            # Validate existing renamed cache before using it
-            if renamed_cache.exists():
-                renamed_cache_index = Path(f"{renamed_cache}.csi")
-                is_corrupted = False
-
-                # Check 1: Index file must exist
-                if not renamed_cache_index.exists():
-                    msg = (
-                        f"Renamed cache index is missing: {renamed_cache_index}. "
-                        f"The file may have been created by an interrupted process. "
-                        f"Removing corrupted cache to force recreation."
-                    )
-                    if self.logger:
-                        self.logger.warning(msg)
-                    else:
-                        print(f"WARNING: {msg}")
-                    is_corrupted = True
-                else:
-                    # Check 2: File must not be truncated
-                    try:
-                        subprocess.run(
-                            f"{self.bcftools_path} view -h {renamed_cache}",
-                            shell=True,
-                            check=True,
-                            capture_output=True
-                        )
-                    except subprocess.CalledProcessError as e:
-                        stderr = e.stderr.decode() if e.stderr else ""
-                        if "BGZF EOF marker" in stderr or "truncated" in stderr:
-                            msg = (
-                                f"Renamed cache file is truncated: {renamed_cache}. "
-                                f"The file may have been created by an interrupted process. "
-                                f"Removing corrupted cache to force recreation."
-                            )
-                            if self.logger:
-                                self.logger.warning(msg)
-                            else:
-                                print(f"WARNING: {msg}")
-                            is_corrupted = True
-                        else:
-                            # Some other error - re-raise it
-                            raise
-
-                # Remove corrupted files
-                if is_corrupted:
-                    renamed_cache.unlink()
-                    renamed_cache_index.unlink(missing_ok=True)
-
-            if not renamed_cache.exists():
-                action = "chr-prefixed" if rename_type == "add_chr" else "chr-removed"
-                msg = f"Creating {action} version of cache at: {renamed_cache}"
-                if self.logger:
-                    self.logger.info(msg)
-                else:
-                    print(msg)
-
-                # Create contig rename map
-                mapping_dir = self.output_annotations.root_dir / "work"
-                mapping_dir.mkdir(parents=True, exist_ok=True)
-                map_file = mapping_dir / "cache_rename_map.txt"
-
-                cache_contigs = self._list_contigs(self.cache_file)
-                lines = []
-                for contig in cache_contigs:
-                    if rename_type == "add_chr" and len(contig) <= 2:
-                        lines.append(f"{contig}\tchr{contig}\n")
-                    elif rename_type == "remove_chr" and contig.startswith("chr"):
-                        lines.append(f"{contig}\t{contig[3:]}\n")
-
-                map_file.write_text("".join(lines))
-
-                # Rename cache contigs
-                cmd = (
-                    f"{self.bcftools_path} annotate --rename-chrs {map_file} "
-                    f"{self.cache_file} -o {renamed_cache} -Ob -W"
-                )
-                subprocess.run(cmd, shell=True, check=True, capture_output=True)
-
-                # Validate the renamed cache was created successfully
-                if not renamed_cache.exists():
-                    raise FileNotFoundError(
-                        f"Failed to create renamed cache file: {renamed_cache}"
-                    )
-
-                renamed_cache_index = Path(f"{renamed_cache}.csi")
-                if not renamed_cache_index.exists():
-                    raise FileNotFoundError(
-                        f"Failed to create index for renamed cache file: {renamed_cache_index}. "
-                        f"The bcftools command may have been interrupted. "
-                        f"Remove {renamed_cache} and try again."
-                    )
-
-                # Verify the file is not truncated by trying to read it
-                try:
-                    result = subprocess.run(
-                        f"{self.bcftools_path} view -h {renamed_cache}",
-                        shell=True,
-                        check=True,
-                        capture_output=True
-                    )
-                except subprocess.CalledProcessError as e:
-                    stderr = e.stderr.decode() if e.stderr else ""
-                    if "BGZF EOF marker" in stderr or "truncated" in stderr:
-                        raise RuntimeError(
-                            f"Renamed cache file appears truncated: {renamed_cache}. "
-                            f"The file creation may have been interrupted. "
-                            f"Remove {cache_variants_dir} and try again."
-                        )
-                    raise
-
-            # Use renamed cache for annotation
-            self.cache_file = renamed_cache
+        raise RuntimeError(
+            "No contigs in common between cache and input. "
+            "Check that both use the same reference genome and contig naming."
+        )
 
     def _validate_inputs(self) -> None:
         """Validate input files, directories, and YAML parameters."""
@@ -929,7 +721,7 @@ class VCFAnnotator(VCFDatabase):
 
         Returns:
             Path to output file (BCF or Parquet)
-            self = VCFAnnotator(input_vcf="~/projects/vcfcache/tests/data/nodata/sample5.bcf",
+            self = VCFAnnotator(input_vcf="~/projects/vcfcache/tests/data/nodata/sample4.bcf",
              annotation_db = "~/tmp/test/test_out/cache/testor", output_dir="~/tmp/test/aout" ,force=True)
 
         """
@@ -938,6 +730,8 @@ class VCFAnnotator(VCFDatabase):
             self.logger.debug("Starting VCF annotation")
 
         try:
+            if not uncached:
+                self._log_contig_overlap()
 
             # Run the workflow in database mode
             self.nx_workflow.run(

@@ -126,6 +126,14 @@ Cache lookup performance is **independent of cache size**. A cache with ten mill
 
 This ensures vcfcache remains scalable – you can build very comprehensive caches covering broad population datasets without worrying about slowing down per-variant lookup performance. **Each sample's runtime scales primarily with the novelty of its variants, not with the size of the cache**.
 
+### Contig naming considerations
+
+VCFcache requires **matching contig naming** between your cache and input samples. For example, if your cache uses `chr1`, `chr2`, etc., your samples must also use `chr1`, `chr2`, etc. Mixing naming conventions (e.g., cache with `chr1` and sample with `1`) will result in an error. At annotation start, vcfcache reports the contig overlap and fails fast if there is no overlap.
+
+### Genome build compatibility
+
+The genome build must be explicitly set in both `params.yaml` and `annotation.yaml` (e.g., `GRCh38`, `GRCh37`). VCFcache validates that these values match and logs the genome build during workflow startup.
+
 ### When caching provides less benefit
 
 For **very small datasets** or **very simple annotation pipelines**, the fixed overhead (t_overhead) may dominate the runtime, reducing or eliminating speed gains. Specifically:
@@ -457,12 +465,13 @@ This separation is a key design choice: it lets you distribute caches safely whi
 
 Example:
 ```yaml
-params:
-  bcftools_cmd: "bcftools"
-  annotation_tool_cmd: "vep"
-  tool_version_command: "vep --version"
-  temp_dir: "/tmp"
-  optional_checks: {}
+bcftools_cmd: "bcftools"
+annotation_tool_cmd: "vep"
+tool_version_command: "vep --version"
+temp_dir: "/tmp"
+threads: 1
+genome_build: "GRCh38"
+optional_checks: {}
 ```
 
 ### `annotation.yaml` (immutable recipe)
@@ -475,6 +484,7 @@ annotation_cmd: |
   ${params.bcftools_cmd} view -o ${OUTPUT_BCF} -Ob -W
 must_contain_info_tag: CSQ
 required_tool_version: "115.2"
+genome_build: "GRCh38"
 ```
 
 Variables you can use:

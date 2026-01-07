@@ -1,4 +1,5 @@
 ## * REQUIRED RESOURCES *
+genome_build: "GRCh38"
 annotation_tool_cmd: "vep"
 tool_version_command: "vep | awk '/ensembl-vep/ {print $NF}'"
 bcftools_cmd: "bcftools"

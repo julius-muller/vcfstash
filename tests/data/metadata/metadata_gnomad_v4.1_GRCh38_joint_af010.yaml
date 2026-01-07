@@ -1,4 +1,5 @@
 title: "gnomAD v4.1 GRCh38 Blueprint (AF ≥ 0.10)"
+genome_build: "GRCh38"
 
 description: |
   VCFcache blueprint derived from gnomAD v4.1 joint frequency data (GRCh38).

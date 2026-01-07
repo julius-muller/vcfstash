@@ -8,33 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### Added
-- **NEW COMMAND:** Added `vcfcache compare` to compare two annotate runs and display performance metrics
-  - Compares cached vs uncached runs or any two successful annotate outputs
-  - Shows timing comparison, speedup, time saved, and MD5 verification
-  - Requires completion flags which are automatically created in annotate outputs
-  - Replaces the benchmark mode that was previously in `vcfcache demo`
-- Added completion flag system (`.vcfcache_complete`) for all successful runs
-  - Tracks command, mode (cached/uncached), version, git commit hash, and timestamp
-  - Enables intelligent comparison and compatibility validation
-  - Written automatically by all 4 main commands: `annotate`, `cache-build`, `blueprint-init`, `blueprint-extend`
-  - Prevents using incomplete/corrupted runs for comparison
-- Added index validation in contig mismatch tests to verify `.csi` files are created for renamed caches
+- Enforced genome build metadata in configuration:
+  - `genome_build` is now required in both `params.yaml` and `annotation.yaml`
+  - Workflow startup logs the genome build from both configs
+  - Mismatched genome builds now fail fast
 
 ### Changed
-- **BREAKING:** Refactored `vcfcache demo` to only run smoke test (comprehensive test of all 4 commands)
-  - Removed benchmark mode (`-a`, `--vcf`, `-y` options) - use `vcfcache compare` instead
-  - Simplified command: just run `vcfcache demo` (no --smoke-test flag needed)
-  - For comparing existing runs, use: `vcfcache compare dir1 dir2`
+- **BREAKING:** Removed all contig renaming/variant-generation support.
+  - The `--generate-contig-variants` option is removed.
+  - Annotation now logs contig overlap at startup and fails if there is no overlap.
 - CI workflow now runs on both tag pushes and main branch pushes (for codecov badge updates)
 - Dockerfile optimizations: moved tests to test stage only, added pip cache mounts for faster builds
 
 ### Fixed
-- **CRITICAL:** Added validation for BOTH new and existing renamed cache files (chr prefix mismatches) to detect incomplete/truncated files from interrupted bcftools processes. Previously, if the bcftools command was killed externally (signal, timeout, system issue), the incomplete file would be left without an index and cause subsequent cached annotations to fail. The initial fix only validated newly created files, but pre-existing corrupted files from before the fix would still cause failures. Now validates ALL renamed cache files before use:
-  - Checks that index (.csi) file exists
-  - Verifies file is not truncated by reading header with bcftools
-  - If corruption detected, removes corrupted file and recreates it
-  - Provides clear warning messages when corruption is detected
-  - Added test that simulates pre-existing corrupted cache files to prevent regression
+- Contig overlap is now reported on every cached annotation run and no-overlap failures are surfaced early.
+- Fixed `AttributeError: 'Namespace' object has no attribute 'verbose'` when running `vcfcache compare` command
+  - Added missing parent parser to compare command to inherit `--verbose`, `--quiet`, and `--debug` flags
+  - Added comprehensive test suite for compare command (`tests/test_compare.py`) with 13 tests
 
 ## 0.4.1 (2026-01-06)
 

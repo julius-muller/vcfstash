@@ -1,4 +1,5 @@
 title: "gnomAD v4.1 GRCh37 VEP Cache (AF ≥ 0.10, basic annotations)"
+genome_build: "GRCh37"
 
 description: |
   VCFcache annotated cache for gnomAD v4.1 GRCh37 variants (AF ≥ 0.10),

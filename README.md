@@ -12,7 +12,9 @@ Cache common variants once, reuse them for every sample. VCFcache builds a norma
 
 **Performance**: With 60-90% cache hit rates on typical samples, VCFcache achieves 2-10× speed-ups compared to standard annotation pipelines. Cache lookups are constant-time operations regardless of cache size, making the tool highly scalable. See [WIKI.md](WIKI.md#performance-model) for the detailed runtime efficiency model.
 
-Works with any genome/build (human, mouse, plants, model organisms) as long as your inputs and annotation pipeline use the same reference/contig naming.
+**Contig naming**: VCFcache requires matching contig naming between cache and samples (e.g., both use `chr1` or both use `1`). At runtime, vcfcache reports the contig overlap and fails fast if there is no overlap.
+
+Works with any genome/build (human, mouse, plants, model organisms) as long as your inputs and annotation pipeline use compatible reference builds and contig naming. The genome build must be explicitly set in both `params.yaml` and `annotation.yaml`.
 
 ---
 

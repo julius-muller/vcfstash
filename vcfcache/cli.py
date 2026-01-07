@@ -458,7 +458,7 @@ def main() -> None:
         dest="anno_config",
         required=False,
         metavar="YAML",
-        help="(Optional) Annotation config YAML. Required when source is blueprint. Forbidden when source is pre-built cache."
+        help="(Optional) Annotation config YAML. Required when building cache from blueprint."
     )
     cache_build_parser.add_argument(
         "-y",
@@ -476,7 +476,6 @@ def main() -> None:
         default=False,
         help="(optional) Force overwrite if cache already exists"
     )
-
     # Main functionality, apply to user vcf
     vcf_parser = subparsers.add_parser(
         "annotate",
@@ -697,6 +696,7 @@ def main() -> None:
             "  vcfcache compare run1/uncached run1/cached\n"
             "  vcfcache compare /path/to/output1 /path/to/output2"
         ),
+        parents=[init_parent_parser],
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     compare_parser.add_argument(
@@ -831,6 +831,8 @@ def main() -> None:
                 return True
 
             # Handle source: local directory or Zenodo DOI
+            skip_annotation = False  # Initialize - may be set to True for existing caches
+
             if args.doi:
                 zenodo_env = "sandbox" if args.debug else "production"
                 logger.info(f"Downloading from Zenodo ({zenodo_env}) DOI: {args.doi}")
@@ -910,38 +912,39 @@ def main() -> None:
                     logger.info(f"Use with: vcfcache annotate -a {final_dir} -i sample.vcf -o output/")
                     is_prebuilt_cache = True
             else:
-                # Local blueprint directory: always requires -a and -n
-                if not args.anno_config:
-                    raise ValueError(
-                        "Local blueprint directory requires -a/--anno-config to build cache."
-                    )
+                # Local blueprint/cache directory
                 if not args.name:
                     raise ValueError(
-                        "Local blueprint directory requires -n/--name to name the cache."
+                        "Local directory requires -n/--name to specify cache name."
                     )
 
-                db_path = args.db
+                db_path = Path(args.db)
+                if not args.anno_config:
+                    raise ValueError(
+                        "Local directory requires -a/--anno-config to build cache."
+                    )
                 logger.debug(f"Using local blueprint: {db_path}")
                 is_prebuilt_cache = False
 
-            # If pre-built cache, we're done
+            # If pre-built cache from Zenodo, we're done
             if is_prebuilt_cache:
                 return
 
-            # Build cache from blueprint
-            logger.debug(f"Running annotation workflow on blueprint: {db_path}")
+            # Build cache from blueprint (unless skipping)
+            if not is_prebuilt_cache:
+                logger.debug(f"Running annotation workflow on blueprint: {db_path}")
 
-            annotator = DatabaseAnnotator(
-                annotation_name=args.name,
-                db_path=db_path,
-                anno_config_file=Path(args.anno_config),
-                params_file=Path(args.params) if args.params else None,
-                verbosity=args.verbose,
-                force=args.force,
-                debug=args.debug,
-                bcftools_path=bcftools_path,
-            )
-            annotator.annotate()
+                annotator = DatabaseAnnotator(
+                    annotation_name=args.name,
+                    db_path=db_path,
+                    anno_config_file=Path(args.anno_config),
+                    params_file=Path(args.params) if args.params else None,
+                    verbosity=args.verbose,
+                    force=args.force,
+                    debug=args.debug,
+                    bcftools_path=bcftools_path,
+                )
+                annotator.annotate()
 
             # Show detailed timing if --debug is enabled
             if args.debug:

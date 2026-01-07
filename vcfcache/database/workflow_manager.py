@@ -135,7 +135,6 @@ class WorkflowManager(WorkflowBase):
         anno_config_file: Optional[Path] = None,
         params_file: Optional[Path] = None,
         verbosity: int = 0,
-        contig_map: Optional[Path] = None,
     ):
         """Initialize the pure Python workflow manager.
 
@@ -230,8 +229,21 @@ class WorkflowManager(WorkflowBase):
         else:
             self.nfa_config_content = {}
 
-        # Optional contig rename map for annotation
-        self.contig_map = Path(contig_map).expanduser().resolve() if contig_map else None
+        params_genome = None
+        anno_genome = None
+        if self.params_file_content:
+            params_genome = self.params_file_content.get("genome_build")
+            if params_genome:
+                self.logger.info(f"Genome build (params.yaml): {params_genome}")
+        if self.nfa_config_content:
+            anno_genome = self.nfa_config_content.get("genome_build")
+            if anno_genome:
+                self.logger.info(f"Genome build (annotation.yaml): {anno_genome}")
+        if params_genome and anno_genome and params_genome != anno_genome:
+            raise ValueError(
+                f"Genome build mismatch between params.yaml ({params_genome}) "
+                f"and annotation.yaml ({anno_genome})."
+            )
 
     def run(
         self,
@@ -551,7 +563,6 @@ class WorkflowManager(WorkflowBase):
             input_bcf = normalized_input  # Use normalized input for subsequent steps
 
         # Step 1: Add cache annotations
-        # Note: Input contigs are never renamed. Cache may have been renamed if needed.
         self.logger.info("Step 1/4: Adding cache annotations")
         step1_bcf = work_task / f"{sample_name}_isecvst.bcf"
         cmd1 = (
@@ -729,7 +740,6 @@ class WorkflowManager(WorkflowBase):
         # Use a unique placeholder for stdin when piping
         STDIN_PLACEHOLDER = "__VCFCACHE_STDIN__"
 
-        # Note: Input contigs are never renamed. Cache may have been renamed if needed.
         anno_cmd = self._substitute_variables(
             self.nfa_config_content["annotation_cmd"],
             extra_vars={

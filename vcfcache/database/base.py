@@ -133,6 +133,17 @@ class VCFDatabase:
                 "or tabix for compressed VCF files."
             )
 
+    def _list_contigs(self, bcf: Path) -> list[str]:
+        """List contigs using bcftools index -s."""
+        self.ensure_indexed(bcf)
+        res = subprocess.run(
+            [str(self.bcftools_path), "index", "-s", str(bcf)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return [line.split()[0] for line in res.stdout.splitlines() if line.strip()]
+
     def validate_bcf_header(
         self, bcf_path: Path, norm: bool = True
     ) -> Tuple[bool, Optional[str]]:
@@ -258,35 +269,13 @@ class VCFDatabase:
                     f"Found {len(vcf_contigs)} unique chromosomes in VCF index"
                 )
 
-            # Check if all VCF contigs are in reference (with automatic mapping)
-            missing_contigs = set()
-            for contig in vcf_contigs:
-                # Check direct match
-                if contig in ref_contigs:
-                    continue
-
-                # Try common transformations
-                # Try with/without 'chr' prefix
-                if contig.startswith("chr") and contig[3:] in ref_contigs:
-                    continue
-                if f"chr{contig}" in ref_contigs:
-                    continue
-
-                # Try MT/M variations for mitochondrial DNA
-                if contig in ("MT", "M", "chrM", "chrMT") and (
-                    "chrM" in ref_contigs
-                    or "M" in ref_contigs
-                    or "MT" in ref_contigs
-                ):
-                    continue
-
-                # If we get here, the contig is missing
-                missing_contigs.add(contig)
+            # Check if all VCF contigs are in reference (exact match)
+            missing_contigs = {c for c in vcf_contigs if c not in ref_contigs}
 
             if missing_contigs:
                 return (
                     False,
-                    f"Contigs in VCF not found in reference (even after automatic mapping): {', '.join(missing_contigs)}",
+                    f"Contigs in VCF not found in reference: {', '.join(missing_contigs)}",
                 )
 
             # Check reference alleles for a subset of variants

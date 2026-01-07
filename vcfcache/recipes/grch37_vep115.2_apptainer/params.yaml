@@ -3,6 +3,7 @@
 ## This recipe is intended for environments where VEP is provided via Apptainer/Singularity.
 ## Adjust paths to match your installation.
 
+genome_build: "GRCh38"
 annotation_tool_cmd: "apptainer exec -B /mnt/data:/mnt/data /mnt/data/apps/ensembl-vep/115/vep.sif vep"
 tool_version_command: "apptainer exec -B /mnt/data:/mnt/data /mnt/data/apps/ensembl-vep/115/vep.sif vep | awk '/ensembl-vep/ {print $NF}'"
 

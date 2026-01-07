@@ -70,6 +70,7 @@ class DatabaseUpdater(VCFDatabase):
                     "bcftools_cmd": str(bcftools_path),
                     "temp_dir": "/tmp",
                     "threads": 1,  # Default to 1 thread
+                    "genome_build": "UNKNOWN",
                     "optional_checks": {},
                 }
                 self.params_file.write_text(yaml.dump(minimal_params))

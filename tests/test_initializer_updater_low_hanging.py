@@ -162,6 +162,7 @@ def test_initializer_create_database_success(monkeypatch, tmp_path):
     init = init_mod.DatabaseInitializer.__new__(init_mod.DatabaseInitializer)
     init.logger = None
     init.cached_output = _DummyCacheOutput(tmp_path / "cache", valid=True)
+    init.cached_output.create_structure()
     init.cache_name = "demo"
     init.input_file = tmp_path / "input.bcf"
     init.input_file.write_bytes(b"bcf")
@@ -197,6 +198,7 @@ def test_initializer_create_database_success_with_logger(monkeypatch, tmp_path):
 
     init.logger = _Logger()
     init.cached_output = _DummyCacheOutput(tmp_path / "cache", valid=True)
+    init.cached_output.create_structure()
     init.cache_name = "demo"
     init.input_file = tmp_path / "input.bcf"
     init.input_file.write_bytes(b"bcf")
@@ -217,6 +219,7 @@ def test_initializer_create_database_md5_error(monkeypatch, tmp_path):
     init = init_mod.DatabaseInitializer.__new__(init_mod.DatabaseInitializer)
     init.logger = None
     init.cached_output = _DummyCacheOutput(tmp_path / "cache", valid=True)
+    init.cached_output.create_structure()
     init.cache_name = "demo"
     init.input_file = tmp_path / "input.bcf"
     init.input_file.write_bytes(b"bcf")
@@ -240,6 +243,7 @@ def test_initializer_create_database_missing_input_file(tmp_path):
     init = init_mod.DatabaseInitializer.__new__(init_mod.DatabaseInitializer)
     init.logger = None
     init.cached_output = _DummyCacheOutput(tmp_path / "cache", valid=True)
+    init.cached_output.create_structure()
     init.cache_name = "demo"
     init.input_file = None
     init.info_file = tmp_path / "blueprint" / "sources.info"
@@ -457,6 +461,8 @@ def test_updater_merge_variants_logs_summary(monkeypatch, tmp_path):
             self.debugs.append(msg)
 
     upd.logger = _Logger()
+    upd.cached_output = _DummyCacheOutput(tmp_path / "cache", valid=True)
+    upd.cached_output.create_structure()
     upd.blueprint_bcf = tmp_path / "db.bcf"
     upd.blueprint_bcf.write_bytes(b"bcf")
     upd.input_file = tmp_path / "input.bcf"
@@ -497,6 +503,8 @@ def test_updater_add_duplicate_skips(monkeypatch, tmp_path):
 def test_updater_merge_variants_updates_info(monkeypatch, tmp_path):
     upd = upd_mod.DatabaseUpdater.__new__(upd_mod.DatabaseUpdater)
     upd.logger = None
+    upd.cached_output = _DummyCacheOutput(tmp_path / "cache", valid=True)
+    upd.cached_output.create_structure()
     upd.blueprint_bcf = tmp_path / "db.bcf"
     upd.blueprint_bcf.write_bytes(b"bcf")
     upd.input_file = tmp_path / "input.bcf"
@@ -575,6 +583,7 @@ def test_initializer_init_creates_minimal_params(monkeypatch, tmp_path):
 
     data = yaml.safe_load(init.config_yaml.read_text())
     assert data["bcftools_cmd"] == "/usr/bin/bcftools"
+    assert data["genome_build"] == "UNKNOWN"
     assert created["input_file"] == input_file
 
 
@@ -584,7 +593,13 @@ def test_initializer_init_uses_params_file(monkeypatch, tmp_path):
     (tmp_path / "input.bcf.csi").write_text("idx")
     output_dir = tmp_path / "cache"
     params_file = tmp_path / "params.yaml"
-    params_file.write_text("threads: 4\n")
+    params_file.write_text(
+        "annotation_tool_cmd: bcftools\n"
+        "bcftools_cmd: bcftools\n"
+        "temp_dir: /tmp\n"
+        "threads: 4\n"
+        "genome_build: GRCh38\n"
+    )
 
     created = {}
 
@@ -619,7 +634,13 @@ def test_updater_init_with_params_file(monkeypatch, tmp_path):
     input_file.write_text("bcf")
     (tmp_path / "input.bcf.csi").write_text("idx")
     params_file = tmp_path / "params.yaml"
-    params_file.write_text("threads: 2\n")
+    params_file.write_text(
+        "annotation_tool_cmd: bcftools\n"
+        "bcftools_cmd: bcftools\n"
+        "temp_dir: /tmp\n"
+        "threads: 2\n"
+        "genome_build: GRCh38\n"
+    )
 
     monkeypatch.setattr(upd_mod, "compute_md5", lambda *_: "abc")
     monkeypatch.setattr(db_base, "create_workflow", lambda **_kwargs: _DummyWorkflow())
@@ -643,7 +664,13 @@ def test_updater_init_uses_init_yaml(monkeypatch, tmp_path):
     workflow_dir = db_path / "workflow"
     workflow_dir.mkdir()
     init_yaml = workflow_dir / "init.yaml"
-    init_yaml.write_text("threads: 1\n")
+    init_yaml.write_text(
+        "annotation_tool_cmd: bcftools\n"
+        "bcftools_cmd: bcftools\n"
+        "temp_dir: /tmp\n"
+        "threads: 1\n"
+        "genome_build: GRCh38\n"
+    )
 
     input_file = tmp_path / "input.bcf"
     input_file.write_text("bcf")
@@ -685,6 +712,7 @@ def test_updater_init_creates_extend_yaml(monkeypatch, tmp_path):
     assert upd.params_file == db_path / "workflow" / "extend.yaml"
     data = yaml.safe_load(upd.params_file.read_text())
     assert data["bcftools_cmd"] == "/usr/bin/bcftools"
+    assert data["genome_build"] == "UNKNOWN"
 
 
 def test_updater_validate_input_files_ok(monkeypatch, tmp_path):
@@ -795,6 +823,7 @@ def test_initializer_create_database_missing_info_file(monkeypatch, tmp_path):
     init = init_mod.DatabaseInitializer.__new__(init_mod.DatabaseInitializer)
     init.logger = None
     init.cached_output = _DummyCacheOutput(tmp_path / "cache", valid=True)
+    init.cached_output.create_structure()
     init.cache_name = "demo"
     init.input_file = tmp_path / "input.bcf"
     init.input_file.write_bytes(b"bcf")
@@ -815,6 +844,7 @@ def test_initializer_create_database_workflow_error(monkeypatch, tmp_path):
     init = init_mod.DatabaseInitializer.__new__(init_mod.DatabaseInitializer)
     init.logger = None
     init.cached_output = _DummyCacheOutput(tmp_path / "cache", valid=True)
+    init.cached_output.create_structure()
     init.cache_name = "demo"
     init.input_file = tmp_path / "input.bcf"
     init.input_file.write_bytes(b"bcf")
@@ -852,6 +882,8 @@ def test_updater_validate_input_files_missing_input(tmp_path):
 def test_updater_merge_variants_non_int_stats(monkeypatch, tmp_path):
     upd = upd_mod.DatabaseUpdater.__new__(upd_mod.DatabaseUpdater)
     upd.logger = None
+    upd.cached_output = _DummyCacheOutput(tmp_path / "cache", valid=True)
+    upd.cached_output.create_structure()
     upd.blueprint_bcf = tmp_path / "db.bcf"
     upd.blueprint_bcf.write_text("bcf")
     upd.input_file = tmp_path / "input.bcf"
@@ -872,6 +904,8 @@ def test_updater_merge_variants_non_int_stats(monkeypatch, tmp_path):
 def test_updater_merge_variants_logs_drop(monkeypatch, tmp_path):
     upd = upd_mod.DatabaseUpdater.__new__(upd_mod.DatabaseUpdater)
     upd.logger = None
+    upd.cached_output = _DummyCacheOutput(tmp_path / "cache", valid=True)
+    upd.cached_output.create_structure()
     upd.blueprint_bcf = tmp_path / "db.bcf"
     upd.blueprint_bcf.write_text("bcf")
     upd.input_file = tmp_path / "input.bcf"
@@ -892,6 +926,8 @@ def test_updater_merge_variants_logs_drop(monkeypatch, tmp_path):
 def test_updater_merge_variants_stats_missing_keys(monkeypatch, tmp_path):
     upd = upd_mod.DatabaseUpdater.__new__(upd_mod.DatabaseUpdater)
     upd.logger = None
+    upd.cached_output = _DummyCacheOutput(tmp_path / "cache", valid=True)
+    upd.cached_output.create_structure()
     upd.blueprint_bcf = tmp_path / "db.bcf"
     upd.blueprint_bcf.write_text("bcf")
     upd.input_file = tmp_path / "input.bcf"

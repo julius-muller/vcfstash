@@ -167,7 +167,7 @@ def update_golden_reference_dataset(force=True):
         # Define the test files
         test_vcf = str(Path(TEST_DATA_DIR) / "crayz_db.bcf")
         test_vcf2 = str(Path(TEST_DATA_DIR) / "crayz_db2.bcf")
-        test_sample = str(Path(TEST_DATA_DIR) / "sample5.bcf")
+        test_sample = str(Path(TEST_DATA_DIR) / "sample4.bcf")
 
         # Define the annotation name
         annotate_name = "testor"

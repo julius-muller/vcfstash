@@ -259,7 +259,7 @@ def test_blueprint_annotation_workflow(test_scenario, prebuilt_cache, test_outpu
     assert annotated_cache.exists(), "Annotated cache file not found"
 
     # Step 3: Annotate a sample using the cache
-    sample_vcf = TEST_DATA_DIR / "sample5.bcf"
+    sample_vcf = TEST_DATA_DIR / "sample4.bcf"
     output_dir = Path(test_output_dir) / "sample_output"
 
     cmd_use_cache = [
@@ -301,7 +301,7 @@ def test_vanilla_annotation_workflow(test_scenario, test_output_dir):
 
     from tests.conftest import TEST_DATA_DIR, TEST_ANNO_CONFIG, TEST_PARAMS
 
-    sample_vcf = TEST_DATA_DIR / "sample5.bcf"
+    sample_vcf = TEST_DATA_DIR / "sample4.bcf"
     output_dir = Path(test_output_dir) / "vanilla_output"
     Path(test_output_dir).mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -366,7 +366,7 @@ def test_annotation_consistency_across_scenarios(test_scenario, test_output_dir)
 
     from tests.conftest import TEST_DATA_DIR, TEST_ANNO_CONFIG, TEST_PARAMS
 
-    sample_vcf = TEST_DATA_DIR / "sample5.bcf"
+    sample_vcf = TEST_DATA_DIR / "sample4.bcf"
 
     if test_scenario == "annotated":
         # In annotated scenario, test with cache

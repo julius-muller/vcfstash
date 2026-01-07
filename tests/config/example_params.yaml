@@ -11,6 +11,7 @@ tool_version_command: "docker run --user $(id -u):$(id -g) -i -v /mnt/data:/mnt/
 bcftools_cmd: "bcftools"
 # Number of threads for bcftools operations
 threads: 1
+genome_build: "GRCh38"
 
 ## * OPTIONAL RESOURCES *
 # All keys here can be utilized in the annotation.yaml file as ${params.MYKEY}

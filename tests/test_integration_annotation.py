@@ -25,7 +25,7 @@ def test_full_integration_annotation():
     """
 
     alias = "cache-hg38-gnomad-4.1wgs-AF0100-vep-115.2-basic"
-    sample_vcf = Path(__file__).resolve().parent / "data" / "nodata" / "sample5.bcf"
+    sample_vcf = Path(__file__).resolve().parent / "data" / "nodata" / "sample4.bcf"
     params = Path(__file__).resolve().parent / "config" / "test_params.yaml"
 
     outdir = Path(tempfile.mkdtemp(prefix="vcfcache_integration_"))

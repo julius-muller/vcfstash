@@ -213,7 +213,7 @@ def test_push_and_pull_roundtrip_via_sandbox(tmp_path: Path):
                 "-a",
                 str(annotation_dir),
                 "--vcf",
-                str(vcfcache_root / "tests" / "data" / "nodata" / "sample5.bcf"),
+                str(vcfcache_root / "tests" / "data" / "nodata" / "sample4.bcf"),
                 "--output",
                 str(out_anno),
                 "-y",
@@ -223,7 +223,7 @@ def test_push_and_pull_roundtrip_via_sandbox(tmp_path: Path):
             env=env,
             cwd=work_dir,
         )
-        produced = out_anno / "sample5_vc.bcf"
+        produced = out_anno / "sample4_vc.bcf"
         assert produced.exists()
 
     finally:

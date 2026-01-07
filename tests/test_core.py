@@ -109,7 +109,11 @@ def test_show_command_outputs_annotation_tool_cmd(test_output_dir):
 
     expected_cmd = "docker run --rm -i vep:latest"
     (annotation_dir / "annotation.yaml").write_text(
-        f'annotation_tool_cmd: "{expected_cmd}"\n'
+        "annotation_cmd: "
+        f"\"{expected_cmd}\"\n"
+        "must_contain_info_tag: CSQ\n"
+        "required_tool_version: \"1.0\"\n"
+        "genome_build: GRCh38\n"
     )
 
     result = subprocess.run(
@@ -171,13 +175,15 @@ def test_list_inspect_reports_required_params(tmp_path: Path):
         "annotation_cmd: |\n"
         "  ${params.bcftools_cmd} view ${INPUT_BCF} | ${params.annotation_tool_cmd} > ${OUTPUT_BCF}\n"
         "must_contain_info_tag: CSQ\n"
-        "required_tool_version: \"115.2\"\n",
+        "required_tool_version: \"115.2\"\n"
+        "genome_build: GRCh38\n",
         encoding="utf-8",
     )
     (cache_root / "cache" / "test_anno" / "params.snapshot.yaml").write_text(
         "params:\n"
         "  bcftools_cmd: bcftools\n"
-        "  annotation_tool_cmd: vep\n",
+        "  annotation_tool_cmd: vep\n"
+        "  genome_build: GRCh38\n",
         encoding="utf-8",
     )
 
@@ -200,7 +206,13 @@ def test_caches_local_lists_from_path(tmp_path: Path):
     # Ensure size >= 1MB so it is listed (local listing ignores tiny/placeholder dirs).
     (cache_root / "blueprint" / "vcfcache.bcf").write_bytes(b"x" * (1024 * 1024 + 10))
     (cache_root / "cache" / "test_anno" / "vcfcache_annotated.bcf").write_bytes(b"x" * (1024 * 1024 + 10))
-    (cache_root / "cache" / "test_anno" / "annotation.yaml").write_text("annotation_cmd: echo\n", encoding="utf-8")
+    (cache_root / "cache" / "test_anno" / "annotation.yaml").write_text(
+        "annotation_cmd: echo\n"
+        "must_contain_info_tag: CSQ\n"
+        "required_tool_version: \"1.0\"\n"
+        "genome_build: GRCh37\n",
+        encoding="utf-8",
+    )
 
     result = subprocess.run(
         VCFCACHE_CMD + ["list", "caches", "--local", str(base)],

@@ -33,10 +33,16 @@ def _make_manager(tmp_path):
     mgr.output_dir = tmp_path
     mgr.name = "demo"
     mgr.logger = _DummyLogger()
-    mgr.params_file_content = {"bcftools_cmd": "bcftools", "threads": 2}
+    mgr.params_file_content = {
+        "bcftools_cmd": "bcftools",
+        "threads": 2,
+        "genome_build": "GRCh38",
+    }
     mgr.nfa_config_content = {
         "annotation_cmd": "echo ${INPUT_BCF} > ${OUTPUT_BCF}",
         "must_contain_info_tag": "MOCK",
+        "required_tool_version": "1.0",
+        "genome_build": "GRCh38",
     }
     mgr.work_dir = None
     return mgr
@@ -44,7 +50,11 @@ def _make_manager(tmp_path):
 
 def test_substitute_variables_env_params_and_extra(monkeypatch, tmp_path):
     mgr = _make_manager(tmp_path)
-    mgr.params_file_content = {"bcftools_cmd": "/usr/bin/bcftools", "vep_cache": "/opt/vep"}
+    mgr.params_file_content = {
+        "bcftools_cmd": "/usr/bin/bcftools",
+        "vep_cache": "/opt/vep",
+        "genome_build": "GRCh38",
+    }
     monkeypatch.setenv("VCFCACHE_ROOT", "/data/vcfcache")
 
     text = "root=${VCFCACHE_ROOT} cache=${params.vep_cache} in=${INPUT_BCF} out=\\${OUTPUT_BCF}"
@@ -121,6 +131,33 @@ def test_run_invalid_mode(tmp_path):
     mgr = _make_manager(tmp_path)
     with pytest.raises(ValueError):
         mgr.run("nope")
+
+
+def test_workflow_manager_genome_mismatch(tmp_path):
+    params = tmp_path / "params.yaml"
+    params.write_text(
+        "annotation_tool_cmd: bcftools\n"
+        "bcftools_cmd: bcftools\n"
+        "temp_dir: /tmp\n"
+        "threads: 1\n"
+        "genome_build: GRCh38\n"
+    )
+    anno = tmp_path / "annotation.yaml"
+    anno.write_text(
+        "annotation_cmd: echo ${INPUT_BCF} > ${OUTPUT_BCF}\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh37\n"
+    )
+
+    with pytest.raises(ValueError):
+        wf.WorkflowManager(
+            input_file=tmp_path / "in.bcf",
+            output_dir=tmp_path / "out",
+            name="demo",
+            params_file=params,
+            anno_config_file=anno,
+        )
 
 
 def test_bcftools_command_run_writes_outputs(monkeypatch, tmp_path):
@@ -313,8 +350,10 @@ def test_run_cache_build_writes_logs(tmp_path, monkeypatch):
     mgr.nfa_config_content = {
         "annotation_cmd": "echo ${INPUT_BCF} > ${OUTPUT_BCF}",
         "must_contain_info_tag": "MOCK",
+        "required_tool_version": "1.0",
+        "genome_build": "GRCh38",
     }
-    mgr.params_file_content = {"bcftools_cmd": "bcftools", "threads": 1}
+    mgr.params_file_content = {"bcftools_cmd": "bcftools", "threads": 1, "genome_build": "GRCh38"}
 
     mgr._run_cache_build(Path("db.bcf"))
     assert (mgr.output_dir / "annotation_tool.log").exists()
@@ -331,8 +370,10 @@ def test_run_annotate_missing_variants(monkeypatch, tmp_path):
     mgr.nfa_config_content = {
         "annotation_cmd": "echo ${INPUT_BCF} > ${OUTPUT_BCF}",
         "must_contain_info_tag": "MOCK",
+        "required_tool_version": "1.0",
+        "genome_build": "GRCh38",
     }
-    mgr.params_file_content = {"bcftools_cmd": "bcftools", "threads": 1}
+    mgr.params_file_content = {"bcftools_cmd": "bcftools", "threads": 1, "genome_build": "GRCh38"}
 
     def _run(cmd, *args, **kwargs):
         class _Res:
@@ -362,8 +403,10 @@ def test_run_annotate_no_missing(monkeypatch, tmp_path):
     mgr.nfa_config_content = {
         "annotation_cmd": "echo ${INPUT_BCF} > ${OUTPUT_BCF}",
         "must_contain_info_tag": "MOCK",
+        "required_tool_version": "1.0",
+        "genome_build": "GRCh38",
     }
-    mgr.params_file_content = {"bcftools_cmd": "bcftools", "threads": 1}
+    mgr.params_file_content = {"bcftools_cmd": "bcftools", "threads": 1, "genome_build": "GRCh38"}
 
     def _run(cmd, *args, **kwargs):
         class _Res:

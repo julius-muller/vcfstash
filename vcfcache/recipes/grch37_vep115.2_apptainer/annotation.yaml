@@ -3,6 +3,7 @@
 ## This annotation config is VEP installation-agnostic (works with native, Docker, or Apptainer).
 ## The installation method is specified in params.yaml via annotation_tool_cmd.
 
+genome_build: "GRCh38"
 annotation_cmd: |
   ${params.bcftools_cmd} view ${INPUT_BCF} | \
   ${params.annotation_tool_cmd} \

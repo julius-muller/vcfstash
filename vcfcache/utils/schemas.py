@@ -39,6 +39,7 @@ class ParamsYAMLSchema:
         bcftools_cmd: "bcftools"
         temp_dir: "/tmp"
         threads: 1
+        genome_build: "GRCh38"
 
         # Optional
         tool_version_command: "vep --version"
@@ -56,6 +57,7 @@ class ParamsYAMLSchema:
         "bcftools_cmd",
         "temp_dir",
         "threads",
+        "genome_build",
     }
 
     # Optional fields (known/documented)
@@ -126,6 +128,8 @@ class ParamsYAMLSchema:
                         f"Invalid params.yaml: Field '{field_name}' must be a string, "
                         f"got {type(data[field_name]).__name__}"
                     )
+                if field_name == "genome_build" and not data[field_name].strip():
+                    return False, "Invalid params.yaml: Field 'genome_build' must be a non-empty string"
 
         # Validate optional_checks if present
         if "optional_checks" in data and not isinstance(data["optional_checks"], dict):
@@ -157,6 +161,7 @@ Example:
 annotation_tool_cmd: "vep"
 bcftools_cmd: "bcftools"
 temp_dir: "/tmp"
+genome_build: "GRCh38"
 tool_version_command: "vep --version"
 optional_checks: {{}}
 vep_cache_dir: "/opt/vep/cache"
@@ -195,6 +200,7 @@ class AnnotationYAMLSchema:
 
         must_contain_info_tag: CSQ
         required_tool_version: "115.2"
+        genome_build: "GRCh38"
         optional_checks: {}
         ```
     """
@@ -204,6 +210,7 @@ class AnnotationYAMLSchema:
         "annotation_cmd",
         "must_contain_info_tag",
         "required_tool_version",
+        "genome_build",
     }
 
     # Optional fields
@@ -258,6 +265,8 @@ class AnnotationYAMLSchema:
                     f"Invalid annotation.yaml: Field '{field_name}' must be a string, "
                     f"got {type(data[field_name]).__name__}"
                 )
+            if field_name == "genome_build" and not data[field_name].strip():
+                return False, "Invalid annotation.yaml: Field 'genome_build' must be a non-empty string"
 
         # Validate optional_checks if present
         if "optional_checks" in data and not isinstance(data["optional_checks"], dict):
@@ -296,6 +305,7 @@ annotation_cmd: |
 
 must_contain_info_tag: CSQ
 required_tool_version: "115.2"
+genome_build: "GRCh38"
 optional_checks: {{}}
 """
 

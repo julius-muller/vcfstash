@@ -90,7 +90,12 @@ def test_print_annotation_command_single_cache(tmp_path, capsys):
     cache_root = tmp_path / "root"
     cache_dir = cache_root / "cache" / "anno1"
     cache_dir.mkdir(parents=True)
-    (cache_dir / "annotation.yaml").write_text("annotation_cmd: echo hello\n")
+    (cache_dir / "annotation.yaml").write_text(
+        "annotation_cmd: echo hello\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
 
     cli._print_annotation_command(cache_root)
     out = capsys.readouterr().out
@@ -196,7 +201,12 @@ def test_main_cache_build_local(monkeypatch, tmp_path):
     (db_dir / "blueprint").mkdir(parents=True)
     (db_dir / "blueprint" / "vcfcache.bcf").write_text("bcf")
     anno = tmp_path / "anno.yaml"
-    anno.write_text("annotation_cmd: echo ok\nmust_contain_info_tag: MOCK\n")
+    anno.write_text(
+        "annotation_cmd: echo ok\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
 
     monkeypatch.setattr(
         cli.sys,
@@ -236,8 +246,19 @@ def test_main_annotate_runs(monkeypatch, tmp_path):
     ann_db = tmp_path / "cache" / "anno"
     ann_db.mkdir(parents=True)
     (ann_db / "vcfcache_annotated.bcf").write_text("x")
-    (ann_db / "annotation.yaml").write_text("annotation_cmd: echo ok\n")
-    (ann_db / "params.snapshot.yaml").write_text("annotation_tool_cmd: bcftools\nbcftools_cmd: bcftools\ntemp_dir: /tmp\nthreads: 1\n")
+    (ann_db / "annotation.yaml").write_text(
+        "annotation_cmd: echo ok\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
+    (ann_db / "params.snapshot.yaml").write_text(
+        "annotation_tool_cmd: bcftools\n"
+        "bcftools_cmd: bcftools\n"
+        "temp_dir: /tmp\n"
+        "threads: 1\n"
+        "genome_build: GRCh38\n"
+    )
 
     vcf = tmp_path / "in.bcf"
     vcf.write_text("bcf")
@@ -290,7 +311,12 @@ def test_main_cache_build_doi_blueprint(monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "extract_cache", lambda *_args, **_kwargs: extracted)
 
     anno = tmp_path / "anno.yaml"
-    anno.write_text("annotation_cmd: echo ok\nmust_contain_info_tag: MOCK\n")
+    anno.write_text(
+        "annotation_cmd: echo ok\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
 
     monkeypatch.setattr(
         cli.sys,
@@ -357,7 +383,12 @@ def test_main_cache_build_doi_prebuilt_cache(monkeypatch, tmp_path):
     anno_dir = extracted / "cache" / "anno1"
     anno_dir.mkdir(parents=True)
     (anno_dir / "vcfcache_annotated.bcf").write_text("x")
-    (anno_dir / "annotation.yaml").write_text("annotation_cmd: echo ok\n")
+    (anno_dir / "annotation.yaml").write_text(
+        "annotation_cmd: echo ok\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
 
     monkeypatch.setattr(cli, "extract_cache", lambda *_args, **_kwargs: extracted)
 
@@ -440,8 +471,19 @@ def test_main_list_local_caches(monkeypatch, tmp_path, capsys):
     anno = cache_root / "cache" / "anno1"
     anno.mkdir(parents=True)
     (anno / "vcfcache_annotated.bcf").write_bytes(b"x" * (1024 * 1024 + 10))
-    (anno / "annotation.yaml").write_text("annotation_cmd: echo ok\n")
-    (anno / "params.snapshot.yaml").write_text("params: {}\n")
+    (anno / "annotation.yaml").write_text(
+        "annotation_cmd: echo ok\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
+    (anno / "params.snapshot.yaml").write_text(
+        "annotation_tool_cmd: bcftools\n"
+        "bcftools_cmd: bcftools\n"
+        "temp_dir: /tmp\n"
+        "threads: 1\n"
+        "genome_build: GRCh38\n"
+    )
 
     monkeypatch.setattr(
         cli.sys,
@@ -488,8 +530,19 @@ def test_main_list_inspect_annotation_dir(monkeypatch, tmp_path, capsys):
     (root / "blueprint").mkdir(parents=True)
     (root / "blueprint" / "vcfcache.bcf").write_text("bcf")
     (anno / "vcfcache_annotated.bcf").write_text("x")
-    (anno / "annotation.yaml").write_text("annotation_cmd: echo ok\nmust_contain_info_tag: MOCK\n")
-    (anno / "params.snapshot.yaml").write_text("params: {}\n")
+    (anno / "annotation.yaml").write_text(
+        "annotation_cmd: echo ok\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
+    (anno / "params.snapshot.yaml").write_text(
+        "annotation_tool_cmd: bcftools\n"
+        "bcftools_cmd: bcftools\n"
+        "temp_dir: /tmp\n"
+        "threads: 1\n"
+        "genome_build: GRCh38\n"
+    )
 
     monkeypatch.setattr(
         cli.sys,
@@ -660,7 +713,12 @@ def test_main_cache_build_doi_cache_with_anno(monkeypatch, tmp_path):
     anno_dir = extracted / "cache" / "anno1"
     anno_dir.mkdir(parents=True)
     (anno_dir / "vcfcache_annotated.bcf").write_text("x")
-    (anno_dir / "annotation.yaml").write_text("annotation_cmd: echo ok\n")
+    (anno_dir / "annotation.yaml").write_text(
+        "annotation_cmd: echo ok\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
     monkeypatch.setattr(cli, "extract_cache", lambda *_a, **_k: extracted)
 
     monkeypatch.setattr(
@@ -768,7 +826,12 @@ def test_main_cache_build_doi_blueprint_success(monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "extract_cache", lambda *_a, **_k: extracted)
 
     anno = tmp_path / "anno.yaml"
-    anno.write_text("annotation_cmd: echo ok\nmust_contain_info_tag: MOCK\n")
+    anno.write_text(
+        "annotation_cmd: echo ok\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
 
     monkeypatch.setattr(
         cli.sys,
@@ -802,9 +865,19 @@ def test_main_list_inspect_cache_root_multiple_annos(monkeypatch, tmp_path, caps
     anno1.mkdir(parents=True)
     anno2.mkdir(parents=True)
     (anno1 / "vcfcache_annotated.bcf").write_text("x")
-    (anno1 / "annotation.yaml").write_text("annotation_cmd: echo ok\n")
+    (anno1 / "annotation.yaml").write_text(
+        "annotation_cmd: echo ok\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
     (anno2 / "vcfcache_annotated.bcf").write_text("x")
-    (anno2 / "annotation.yaml").write_text("annotation_cmd: echo ok\n")
+    (anno2 / "annotation.yaml").write_text(
+        "annotation_cmd: echo ok\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
 
     monkeypatch.setattr(
         cli.sys,
@@ -1064,7 +1137,12 @@ def test_print_annotation_command_single_cache(tmp_path, capsys):
     cache_dir.mkdir(parents=True)
     anno_dir = cache_dir / "anno1"
     anno_dir.mkdir()
-    (anno_dir / "annotation.yaml").write_text("annotation_cmd: echo ok\n")
+    (anno_dir / "annotation.yaml").write_text(
+        "annotation_cmd: echo ok\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
 
     cli._print_annotation_command(cache_root)
     out = capsys.readouterr().out
@@ -1149,7 +1227,13 @@ def test_main_list_inspect_missing_params_snapshot(monkeypatch, tmp_path, capsys
     anno_dir = root / "cache" / "anno1"
     anno_dir.mkdir(parents=True)
     (anno_dir / "vcfcache_annotated.bcf").write_text("bcf")
-    (anno_dir / "annotation.yaml").write_text("annotation_cmd: echo ok\n# ${params.foo}\n")
+    (anno_dir / "annotation.yaml").write_text(
+        "annotation_cmd: echo ok\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+        "# ${params.foo}\n"
+    )
 
     monkeypatch.setattr(
         cli.sys,
@@ -1175,13 +1259,24 @@ def test_main_list_local_caches_formats_alias(monkeypatch, tmp_path, capsys):
     (root / "cache").mkdir()
     anno_dir = root / "cache" / "anno1"
     anno_dir.mkdir(parents=True)
-    (anno_dir / "annotation.yaml").write_text("annotation_cmd: echo ok\n")
+    (anno_dir / "annotation.yaml").write_text(
+        "annotation_cmd: echo ok\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
     (anno_dir / "vcfcache_annotated.bcf").write_bytes(b"x" * (2 * 1024 * 1024))
     (anno_dir / "vcfcache_annotated.bcf.csi").write_text("idx")
     (root / "blueprint" / "vcfcache.bcf").write_text("bcf")
     (root / "blueprint" / "vcfcache.bcf.csi").write_text("idx")
     (root / "blueprint" / "sources.info").write_text("{}")
-    (anno_dir / "params.snapshot.yaml").write_text("threads: 1\n")
+    (anno_dir / "params.snapshot.yaml").write_text(
+        "annotation_tool_cmd: bcftools\n"
+        "bcftools_cmd: bcftools\n"
+        "temp_dir: /tmp\n"
+        "threads: 1\n"
+        "genome_build: GRCh38\n"
+    )
 
     monkeypatch.setattr(
         cli.sys,
@@ -1255,8 +1350,19 @@ def test_main_annotate_uncached_print(monkeypatch, capsys, tmp_path):
     ann_db = tmp_path / "cache" / "anno"
     ann_db.mkdir(parents=True)
     (ann_db / "vcfcache_annotated.bcf").write_text("x")
-    (ann_db / "annotation.yaml").write_text("annotation_cmd: echo ok\n")
-    (ann_db / "params.snapshot.yaml").write_text("annotation_tool_cmd: bcftools\nbcftools_cmd: bcftools\ntemp_dir: /tmp\nthreads: 1\n")
+    (ann_db / "annotation.yaml").write_text(
+        "annotation_cmd: echo ok\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
+    (ann_db / "params.snapshot.yaml").write_text(
+        "annotation_tool_cmd: bcftools\n"
+        "bcftools_cmd: bcftools\n"
+        "temp_dir: /tmp\n"
+        "threads: 1\n"
+        "genome_build: GRCh38\n"
+    )
 
     vcf = tmp_path / "in.bcf"
     vcf.write_text("bcf")

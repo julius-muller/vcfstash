@@ -20,6 +20,7 @@ class TestParamsYAMLSchema:
             "bcftools_cmd": "bcftools",
             "temp_dir": "/tmp",
             "threads": 2,
+            "genome_build": "GRCh38",
             "tool_version_command": "vep --version",
             "optional_checks": {},
             "custom_field": "value",
@@ -35,6 +36,7 @@ class TestParamsYAMLSchema:
             "bcftools_cmd": "bcftools",
             "temp_dir": "/tmp",
             "threads": 1,
+            "genome_build": "GRCh38",
         }
         is_valid, error = ParamsYAMLSchema.validate(data)
         assert is_valid
@@ -73,6 +75,7 @@ class TestParamsYAMLSchema:
             "bcftools_cmd": "bcftools",
             "temp_dir": "/tmp",
             "threads": 1,
+            "genome_build": "GRCh38",
         }
         is_valid, error = ParamsYAMLSchema.validate(data)
         assert not is_valid
@@ -92,6 +95,7 @@ class TestParamsYAMLSchema:
             "bcftools_cmd": "bcftools",
             "temp_dir": "/tmp",
             "threads": 1,
+            "genome_build": "GRCh38",
             "optional_checks": "not a dict",
         }
         is_valid, error = ParamsYAMLSchema.validate(data)
@@ -106,6 +110,7 @@ class TestParamsYAMLSchema:
             "bcftools_cmd": "bcftools",
             "temp_dir": "/tmp",
             "threads": "not an int",
+            "genome_build": "GRCh38",
         }
         is_valid, error = ParamsYAMLSchema.validate(data)
         assert not is_valid
@@ -119,6 +124,7 @@ class TestParamsYAMLSchema:
             "bcftools_cmd": "bcftools",
             "temp_dir": "/tmp",
             "threads": 0,
+            "genome_build": "GRCh38",
         }
         is_valid, error = ParamsYAMLSchema.validate(data)
         assert not is_valid
@@ -135,6 +141,7 @@ class TestAnnotationYAMLSchema:
             "annotation_cmd": "echo test",
             "must_contain_info_tag": "CSQ",
             "required_tool_version": "115.2",
+            "genome_build": "GRCh38",
             "optional_checks": {},
         }
         is_valid, error = AnnotationYAMLSchema.validate(data)
@@ -147,6 +154,7 @@ class TestAnnotationYAMLSchema:
             "annotation_cmd": "echo test",
             "must_contain_info_tag": "CSQ",
             "required_tool_version": "115.2",
+            "genome_build": "GRCh38",
         }
         is_valid, error = AnnotationYAMLSchema.validate(data)
         assert is_valid
@@ -184,6 +192,7 @@ class TestAnnotationYAMLSchema:
             "annotation_cmd": 123,  # Should be string
             "must_contain_info_tag": "CSQ",
             "required_tool_version": "115.2",
+            "genome_build": "GRCh38",
         }
         is_valid, error = AnnotationYAMLSchema.validate(data)
         assert not is_valid
@@ -208,6 +217,7 @@ annotation_tool_cmd: vep
 bcftools_cmd: bcftools
 temp_dir: /tmp
 threads: 1
+genome_build: GRCh38
 """)
         is_valid, error, data = validate_params_yaml(params_file)
         assert is_valid
@@ -221,6 +231,7 @@ threads: 1
 annotation_cmd: echo test
 must_contain_info_tag: CSQ
 required_tool_version: "115.2"
+genome_build: GRCh38
 """)
         is_valid, error, data = validate_annotation_yaml(anno_file)
         assert is_valid
@@ -275,6 +286,7 @@ class TestCrossValidation:
 annotation_cmd: echo test
 must_contain_info_tag: CSQ
 required_tool_version: "115.2"
+genome_build: GRCh38
 """)
         is_valid, error, data = validate_params_yaml(anno_file)
         assert not is_valid
@@ -288,6 +300,7 @@ annotation_tool_cmd: vep
 bcftools_cmd: bcftools
 temp_dir: /tmp
 threads: 1
+genome_build: GRCh38
 """)
         is_valid, error, data = validate_annotation_yaml(params_file)
         assert not is_valid

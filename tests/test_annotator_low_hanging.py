@@ -12,29 +12,6 @@ from vcfcache.database import base as db_base
 from vcfcache.database.annotator import DatabaseAnnotator, VCFAnnotator
 
 
-def _make_annotator_for_contigs(cache_contigs, input_contigs):
-    annotator = VCFAnnotator.__new__(VCFAnnotator)
-    annotator.cache_file = Path("cache.bcf")
-    annotator.input_vcf = Path("input.bcf")
-    annotator.logger = None
-
-    def _list_contigs(bcf):
-        if bcf == annotator.cache_file:
-            return list(cache_contigs)
-        return list(input_contigs)
-
-    annotator._list_contigs = _list_contigs  # type: ignore[method-assign]
-    return annotator
-
-
-def test_canonical_contig():
-    assert VCFAnnotator._canonical_contig("chr1") == "1"
-    assert VCFAnnotator._canonical_contig("1") == "1"
-    assert VCFAnnotator._canonical_contig("chrM") == "mt"
-    assert VCFAnnotator._canonical_contig("MT") == "mt"
-    assert VCFAnnotator._canonical_contig("chrGL000191.1") == "gl000191.1"
-
-
 def test_wavg():
     assert VCFAnnotator.wavg(0.1, 0.2, 10, 5) == pytest.approx((0.1 * 10 + 0.2 * 5) / 15)
     assert VCFAnnotator.wavg(None, None, 0, 0) is None
@@ -42,48 +19,7 @@ def test_wavg():
     assert VCFAnnotator.wavg(0.1, None, 5, 0) == 0.1
 
 
-def test_check_contig_compatibility_remove_chr():
-    annotator = _make_annotator_for_contigs(
-        cache_contigs=["chr1", "chr2", "chrM"],
-        input_contigs=["1", "2", "M"],
-    )
-    compatible, (needs_rename, rename_type) = annotator._check_contig_compatibility()
-    assert compatible is True
-    assert needs_rename is True
-    assert rename_type == "remove_chr"
-
-
-def test_check_contig_compatibility_add_chr():
-    annotator = _make_annotator_for_contigs(
-        cache_contigs=["1", "2", "M"],
-        input_contigs=["chr1", "chr2", "chrM"],
-    )
-    compatible, (needs_rename, rename_type) = annotator._check_contig_compatibility()
-    assert compatible is True
-    assert needs_rename is True
-    assert rename_type == "add_chr"
-
-
-def test_check_contig_compatibility_no_overlap():
-    annotator = _make_annotator_for_contigs(
-        cache_contigs=["1", "2"],
-        input_contigs=["chrX", "chrY"],
-    )
-    with pytest.raises(RuntimeError):
-        annotator._check_contig_compatibility()
-
-
-def test_check_contig_compatibility_exact_match():
-    annotator = _make_annotator_for_contigs(
-        cache_contigs=["1", "2", "X"],
-        input_contigs=["1", "2", "X"],
-    )
-    compatible, rename = annotator._check_contig_compatibility()
-    assert compatible is True
-    assert rename is False
-
-
-def test_check_contig_compatibility_direct_overlap_logs():
+def test_log_contig_overlap_reports(monkeypatch):
     annotator = VCFAnnotator.__new__(VCFAnnotator)
     annotator.cache_file = Path("cache.bcf")
     annotator.input_vcf = Path("input.bcf")
@@ -99,16 +35,31 @@ def test_check_contig_compatibility_direct_overlap_logs():
 
     def _list_contigs(bcf):
         if bcf == annotator.cache_file:
-            return ["1", "2"]
-        return ["1", "3"]
+            return ["1", "2", "3"]
+        return ["2", "3", "4"]
 
     annotator._list_contigs = _list_contigs  # type: ignore[method-assign]
 
-    compatible, (needs_rename, rename_type) = annotator._check_contig_compatibility()
-    assert compatible is True
-    assert needs_rename is False
-    assert rename_type is None
-    assert any("overlapping contig" in msg for msg in annotator.logger.messages)
+    annotator._log_contig_overlap()
+    assert any("overlap=2" in msg for msg in annotator.logger.messages)
+    assert any("Overlapping contigs" in msg for msg in annotator.logger.messages)
+
+
+def test_log_contig_overlap_no_overlap(monkeypatch):
+    annotator = VCFAnnotator.__new__(VCFAnnotator)
+    annotator.cache_file = Path("cache.bcf")
+    annotator.input_vcf = Path("input.bcf")
+    annotator.logger = None
+
+    def _list_contigs(bcf):
+        if bcf == annotator.cache_file:
+            return ["1"]
+        return ["2"]
+
+    annotator._list_contigs = _list_contigs  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError):
+        annotator._log_contig_overlap()
 
 
 def test_process_variant_annotations():
@@ -130,61 +81,18 @@ def test_process_variant_annotations():
     assert "gnomade_af" not in info
 
 
-def test_ensure_index_skips_when_present(monkeypatch, tmp_path):
-    annotator = VCFAnnotator.__new__(VCFAnnotator)
-    annotator.bcftools_path = Path("/usr/bin/bcftools")
-    bcf = tmp_path / "x.bcf"
-    bcf.write_text("bcf")
-    (tmp_path / "x.bcf.csi").write_text("idx")
-
-    def _run(*_args, **_kwargs):
-        raise AssertionError("subprocess.run should not be called")
-
-    monkeypatch.setattr("vcfcache.database.annotator.subprocess.run", _run)
-    annotator._ensure_index(bcf)
-
-
 def test_list_contigs_parses_output(monkeypatch, tmp_path):
     annotator = VCFAnnotator.__new__(VCFAnnotator)
     annotator.bcftools_path = Path("/usr/bin/bcftools")
 
-    def _ensure_index(_):
-        return None
+    annotator.ensure_indexed = lambda *_a, **_k: None  # type: ignore[assignment]
 
     class _Res:
         stdout = "1\t100\n2\t200\n\n"
 
-    annotator._ensure_index = _ensure_index  # type: ignore[method-assign]
     monkeypatch.setattr("vcfcache.database.annotator.subprocess.run", lambda *a, **k: _Res())
     contigs = annotator._list_contigs(tmp_path / "x.bcf")
     assert contigs == ["1", "2"]
-
-
-def test_ensure_contig_compatibility_renames_cache(monkeypatch, tmp_path):
-    annotator = VCFAnnotator.__new__(VCFAnnotator)
-    annotator.logger = None
-    annotator.bcftools_path = Path("/usr/bin/bcftools")
-    annotator.cache_file = tmp_path / "cache" / "vcfcache_annotated.bcf"
-    annotator.cache_file.parent.mkdir(parents=True, exist_ok=True)
-    annotator.cache_file.write_text("bcf")
-    annotator.input_vcf = tmp_path / "input.bcf"
-    annotator.input_vcf.write_text("bcf")
-    annotator.output_annotations = type(
-        "Out", (), {"root_dir": tmp_path / "out"}
-    )()
-
-    annotator._ensure_index = lambda *_args, **_kwargs: None  # type: ignore[assignment]
-    annotator._check_contig_compatibility = lambda: (True, (True, "remove_chr"))  # type: ignore[assignment]
-    annotator._list_contigs = lambda *_args, **_kwargs: ["chr1", "chr2"]  # type: ignore[assignment]
-
-    monkeypatch.setattr("vcfcache.database.annotator.subprocess.run", lambda *a, **k: None)
-
-    annotator._ensure_contig_compatibility()
-
-    mapping = annotator.output_annotations.root_dir / "work" / "cache_rename_map.txt"
-    assert mapping.exists()
-    assert mapping.read_text() == "chr1\t1\nchr2\t2\n"
-    assert annotator.cache_file.name.endswith("_nochr.bcf")
 
 
 def test_process_region_basic(monkeypatch):
@@ -480,72 +388,6 @@ def test_setup_output_force_removes_existing(tmp_path):
     assert (root / "workflow").exists()
 
 
-def test_ensure_contig_compatibility_no_rename(tmp_path):
-    annotator = VCFAnnotator.__new__(VCFAnnotator)
-    annotator.logger = None
-    annotator.cache_file = tmp_path / "cache.bcf"
-    annotator.input_vcf = tmp_path / "input.bcf"
-    annotator.cache_file.write_text("bcf")
-    annotator.input_vcf.write_text("bcf")
-    annotator.output_annotations = type(
-        "Out", (), {"root_dir": tmp_path / "out"}
-    )()
-    annotator._ensure_index = lambda *_args, **_kwargs: None  # type: ignore[assignment]
-    annotator._check_contig_compatibility = lambda: (True, (False, None))  # type: ignore[assignment]
-
-    annotator._ensure_contig_compatibility()
-    assert annotator.cache_file.name == "cache.bcf"
-
-
-def test_ensure_contig_compatibility_incompatible(tmp_path):
-    annotator = VCFAnnotator.__new__(VCFAnnotator)
-    annotator.logger = None
-    annotator.cache_file = tmp_path / "cache.bcf"
-    annotator.input_vcf = tmp_path / "input.bcf"
-    annotator.cache_file.write_text("bcf")
-    annotator.input_vcf.write_text("bcf")
-    annotator._ensure_index = lambda *_args, **_kwargs: None  # type: ignore[assignment]
-    annotator._check_contig_compatibility = lambda: (False, (False, None))  # type: ignore[assignment]
-
-    with pytest.raises(RuntimeError):
-        annotator._ensure_contig_compatibility()
-
-
-def test_ensure_contig_compatibility_add_chr_with_logger(monkeypatch, tmp_path):
-    class _Logger:
-        def __init__(self):
-            self.infos = []
-
-        def info(self, msg):
-            self.infos.append(msg)
-
-    annotator = VCFAnnotator.__new__(VCFAnnotator)
-    annotator.logger = _Logger()
-    annotator.bcftools_path = Path("/usr/bin/bcftools")
-    annotator.cache_file = tmp_path / "cache" / "vcfcache_annotated.bcf"
-    annotator.cache_file.parent.mkdir(parents=True, exist_ok=True)
-    annotator.cache_file.write_text("bcf")
-    annotator.input_vcf = tmp_path / "input.bcf"
-    annotator.input_vcf.write_text("bcf")
-    annotator.output_annotations = type(
-        "Out", (), {"root_dir": tmp_path / "out"}
-    )()
-
-    annotator._ensure_index = lambda *_args, **_kwargs: None  # type: ignore[assignment]
-    annotator._check_contig_compatibility = lambda: (True, (True, "add_chr"))  # type: ignore[assignment]
-    annotator._list_contigs = lambda *_args, **_kwargs: ["1", "2"]  # type: ignore[assignment]
-
-    monkeypatch.setattr("vcfcache.database.annotator.subprocess.run", lambda *a, **k: None)
-
-    annotator._ensure_contig_compatibility()
-
-    mapping = annotator.output_annotations.root_dir / "work" / "cache_rename_map.txt"
-    assert mapping.exists()
-    assert mapping.read_text() == "1\tchr1\n2\tchr2\n"
-    assert annotator.cache_file.name.endswith("_chrprefixed.bcf")
-    assert any("Creating" in msg for msg in annotator.logger.infos)
-
-
 def test_convert_to_parquet_logs(monkeypatch, tmp_path):
     class _Logger:
         def __init__(self):
@@ -631,6 +473,7 @@ def test_annotate_calls_cleanup(monkeypatch, tmp_path):
     annotator.output_vcf = tmp_path / "out.bcf"
     annotator.cache_file = tmp_path / "cache.bcf"
     annotator.cache_file.write_text("bcf")
+    annotator.output_annotations = type("Out", (), {"root_dir": tmp_path})()
     annotator.nx_workflow = type(
         "WF", (), {"run": lambda *_a, **_k: None, "cleanup_work_dir": lambda *_: None}
     )()
@@ -673,23 +516,6 @@ def test_validate_inputs_success(tmp_path):
     assert called["indexed"] is True
 
 
-def test_ensure_index_runs_when_missing(monkeypatch, tmp_path):
-    annotator = VCFAnnotator.__new__(VCFAnnotator)
-    annotator.bcftools_path = Path("/usr/bin/bcftools")
-    bcf = tmp_path / "x.bcf"
-    bcf.write_text("bcf")
-
-    called = {"ok": False}
-
-    def _run(*_args, **_kwargs):
-        called["ok"] = True
-        return type("R", (), {"stdout": "", "stderr": "", "returncode": 0})()
-
-    monkeypatch.setattr("vcfcache.database.annotator.subprocess.run", _run)
-    annotator._ensure_index(bcf)
-    assert called["ok"] is True
-
-
 def test_process_region_handles_exception(monkeypatch):
     annotator = VCFAnnotator.__new__(VCFAnnotator)
     annotator.logger = None
@@ -721,7 +547,8 @@ def test_preprocess_annotation_config(tmp_path):
 
     config = tmp_path / "annotation.yaml"
     config.write_text(
-        "cmd: $INPUT_BCF ${OUTPUT_BCF} \\\\${INPUT_BCF} \\\\${OUTPUT_BCF} $AUXILIARY_DIR ${AUXILIARY_DIR}\n"
+        "cmd: $INPUT_BCF ${OUTPUT_BCF} \\\\${INPUT_BCF} \\\\${OUTPUT_BCF} "
+        "$AUXILIARY_DIR ${AUXILIARY_DIR}\n"
     )
 
     output = annotator._preprocess_annotation_config(config)
@@ -806,9 +633,20 @@ def test_database_annotator_init_minimal(monkeypatch, tmp_path):
     (db_root / "workflow").mkdir()
 
     params_file = tmp_path / "params.yaml"
-    params_file.write_text("threads: 1\n")
+    params_file.write_text(
+        "annotation_tool_cmd: bcftools\n"
+        "bcftools_cmd: bcftools\n"
+        "temp_dir: /tmp\n"
+        "threads: 1\n"
+        "genome_build: GRCh38\n"
+    )
     anno_config = tmp_path / "annotation.yaml"
-    anno_config.write_text("cmd: $INPUT_BCF\n")
+    anno_config.write_text(
+        "annotation_cmd: $INPUT_BCF\n"
+        "must_contain_info_tag: CSQ\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
 
     monkeypatch.setattr(db_base, "create_workflow", lambda **_kwargs: type("WF", (), {"run": lambda *_a, **_k: None, "cleanup_work_dir": lambda *_: None})())
 
@@ -835,8 +673,19 @@ def test_vcf_annotator_init_minimal(monkeypatch, tmp_path):
 
     anno_dir = cache_root / "cache" / "anno1"
     anno_dir.mkdir(parents=True)
-    (anno_dir / "annotation.yaml").write_text("annotation_cmd: echo ok\n")
-    (anno_dir / "params.snapshot.yaml").write_text("threads: 1\n")
+    (anno_dir / "annotation.yaml").write_text(
+        "annotation_cmd: echo ok\n"
+        "must_contain_info_tag: CSQ\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
+    (anno_dir / "params.snapshot.yaml").write_text(
+        "annotation_tool_cmd: bcftools\n"
+        "bcftools_cmd: bcftools\n"
+        "temp_dir: /tmp\n"
+        "threads: 1\n"
+        "genome_build: GRCh38\n"
+    )
     (anno_dir / "vcfcache_annotated.bcf").write_text("bcf")
 
     input_vcf = tmp_path / "sample.bcf"
@@ -844,8 +693,6 @@ def test_vcf_annotator_init_minimal(monkeypatch, tmp_path):
     (tmp_path / "sample.bcf.csi").write_text("idx")
 
     monkeypatch.setattr(db_base, "create_workflow", lambda **_kwargs: type("WF", (), {"run": lambda *_a, **_k: None, "cleanup_work_dir": lambda *_: None})())
-    monkeypatch.setattr(VCFAnnotator, "_ensure_contig_compatibility", lambda *_args, **_kwargs: None)
-
     annotator = VCFAnnotator(
         input_vcf=input_vcf,
         annotation_db=anno_dir,
