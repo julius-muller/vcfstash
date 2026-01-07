@@ -31,6 +31,7 @@ class _DummyLogger:
 def _make_manager(tmp_path):
     mgr = wf.WorkflowManager.__new__(wf.WorkflowManager)
     mgr.output_dir = tmp_path
+    mgr.output_file = None
     mgr.name = "demo"
     mgr.logger = _DummyLogger()
     mgr.params_file_content = {

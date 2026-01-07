@@ -50,7 +50,8 @@ docker run --rm -v $(pwd):/work ghcr.io/julius-muller/vcfcache:latest \
   annotate \
     -a cache-hg38-gnomad-4.1joint-AF0100-vep-115.2-basic \
     --vcf /work/sample.vcf.gz \
-    --output /work/out 
+    --output /work/sample_vc.bcf \
+    --stats-dir /work
 
 ```
 
@@ -82,7 +83,7 @@ vcfcache cache-build --name vep_cache --db ./cache -a annotation.yaml -y params.
 
 3. **Use cache** on samples:
 ```bash
-vcfcache annotate -a ./cache/cache/vep_cache --vcf sample.vcf.gz --output ./results
+vcfcache annotate -a ./cache/cache/vep_cache --vcf sample.vcf.gz --output ./sample_vc.bcf --stats-dir ./results
 ```
 
 ---

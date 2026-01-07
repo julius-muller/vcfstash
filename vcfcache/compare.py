@@ -12,74 +12,23 @@ from typing import Dict, List, Optional, Tuple
 
 import yaml
 
-from vcfcache.utils.completion import read_completion_flag, validate_compatibility
+from vcfcache.utils.completion import read_completion_flag
 
 
-def get_md5(file_path: Path) -> str:
-    """Calculate MD5 checksum of a file.
-
-    Args:
-        file_path: Path to the file
-
-    Returns:
-        MD5 checksum as hex string
-    """
-    md5_hash = hashlib.md5()
-    with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            md5_hash.update(chunk)
-    return md5_hash.hexdigest()
-
-
-def count_variants(bcf_path: Path) -> Optional[int]:
-    """Count total number of variants in a BCF file using bcftools index -n.
-
-    Args:
-        bcf_path: Path to the BCF file
-
-    Returns:
-        Number of variants, or None if counting failed
-    """
-    try:
-        # Use bcftools index -n to get variant count
-        result = subprocess.run(
-            ["bcftools", "index", "-n", str(bcf_path)],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        count = int(result.stdout.strip())
-        return count
-    except (subprocess.CalledProcessError, ValueError, FileNotFoundError):
-        return None
-
-
-def read_params_yaml(output_dir: Path) -> Dict[str, any]:
-    """Read params.snapshot.yaml from workflow directory.
-
-    Args:
-        output_dir: Output directory from vcfcache annotate
-
-    Returns:
-        Dictionary with genome_build and threads, or empty dict if not found
-    """
-    params_file = output_dir / "workflow" / "params.snapshot.yaml"
-    if not params_file.exists():
+def read_compare_stats(stats_dir: Path) -> Dict[str, any]:
+    """Read compare_stats.yaml from stats directory."""
+    stats_file = stats_dir / "compare_stats.yaml"
+    if not stats_file.exists():
         return {}
-
     try:
-        with open(params_file, "r") as f:
-            params = yaml.safe_load(f)
-            return {
-                "genome_build": params.get("genome_build", "N/A"),
-                "threads": params.get("threads", "N/A"),
-            }
+        with open(stats_file, "r") as f:
+            return yaml.safe_load(f) or {}
     except Exception:
         return {}
 
 
 def parse_workflow_log(output_dir: Path) -> Tuple[Optional[float], List[Dict[str, str]]]:
-    """Parse workflow.log to extract total time and detailed step timings.
+    """Parse workflow.log to extract total time and detailed step timings from stats dir.
 
     Args:
         output_dir: Output directory from vcfcache annotate
@@ -134,7 +83,7 @@ def parse_workflow_log(output_dir: Path) -> Tuple[Optional[float], List[Dict[str
 
 
 def find_output_bcf(output_dir: Path) -> Optional[Path]:
-    """Find the output BCF file in the annotate output directory.
+    """Find the output BCF file from the annotate stats directory.
 
     Args:
         output_dir: Output directory from vcfcache annotate
@@ -142,12 +91,40 @@ def find_output_bcf(output_dir: Path) -> Optional[Path]:
     Returns:
         Path to output BCF file, or None if not found
     """
-    # Look for *.bcf files in the output directory (not in work subdirectory)
+    completion = read_completion_flag(output_dir)
+    if completion:
+        output_file = completion.get("output_file")
+        if output_file and output_file not in {"stdout", "-"}:
+            output_path = Path(output_file).expanduser()
+            if output_path.exists():
+                return output_path
+
+    # Fallback: look for *.bcf files in the stats directory
     bcf_files = [f for f in output_dir.glob("*.bcf") if not f.name.startswith("work")]
     if bcf_files:
         return bcf_files[0]
 
     return None
+
+
+def compute_variant_md5_all(bcf_path: Path) -> Optional[str]:
+    """Compute MD5 of all variant lines (no header)."""
+    try:
+        proc = subprocess.Popen(
+            ["bcftools", "view", "-H", str(bcf_path)],
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+    except Exception:
+        return None
+
+    md5_hash = hashlib.md5()
+    for line in proc.stdout:  # type: ignore[union-attr]
+        md5_hash.update(line.encode())
+    proc.wait()
+    if proc.returncode != 0:
+        return None
+    return md5_hash.hexdigest()
 
 
 def format_time(seconds: float) -> str:
@@ -172,12 +149,13 @@ def format_time(seconds: float) -> str:
         return f"{seconds:.1f}s"
 
 
-def compare_runs(dir1: Path, dir2: Path) -> None:
+def compare_runs(dir1: Path, dir2: Path, md5_all: bool = False) -> None:
     """Compare two vcfcache annotate runs and display results.
 
     Args:
-        dir1: First annotate output directory
-        dir2: Second annotate output directory
+        dir1: First annotate stats directory
+        dir2: Second annotate stats directory
+        md5_all: If True, compute full MD5 of all variants (no header)
     """
     # Validate both directories exist
     if not dir1.exists():
@@ -185,159 +163,151 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
     if not dir2.exists():
         raise FileNotFoundError(f"Directory not found: {dir2}")
 
-    # Read completion flags
-    data1 = read_completion_flag(dir1)
-    data2 = read_completion_flag(dir2)
+    stats1 = read_compare_stats(dir1)
+    stats2 = read_compare_stats(dir2)
+    if not stats1 or not stats2:
+        raise ValueError("Missing compare_stats.yaml in one or both stats directories.")
 
-    # Validate compatibility
-    is_compatible, message = validate_compatibility(dir1, dir2)
-    if not is_compatible:
-        raise ValueError(f"Runs are not compatible: {message}")
+    # Compatibility checks
+    input1 = stats1.get("input_name")
+    input2 = stats2.get("input_name")
+    if input1 and input2 and input1 != input2:
+        raise ValueError(f"Input filename mismatch: {input1} vs {input2}")
 
-    if message:  # Warning message
-        print(f"\n{message}\n")
+    anno1 = stats1.get("annotation_yaml_md5")
+    anno2 = stats2.get("annotation_yaml_md5")
+    if anno1 and anno2 and anno1 != anno2:
+        raise ValueError("annotation.yaml mismatch: the two runs used different annotation recipes.")
 
-    # Determine which is cached and which is uncached
-    mode1 = data1.get("mode", "unknown")
-    mode2 = data2.get("mode", "unknown")
-
-    if mode1 == "uncached" and mode2 == "cached":
-        uncached_dir, cached_dir = dir1, dir2
-        uncached_data, cached_data = data1, data2
-    elif mode1 == "cached" and mode2 == "uncached":
-        uncached_dir, cached_dir = dir2, dir1
-        uncached_data, cached_data = data2, data1
-    else:
-        # Both are same mode or unknown, just compare them as run1 vs run2
-        uncached_dir, cached_dir = dir1, dir2
-        uncached_data, cached_data = data1, data2
+    warnings = []
+    if stats1.get("vcfcache_version") != stats2.get("vcfcache_version"):
+        warnings.append(
+            f"WARNING: Different vcfcache versions ({stats1.get('vcfcache_version')} vs {stats2.get('vcfcache_version')})."
+        )
+    if stats1.get("genome_build_params") != stats2.get("genome_build_params"):
+        warnings.append(
+            f"WARNING: Different genome_build in params.yaml ({stats1.get('genome_build_params')} vs {stats2.get('genome_build_params')})."
+        )
+    if stats1.get("genome_build_annotation") != stats2.get("genome_build_annotation"):
+        warnings.append(
+            f"WARNING: Different genome_build in annotation.yaml ({stats1.get('genome_build_annotation')} vs {stats2.get('genome_build_annotation')})."
+        )
 
     # Parse workflow logs
-    uncached_time, uncached_steps = parse_workflow_log(uncached_dir)
-    cached_time, cached_steps = parse_workflow_log(cached_dir)
+    time1, steps1 = parse_workflow_log(dir1)
+    time2, steps2 = parse_workflow_log(dir2)
 
-    # Read params from both runs
-    uncached_params = read_params_yaml(uncached_dir)
-    cached_params = read_params_yaml(cached_dir)
-
-    if uncached_time is None:
-        raise ValueError(
-            f"Could not extract timing from {uncached_dir}. "
-            f"Check that workflow.log exists and contains 'Workflow completed successfully in' line."
-        )
-    if cached_time is None:
-        raise ValueError(
-            f"Could not extract timing from {cached_dir}. "
-            f"Check that workflow.log exists and contains 'Workflow completed successfully in' line."
-        )
-
-    # Find output BCF files
-    uncached_bcf = find_output_bcf(uncached_dir)
-    cached_bcf = find_output_bcf(cached_dir)
-
-    # Calculate MD5s if files exist
-    uncached_md5 = get_md5(uncached_bcf) if uncached_bcf and uncached_bcf.exists() else "N/A"
-    cached_md5 = get_md5(cached_bcf) if cached_bcf and cached_bcf.exists() else "N/A"
-
-    # Count variants in output files
-    uncached_count = count_variants(uncached_bcf) if uncached_bcf and uncached_bcf.exists() else None
-    cached_count = count_variants(cached_bcf) if cached_bcf and cached_bcf.exists() else None
-
-    # Display results
-    print("\n" + "=" * 80)
-    print("  VCFcache Annotation Comparison")
-    print("=" * 80)
-    print()
-    print(f"Uncached run: {uncached_dir}")
-    print(f"  Mode: {uncached_data.get('mode', 'unknown')}")
-    print(f"  Version: {uncached_data.get('version', 'unknown')}")
-    print(f"  Timestamp: {uncached_data.get('timestamp', 'unknown')}")
-    print(f"  Genome build: {uncached_params.get('genome_build', 'N/A')}")
-    print(f"  Threads: {uncached_params.get('threads', 'N/A')}")
-    if uncached_count is not None:
-        print(f"  Variants: {uncached_count:,}")
-    print()
-    print(f"Cached run: {cached_dir}")
-    print(f"  Mode: {cached_data.get('mode', 'unknown')}")
-    print(f"  Version: {cached_data.get('version', 'unknown')}")
-    print(f"  Timestamp: {cached_data.get('timestamp', 'unknown')}")
-    print(f"  Genome build: {cached_params.get('genome_build', 'N/A')}")
-    print(f"  Threads: {cached_params.get('threads', 'N/A')}")
-    if cached_count is not None:
-        print(f"  Variants: {cached_count:,}")
-    print()
-
-    # Display detailed step timings
-    if cached_steps:
-        print("-" * 80)
-        print("  Detailed Step Timings (Cached Run)")
-        print("-" * 80)
-        print()
-        for i, step in enumerate(cached_steps, 1):
-            duration = step.get("duration", 0)
-            command = step.get("command", "unknown")
-            print(f"  Step {i}: {command}")
-            print(f"    Duration: {format_time(duration)} ({duration:.2f}s)")
-        print()
-
-    if uncached_steps:
-        print("-" * 80)
-        print("  Detailed Step Timings (Uncached Run)")
-        print("-" * 80)
-        print()
-        for i, step in enumerate(uncached_steps, 1):
-            duration = step.get("duration", 0)
-            command = step.get("command", "unknown")
-            print(f"  Step {i}: {command}")
-            print(f"    Duration: {format_time(duration)} ({duration:.2f}s)")
-        print()
-
-    # Summary comparison
-    print("=" * 80)
-    print("  Summary")
-    print("=" * 80)
-    print()
-    print(f"  {'Total Time (Uncached):':<35} {format_time(uncached_time):>20} ({uncached_time:,.2f}s)")
-    print(f"  {'Total Time (Cached):':<35} {format_time(cached_time):>20} ({cached_time:,.2f}s)")
-    print()
-    speedup = uncached_time / cached_time if cached_time > 0 else 0
-    time_saved = uncached_time - cached_time
-    print(f"  {'Speed-up:':<35} {speedup:>20.2f}x")
-    print(f"  {'Time Saved:':<35} {format_time(time_saved):>20} ({time_saved:,.2f}s)")
-    if time_saved >= 60:
-        print(f"  {'':35} ({time_saved / 60:>19.1f} minutes)")
-    if time_saved >= 3600:
-        print(f"  {'':35} ({time_saved / 3600:>19.2f} hours)")
-    print()
-
-    # Output verification
-    print("-" * 80)
-    print("  Output Verification")
-    print("-" * 80)
-    print()
-
-    # Variant counts
-    if uncached_count is not None and cached_count is not None:
-        print(f"  Variant count (Uncached): {uncached_count:,}")
-        print(f"  Variant count (Cached):   {cached_count:,}")
-        print()
-        if uncached_count == cached_count:
-            print("  ✓ Variant counts are IDENTICAL")
-        else:
-            print(f"  ✗ WARNING: Variant counts DIFFER! (diff: {abs(uncached_count - cached_count):,})")
-        print()
-
-    # MD5 checksums
-    print(f"  MD5 (Uncached): {uncached_md5}")
-    print(f"  MD5 (Cached):   {cached_md5}")
-    print()
-    if uncached_md5 != "N/A" and cached_md5 != "N/A":
-        if uncached_md5 == cached_md5:
-            print("  ✓ MD5 checksums are IDENTICAL")
-        else:
-            print("  ✗ WARNING: MD5 checksums DIFFER!")
+    # Determine comparator order (A = slower / longer runtime)
+    if time1 is not None and time2 is not None and time1 < time2:
+        dir_a, dir_b = dir2, dir1
+        stats_a, stats_b = stats2, stats1
+        time_a, time_b = time2, time1
+        steps_a, steps_b = steps2, steps1
     else:
-        print("  ⚠ Could not verify MD5 (BCF files not found)")
+        dir_a, dir_b = dir1, dir2
+        stats_a, stats_b = stats1, stats2
+        time_a, time_b = time1, time2
+        steps_a, steps_b = steps1, steps2
+
+    def _counts(stats: Dict[str, any]) -> tuple[Optional[int], Optional[int], Optional[int]]:
+        counts = stats.get("variant_counts", {}) or {}
+        total = counts.get("total_output")
+        annotated = counts.get("annotated_output")
+        dropped = counts.get("dropped_variants")
+        mode = stats.get("mode")
+        if annotated is None and mode == "uncached":
+            annotated = total
+        return total, annotated, dropped
+
+    total_a, annotated_a, dropped_a = _counts(stats_a)
+    total_b, annotated_b, dropped_b = _counts(stats_b)
+
+    def _rate(annotated: Optional[int], duration: Optional[float]) -> Optional[float]:
+        if annotated is None or duration is None or duration <= 0:
+            return None
+        return annotated / duration
+
+    rate_a = _rate(annotated_a, time_a)
+    rate_b = _rate(annotated_b, time_b)
+
+    md5_a = stats_a.get("variant_md5", {}) or {}
+    md5_b = stats_b.get("variant_md5", {}) or {}
+
+    md5_all_a = md5_a.get("all")
+    md5_all_b = md5_b.get("all")
+    if md5_all:
+        if md5_all_a is None:
+            out_a = find_output_bcf(dir_a)
+            if out_a:
+                md5_all_a = compute_variant_md5_all(out_a)
+        if md5_all_b is None:
+            out_b = find_output_bcf(dir_b)
+            if out_b:
+                md5_all_b = compute_variant_md5_all(out_b)
+
+    print("\n" + "=" * 80)
+    print("  VCFcache Run Comparison")
+    print("=" * 80)
     print()
+    print(f"Input file: {stats_a.get('input_name', 'unknown')}")
+    print(f"Cache name: {stats_a.get('cache_name', 'unknown')}")
+    print()
+    if warnings:
+        print("WARNINGS:")
+        for w in warnings:
+            print(f"  {w}")
+        print()
+
+    print(f"Comparator A (slower): {dir_a}")
+    print(f"  Mode: {stats_a.get('mode', 'unknown')}")
+    print(f"  Version: {stats_a.get('vcfcache_version', 'unknown')}")
+    print(f"  Genome build (params.yaml): {stats_a.get('genome_build_params', 'N/A')}")
+    print(f"  Genome build (annotation.yaml): {stats_a.get('genome_build_annotation', 'N/A')}")
+    if total_a is not None:
+        print(f"  Output variants: {total_a:,}")
+    if annotated_a is not None:
+        print(f"  Annotated variants: {annotated_a:,}")
+    if dropped_a is not None:
+        print(f"  Dropped variants: {dropped_a:,}")
+    if rate_a is not None:
+        print(f"  Annotated variants/sec: {rate_a:,.2f}")
+    if time_a is not None:
+        print(f"  Total time: {format_time(time_a)} ({time_a:,.2f}s)")
+    print()
+
+    print(f"Comparator B (faster): {dir_b}")
+    print(f"  Mode: {stats_b.get('mode', 'unknown')}")
+    print(f"  Version: {stats_b.get('vcfcache_version', 'unknown')}")
+    print(f"  Genome build (params.yaml): {stats_b.get('genome_build_params', 'N/A')}")
+    print(f"  Genome build (annotation.yaml): {stats_b.get('genome_build_annotation', 'N/A')}")
+    if total_b is not None:
+        print(f"  Output variants: {total_b:,}")
+    if annotated_b is not None:
+        print(f"  Annotated variants: {annotated_b:,}")
+    if dropped_b is not None:
+        print(f"  Dropped variants: {dropped_b:,}")
+    if rate_b is not None:
+        print(f"  Annotated variants/sec: {rate_b:,.2f}")
+    if time_b is not None:
+        print(f"  Total time: {format_time(time_b)} ({time_b:,.2f}s)")
+    print()
+
+    if time_a is not None and time_b is not None:
+        speedup = time_a / time_b if time_b > 0 else 0
+        time_saved = time_a - time_b
+        print("Summary:")
+        print(f"  Speed-up (A/B): {speedup:.2f}x")
+        print(f"  Time saved: {format_time(time_saved)} ({time_saved:,.2f}s)")
+        print()
+
+    print("Output verification:")
+    print(f"  Top10 MD5 A: {md5_a.get('top10') or 'N/A'}")
+    print(f"  Top10 MD5 B: {md5_b.get('top10') or 'N/A'}")
+    print(f"  Bottom10 MD5 A: {md5_a.get('bottom10') or 'N/A'}")
+    print(f"  Bottom10 MD5 B: {md5_b.get('bottom10') or 'N/A'}")
+    if md5_all:
+        print(f"  Total MD5 A (all variants): {md5_all_a or 'N/A'}")
+        print(f"  Total MD5 B (all variants): {md5_all_b or 'N/A'}")
+        print()
     print("=" * 80)
     print()

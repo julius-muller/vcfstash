@@ -63,7 +63,7 @@ def format_duration(seconds):
         return f"{secs:.3f}s"
 
 
-def collect_detailed_timings(cache_dir, output_dir):
+def collect_detailed_timings(cache_dir, cached_stats_dir, uncached_stats_dir):
     """Collect detailed timing information from workflow log files."""
     import re
     detailed_timings = {}
@@ -88,8 +88,10 @@ def collect_detailed_timings(cache_dir, output_dir):
                         detailed_timings[step_name].append((cmd, duration))
 
     # Collect from annotation operations
-    for output_subdir, step_name in [(output_dir, "annotate-cached"),
-                                       (output_dir.parent / "output_uncached", "annotate-uncached")]:
+    for output_subdir, step_name in [
+        (cached_stats_dir, "annotate-cached"),
+        (uncached_stats_dir, "annotate-uncached"),
+    ]:
         if not output_subdir.exists():
             continue
 
@@ -275,7 +277,7 @@ def run_smoke_test(keep_files=False, quiet=False):
     try:
         # Define paths
         cache_dir = temp_dir / "cache"
-        output_dir = temp_dir / "output"
+        stats_dir = temp_dir / "stats"
 
         bp_init_file = demo_data / "demo_bp.bcf"
         bp_extend_file = demo_data / "demo_bpext.bcf"
@@ -405,15 +407,15 @@ def run_smoke_test(keep_files=False, quiet=False):
         # ====================================================================
         print_step(4, "annotate - Use cache to annotate a sample VCF")
 
-        # Note: Don't create output_dir manually - let vcfcache annotate create it
-        # to avoid validation issues
-
+        output_bcf = temp_dir / "demo_sample_vc.bcf"
+        stats_out_dir = stats_dir / f"{output_bcf.name}_vcstats"
         cmd = [
             sys.executable, "-m", "vcfcache.cli",
             "annotate",
             "-a", str(cache_dir / "cache" / "demo_cache"),
             "--vcf", str(sample_file),
-            "--output", str(output_dir),
+            "--output", str(output_bcf),
+            "--stats-dir", str(stats_dir),
             "-y", str(params_file),
             "--force"
         ]
@@ -423,9 +425,7 @@ def run_smoke_test(keep_files=False, quiet=False):
         if not success:
             return 1
 
-        # Verify output was created
-        # Note: output filename is based on input filename, so demo_sample.vcf.gz -> demo_sample.vcf_vc.bcf
-        output_bcf = output_dir / "demo_sample.vcf_vc.bcf"
+        # Verify output was created (output filename is user-specified)
         if not output_bcf.exists():
             print(f"✗ Annotated output not created: {output_bcf}")
             return 1
@@ -448,7 +448,7 @@ def run_smoke_test(keep_files=False, quiet=False):
             print(f"✓ Annotation tag CSQ present in output")
 
         # Show detailed timing for this step
-        output_log = output_dir / "workflow.log"
+        output_log = stats_out_dir / "workflow.log"
         shown_log_lines[str(output_log)] = show_step_timing(
             output_log, shown_log_lines.get(str(output_log))
         )
@@ -459,13 +459,15 @@ def run_smoke_test(keep_files=False, quiet=False):
         print_step(5, "Validation - Compare cached vs uncached annotation outputs")
 
         # Run uncached annotation for comparison
-        output_dir_uncached = temp_dir / "output_uncached"
+        output_bcf_uncached = temp_dir / "demo_sample_uncached_vc.bcf"
+        stats_out_uncached = stats_dir / f"{output_bcf_uncached.name}_vcstats"
         cmd_uncached = [
             sys.executable, "-m", "vcfcache.cli",
             "annotate",
             "-a", str(cache_dir / "cache" / "demo_cache"),
             "--vcf", str(sample_file),
-            "--output", str(output_dir_uncached),
+            "--output", str(output_bcf_uncached),
+            "--stats-dir", str(stats_dir),
             "-y", str(params_file),
             "--uncached",  # Force full annotation without cache
             "--force"
@@ -478,13 +480,12 @@ def run_smoke_test(keep_files=False, quiet=False):
             print("This is a critical issue - uncached mode must work for validation.")
             return 1
 
-        output_bcf_uncached = output_dir_uncached / "demo_sample.vcf_vc.bcf"
         if not output_bcf_uncached.exists():
             print(f"✗ ERROR: Uncached output not created: {output_bcf_uncached}")
             return 1
 
         # Show detailed timing for uncached annotation
-        uncached_log = output_dir_uncached / "workflow.log"
+        uncached_log = stats_out_uncached / "workflow.log"
         shown_log_lines[str(uncached_log)] = show_step_timing(
             uncached_log, shown_log_lines.get(str(uncached_log))
         )
@@ -555,7 +556,9 @@ def run_smoke_test(keep_files=False, quiet=False):
         print(f"  {'Total':25s}: {format_duration(total_time):>12s}\n")
 
         # Detailed timing breakdown
-        detailed_timings = collect_detailed_timings(cache_dir, output_dir)
+        detailed_timings = collect_detailed_timings(
+            cache_dir, stats_out_dir, stats_out_uncached
+        )
         if detailed_timings:
             print("\nDetailed Operation Timing:")
             print("─" * 60)
@@ -592,5 +595,3 @@ def run_smoke_test(keep_files=False, quiet=False):
                 print(f"✓ Cleaned up temporary directory")
             except Exception as e:
                 print(f"⚠ Warning: Could not clean up {temp_dir}: {e}")
-
-

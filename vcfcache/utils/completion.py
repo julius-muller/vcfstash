@@ -37,6 +37,7 @@ def write_completion_flag(
     command: str,
     mode: Optional[str] = None,
     version: Optional[str] = None,
+    output_file: Optional[str] = None,
 ) -> None:
     """Write a completion flag indicating successful run completion.
 
@@ -61,6 +62,8 @@ def write_completion_flag(
         "git_commit": get_git_commit_hash(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+    if output_file:
+        completion_data["output_file"] = output_file
 
     flag_file = output_dir / ".vcfcache_complete"
     with open(flag_file, "w") as f:

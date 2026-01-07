@@ -509,9 +509,25 @@ def main() -> None:
     vcf_parser.add_argument(
         "-o",
         "--output",
+        "--output-file",
+        dest="output_file",
+        required=False,
+        metavar="FILE",
+        help=(
+            "Output BCF file (required unless using --list or --show-command). "
+            "Use '-' or 'stdout' to stream to stdout. "
+            "If no extension is provided, '.bcf' is appended."
+        ),
+    )
+    vcf_parser.add_argument(
+        "--stats-dir",
+        dest="stats_dir",
         required=False,
         metavar="DIR",
-        help="Output directory for annotated VCF (required unless using --list or --show-command)",
+        help=(
+            "Optional directory to store annotation logs, workflow files, and auxiliary outputs. "
+            "All files will be written under <stats_dir>/<output_file>_vcstats."
+        ),
     )
     vcf_parser.add_argument(
         "--uncached",
@@ -537,7 +553,7 @@ def main() -> None:
         dest="force",
         action="store_true",
         default=False,
-        help="(optional) Force overwrite if output directory exists (default: False)",
+        help="(optional) Force overwrite if output file or stats directory exists (default: False)",
     )
     vcf_parser.add_argument(
         "-p",
@@ -690,11 +706,11 @@ def main() -> None:
         help="Compare two vcfcache annotate runs (e.g., cached vs uncached)",
         description=(
             "Compare two successful vcfcache annotate runs and display performance metrics.\n\n"
-            "This command requires completion flags (.vcfcache_complete) in both output directories,\n"
-            "which are automatically created by vcfcache annotate in version 0.4.2+.\n\n"
+            "This command requires completion flags (.vcfcache_complete) in both stats directories,\n"
+            "which are created by vcfcache annotate when --stats-dir is used.\n\n"
             "Examples:\n"
-            "  vcfcache compare run1/uncached run1/cached\n"
-            "  vcfcache compare /path/to/output1 /path/to/output2"
+            "  vcfcache compare run1/uncached_stats run1/cached_stats\n"
+            "  vcfcache compare /path/to/stats1 /path/to/stats2"
         ),
         parents=[init_parent_parser],
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -702,12 +718,21 @@ def main() -> None:
     compare_parser.add_argument(
         "dir1",
         type=str,
-        help="First annotate output directory",
+        help="First annotate stats directory",
     )
     compare_parser.add_argument(
         "dir2",
         type=str,
-        help="Second annotate output directory",
+        help="Second annotate stats directory",
+    )
+    compare_parser.add_argument(
+        "--md5-all",
+        action="store_true",
+        default=False,
+        help=(
+            "(optional) Compute MD5 of all variants (no header). "
+            "WARNING: can be slow for large files and may differ between runs due to upstream tool quirks."
+        ),
     )
 
     args = parser.parse_args(args=None if sys.argv[1:] else ["--help"])
@@ -721,7 +746,7 @@ def main() -> None:
         parser.error("--show-command and --list cannot be used together")
 
     if args.command == "annotate" and not (show_command_only or list_only):
-        if not args.i or not args.output:
+        if not args.i or not args.output_file:
             parser.error(
                 "annotate command requires -i/--vcf and -o/--output unless --show-command is used"
             )
@@ -909,7 +934,9 @@ def main() -> None:
                     temp_extract.rmdir()
 
                     logger.info(f"Pre-built cache ready at: {final_dir}")
-                    logger.info(f"Use with: vcfcache annotate -a {final_dir} -i sample.vcf -o output/")
+                    logger.info(
+                        f"Use with: vcfcache annotate -a {final_dir} -i sample.vcf -o sample_vc.bcf --stats-dir output/"
+                    )
                     is_prebuilt_cache = True
             else:
                 # Local blueprint/cache directory
@@ -975,7 +1002,8 @@ def main() -> None:
                 annotation_db=args.a,
                 input_vcf=args.i,
                 params_file=Path(args.params) if args.params else None,
-                output_dir=args.output,
+                output_file=args.output_file,
+                stats_dir=args.stats_dir,
                 verbosity=args.verbose,
                 force=args.force,
                 debug=args.debug,
@@ -992,8 +1020,9 @@ def main() -> None:
             )
 
             # Show detailed timing if --debug is enabled
-            if args.debug:
-                workflow_log = Path(args.output) / "workflow.log"
+            if args.debug and args.stats_dir:
+                output_name = Path(args.output_file).name if args.output_file not in ("-", "stdout") else "stdout"
+                workflow_log = Path(args.stats_dir) / f"{output_name}_vcstats" / "workflow.log"
                 _show_detailed_timings(workflow_log)
 
         elif args.command == "list":
@@ -1363,7 +1392,9 @@ def main() -> None:
             else:  # caches
                 print(f"Download: vcfcache cache-build --doi <DOI>")
                 print(f"  (downloads to {cache_location}/caches/)")
-                print(f"Then use: vcfcache annotate -a {cache_location}/caches/<cache_name> -i sample.vcf -o output/")
+                print(
+                    f"Then use: vcfcache annotate -a {cache_location}/caches/<cache_name> -i sample.vcf -o sample_vc.bcf --stats-dir output/"
+                )
                 print(f"\nTip: Set VCFCACHE_DIR=/path/to/large/disk to change download location\n")
 
         elif args.command == "push":
@@ -1511,7 +1542,12 @@ def main() -> None:
             from vcfcache.compare import compare_runs
 
             try:
-                compare_runs(Path(args.dir1), Path(args.dir2))
+                if args.md5_all:
+                    print(
+                        "WARNING: --md5-all can be slow for large files and may differ between runs "
+                        "due to upstream tool quirks."
+                    )
+                compare_runs(Path(args.dir1), Path(args.dir2), md5_all=args.md5_all)
             except (FileNotFoundError, ValueError) as e:
                 print(f"Error: {e}")
                 sys.exit(1)

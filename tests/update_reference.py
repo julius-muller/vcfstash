@@ -132,10 +132,11 @@ def update_golden_reference_dataset(force=True):
 
     # Use subdirectories in the expected output directory
     cache_dir = os.path.join(EXPECTED_OUTPUT_DIR, "cache_result")
-    annotate_dir = os.path.join(EXPECTED_OUTPUT_DIR, "annotate_result")
+    annotate_file = os.path.join(EXPECTED_OUTPUT_DIR, "annotate_result.bcf")
+    annotate_stats_dir = os.path.join(EXPECTED_OUTPUT_DIR, "annotate_stats")
 
     # Ensure the directories don't exist
-    for dir_path in [cache_dir, annotate_dir]:
+    for dir_path in [cache_dir, annotate_stats_dir]:
         if os.path.exists(dir_path):
             if force:
                 print(f"Removing existing directory: {dir_path}")
@@ -143,6 +144,13 @@ def update_golden_reference_dataset(force=True):
             else:
                 print(f"Directory {dir_path} already exists. Use --force to overwrite.")
                 return False
+    if os.path.exists(annotate_file):
+        if force:
+            print(f"Removing existing file: {annotate_file}")
+            os.unlink(annotate_file)
+        else:
+            print(f"File {annotate_file} already exists. Use --force to overwrite.")
+            return False
 
     # Create a temporary params file with the correct paths
     temp_params_file = None
@@ -247,7 +255,8 @@ def update_golden_reference_dataset(force=True):
             "annotate",
             "-a", annotation_db,
             "--vcf", test_sample,
-            "--output", annotate_dir,
+            "--output", annotate_file,
+            "--stats-dir", annotate_stats_dir,
             "-y", temp_params_file,
             "-f"
         ]
@@ -268,11 +277,11 @@ def update_golden_reference_dataset(force=True):
         print(f"{VCFCACHE_CMD} blueprint-init --vcf {test_vcf} --output {cache_dir} -y {temp_params_file} -f")
         print(f"{VCFCACHE_CMD} blueprint-extend --db {cache_dir} -i {test_vcf2}")
         print(f"{VCFCACHE_CMD} cache-build --name {annotate_name} -a {TEST_ANNO_CONFIG} --db {cache_dir} -y {temp_params_file} -f")
-        print(f"{VCFCACHE_CMD} annotate -a {annotation_db} --vcf {test_sample} --output {annotate_dir} -y {temp_params_file} -f")
+        print(f"{VCFCACHE_CMD} annotate -a {annotation_db} --vcf {test_sample} --output {annotate_file} --stats-dir {annotate_stats_dir} -y {temp_params_file} -f")
 
         print("\nOutput directories:")
         print(f"Cache directory: {cache_dir}")
-        print(f"Annotate directory: {annotate_dir}")
+        print(f"Annotate stats directory: {annotate_stats_dir}")
 
         return True
 

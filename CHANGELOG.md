@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING:** Removed all contig renaming/variant-generation support.
   - The `--generate-contig-variants` option is removed.
   - Annotation now logs contig overlap at startup and fails if there is no overlap.
+- **BREAKING:** `vcfcache annotate` now writes directly to an output BCF file instead of creating an output directory.
+  - Use `--stats-dir` to store workflow logs/auxiliary files under `<output_file>_vcstats`.
+  - Use `-` or `stdout` to stream output to stdout.
+  - Any tooling or scripts that expected an output directory now need to pass a file path (e.g., `sample_vc.bcf`).
 - CI workflow now runs on both tag pushes and main branch pushes (for codecov badge updates)
 - Dockerfile optimizations: moved tests to test stage only, added pip cache mounts for faster builds
 

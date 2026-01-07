@@ -254,16 +254,18 @@ def run_cache_build(db_dir, name, force=False):
         raise e
 
 
-def run_annotate(annotation_db, input_vcf, output_dir, force=False):
+def run_annotate(annotation_db, input_vcf, output_file, stats_dir=None, force=False):
     """Run the annotate command and return the process result."""
 
     cmd = VCFCACHE_CMD + [
         "annotate",
         "-a", str(annotation_db),
         "--vcf", str(input_vcf),
-        "--output", str(output_dir),
+        "--output", str(output_file),
         "-y", TEST_PARAMS
     ]
+    if stats_dir:
+        cmd += ["--stats-dir", str(stats_dir)]
 
     if force:
         cmd.append("-f")
@@ -386,12 +388,19 @@ def test_full_annotation_workflow(test_output_dir, test_scenario, prebuilt_cache
     assert annotation_dir.exists(), f"Annotation directory not found: {annotation_dir}"
     print(f"Annotation directory created: {annotation_dir}")
 
-    # Step 5: Create output directory for annotate
-    output_dir = Path(test_output_dir) / "full_workflow_output"
+    # Step 5: Define output file and stats dir for annotate
+    output_file = Path(test_output_dir) / "full_workflow_output.bcf"
+    stats_dir = Path(test_output_dir) / "full_workflow_stats"
 
     # Step 6: Run annotate
     print("Running annotate...")
-    annotate_result = run_annotate(annotation_dir, TEST_SAMPLE, output_dir, force=True)
+    annotate_result = run_annotate(
+        annotation_dir,
+        TEST_SAMPLE,
+        output_file,
+        stats_dir=stats_dir,
+        force=True,
+    )
     if annotate_result.returncode != 0:
         print(f"Command output: {annotate_result.stdout}")
         print(f"Command error: {annotate_result.stderr}")
@@ -399,15 +408,9 @@ def test_full_annotation_workflow(test_output_dir, test_scenario, prebuilt_cache
         print(f"Workflow directory contents: {list(workflow_dir.iterdir())}")
     assert annotate_result.returncode == 0, f"annotate failed: {annotate_result.stderr}"
 
-    # Step 7: Verify the output directory exists
-    assert output_dir.exists(), f"Output directory not found: {output_dir}"
-    print(f"Output directory created: {output_dir}")
-
-    # Step 8: Verify the output file exists
-    output_file = output_dir / (Path(str(TEST_SAMPLE)).stem + "_vc.bcf")
+    # Step 7: Verify the output file exists
     if not output_file.exists():
-        print(
-            f"Files in output_dir ({output_dir}): {list(output_dir.iterdir()) if output_dir.exists() else 'Directory does not exist'}")
+        print(f"Output file not found: {output_file}")
         raise FileNotFoundError(f"Output file not found: {output_file}")
     print(f"Output file created: {output_file}")
 
@@ -450,9 +453,7 @@ def test_full_annotation_workflow(test_output_dir, test_scenario, prebuilt_cache
     print("MOCK_ANNO tag found in variants")
 
     # Step 13: Verify the output contains the auxiliary information
-
-    # Check auxiliary directory exists
-    auxiliary_dir = output_dir / "auxiliary"
+    auxiliary_dir = stats_dir / f"{output_file.name}_vcstats" / "auxiliary"
     assert auxiliary_dir.exists(), "Auxiliary directory was not created"
     assert auxiliary_dir.is_dir(), "Auxiliary directory is not a directory"
 
@@ -485,18 +486,21 @@ def test_cached_vs_uncached_annotation(test_output_dir, params_file, test_scenar
 
     # Step 3: Run annotation with caching
     print("Running cached annotation...")
-    cached_output = Path(test_output_dir) / "cached_output"
+    stats_dir = Path(test_output_dir) / "stats"
+    cached_output = Path(test_output_dir) / "cached_output.bcf"
     cached_cmd = VCFCACHE_CMD + [ "annotate", "-a", str(Path(test_output_dir) / "cache" / annotate_name),
                   "-i", str(TEST_SAMPLE), "-o", str(cached_output),
+                  "--stats-dir", str(stats_dir),
                   "-y", str(params_file), "-f"]
     cached_result = subprocess.run(cached_cmd, capture_output=True, text=True)
     assert cached_result.returncode == 0, f"Cached annotation failed: {cached_result.stderr}"
 
     # Step 4: Run annotation without caching
     print("Running uncached annotation...")
-    uncached_output = Path(test_output_dir) / "uncached_output"
+    uncached_output = Path(test_output_dir) / "uncached_output.bcf"
     uncached_cmd = VCFCACHE_CMD + [ "annotate", "-a", str(Path(test_output_dir) / "cache" / annotate_name),
                     "-i", str(TEST_SAMPLE), "-o", str(uncached_output),
+                    "--stats-dir", str(stats_dir),
                     "-y", str(params_file), "--uncached", "-f"]
     uncached_result = subprocess.run(uncached_cmd, capture_output=True, text=True)
     assert uncached_result.returncode == 0, f"Uncached annotation failed: {uncached_result.stderr}"
@@ -508,24 +512,34 @@ def test_cached_vs_uncached_annotation(test_output_dir, params_file, test_scenar
     from tests.conftest import get_bcftools_cmd
     bcftools_path = get_bcftools_cmd()
 
-    # Compare headers
+    # Compare headers (ignore bcftools command history lines with run-specific paths)
     cached_header = subprocess.run(
-        [str(bcftools_path), "view", "-h", str(cached_output / "annotated.bcf")],
+        [str(bcftools_path), "view", "-h", str(cached_output)],
         capture_output=True, text=True
     )
     uncached_header = subprocess.run(
-        [str(bcftools_path), "view", "-h", str(uncached_output / "annotated.bcf")],
+        [str(bcftools_path), "view", "-h", str(uncached_output)],
         capture_output=True, text=True
     )
-    assert cached_header.stdout == uncached_header.stdout, "Headers differ between cached and uncached outputs"
+
+    def _normalize_header(text: str) -> str:
+        lines = [
+            line for line in text.splitlines()
+            if not line.startswith("##bcftools_")
+        ]
+        return "\n".join(lines)
+
+    assert _normalize_header(cached_header.stdout) == _normalize_header(uncached_header.stdout), (
+        "Headers differ between cached and uncached outputs"
+    )
 
     # Compare variants
     cached_variants = subprocess.run(
-        [str(bcftools_path), "view", str(cached_output / "annotated.bcf")],
+        [str(bcftools_path), "view", "-H", str(cached_output)],
         capture_output=True, text=True
     )
     uncached_variants = subprocess.run(
-        [str(bcftools_path), "view", str(uncached_output / "annotated.bcf")],
+        [str(bcftools_path), "view", "-H", str(uncached_output)],
         capture_output=True, text=True
     )
 
@@ -579,9 +593,11 @@ def test_input_not_modified_during_annotation(test_output_dir, params_file, test
 
     # Step 4: Run annotation with caching
     print("Running annotation...")
-    output_dir = Path(test_output_dir) / "annotation_output"
+    output_file = Path(test_output_dir) / "annotation_output.bcf"
+    stats_dir = Path(test_output_dir) / "annotation_stats"
     annotate_cmd = VCFCACHE_CMD + [ "annotate", "-a", str(Path(test_output_dir) / "cache" / annotate_name),
-                  "-i", str(TEST_SAMPLE), "-o", str(output_dir),
+                  "-i", str(TEST_SAMPLE), "-o", str(output_file),
+                  "--stats-dir", str(stats_dir),
                   "-y", str(params_file), "-f"]
     annotate_result = subprocess.run(annotate_cmd, capture_output=True, text=True)
     assert annotate_result.returncode == 0, f"Annotation failed: {annotate_result.stderr}"
@@ -603,9 +619,7 @@ def test_input_not_modified_during_annotation(test_output_dir, params_file, test
     bcftools_path = get_bcftools_cmd()
 
     # Check if the output file exists
-    # The output file is named after the input file with _vc.bcf suffix
-    sample_name = Path(str(TEST_SAMPLE)).stem
-    output_file = output_dir / f"{sample_name}_vc.bcf"
+    # Output file is user-specified
     assert output_file.exists(), f"Output file not found: {output_file}"
 
     # Check if the output file has a valid header

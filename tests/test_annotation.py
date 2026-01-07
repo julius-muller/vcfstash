@@ -133,15 +133,16 @@ def test_annotate_with_cache(test_scenario, test_sample_with_hits_and_misses,
     vep_params = get_vcfcache_root() / "recipes" / "docker-annotated" / "params.yaml"
     assert vep_params.exists(), f"VEP params not found: {vep_params}"
 
-    output_dir = Path(test_output_dir) / "annotated_output"
-    # Don't create the output directory - vcfcache will create it
+    output_bcf = Path(test_output_dir) / "annotated_output.bcf"
+    stats_dir = Path(test_output_dir) / "annotated_stats"
 
     # Run annotation using the pre-built cache
     cmd = [
         "vcfcache", "annotate",
         "-a", str(annotation_cache_path),
         "--vcf", str(test_sample_with_hits_and_misses),
-        "--output", str(output_dir),
+        "--output", str(output_bcf),
+        "--stats-dir", str(stats_dir),
         "-y", str(vep_params),
         "-vv"
     ]
@@ -161,9 +162,6 @@ def test_annotate_with_cache(test_scenario, test_sample_with_hits_and_misses,
 
     assert result.returncode == 0, f"Annotation failed: {result.stderr}"
 
-    sample_name = test_sample_with_hits_and_misses.name.replace(".bcf", "").replace(".vcf", "")
-    # In annotate mode the workflow publishes "<sample>_vc.bcf"
-    output_bcf = output_dir / f"{sample_name}_vc.bcf"
     assert output_bcf.exists(), f"Annotated output BCF not found at {output_bcf}"
 
     # Resolve bcftools path from the same params file used for the run
@@ -260,13 +258,15 @@ def test_blueprint_annotation_workflow(test_scenario, prebuilt_cache, test_outpu
 
     # Step 3: Annotate a sample using the cache
     sample_vcf = TEST_DATA_DIR / "sample4.bcf"
-    output_dir = Path(test_output_dir) / "sample_output"
+    output_bcf = Path(test_output_dir) / "sample_output.bcf"
+    stats_dir = Path(test_output_dir) / "sample_output_stats"
 
     cmd_use_cache = [
         "vcfcache", "annotate",
         "-a", str(cache_path),
         "--vcf", str(sample_vcf),
-        "--output", str(output_dir),
+        "--output", str(output_bcf),
+        "--stats-dir", str(stats_dir),
         "-y", str(TEST_PARAMS),
         "-vv"
     ]
@@ -277,8 +277,7 @@ def test_blueprint_annotation_workflow(test_scenario, prebuilt_cache, test_outpu
     print(f"Annotate STDOUT:\n{result.stdout}")
     assert result.returncode == 0, f"Sample annotation failed: {result.stderr}"
 
-    # Verify output (annotate mode emits <sample>_vc.bcf)
-    output_bcf = output_dir / f"{sample_vcf.stem}_vc.bcf"
+    # Verify output file exists
     assert output_bcf.exists(), f"Annotated sample not found at {output_bcf}"
 
     # Check for MOCK_ANNO tag
@@ -378,24 +377,23 @@ def test_annotation_consistency_across_scenarios(test_scenario, test_output_dir)
         if not vep_params.exists():
             pytest.skip("VEP params not found")
 
-        output_dir = Path(test_output_dir) / "consistency_test"
-        if output_dir.exists():
-            shutil.rmtree(output_dir)
+        output_bcf = Path(test_output_dir) / "consistency_test.bcf"
+        stats_dir = Path(test_output_dir) / "consistency_stats"
+        if output_bcf.exists():
+            output_bcf.unlink()
 
         cmd = [
             "vcfcache", "annotate",
             "-a", str(annotation_cache_path),
             "--vcf", str(sample_vcf),
-            "--output", str(output_dir),
+            "--output", str(output_bcf),
+            "--stats-dir", str(stats_dir),
             "-y", str(vep_params),
             "-vv"
         ]
 
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         assert result.returncode == 0, f"Annotation failed: {result.stderr}"
-
-        sample_name = sample_vcf.name.replace(".bcf", "").replace(".vcf", "")
-        output_bcf = output_dir / f"{sample_name}_vc.bcf"
 
     elif test_scenario == "blueprint":
         # In blueprint scenario, create minimal cache and use it
@@ -419,7 +417,8 @@ def test_annotation_consistency_across_scenarios(test_scenario, test_output_dir)
         ], check=True, timeout=120)
 
         # Annotate sample
-        output_dir = Path(test_output_dir) / "consistency_output"
+        output_bcf = Path(test_output_dir) / "consistency_output.bcf"
+        stats_dir = Path(test_output_dir) / "consistency_output_stats"
         cache_base = cache_dir / "db" / "cache"
         if not cache_base.exists():
             cache_base = cache_dir / "cache"
@@ -429,12 +428,10 @@ def test_annotation_consistency_across_scenarios(test_scenario, test_output_dir)
             "vcfcache", "annotate",
             "-a", str(cache_path),
             "--vcf", str(sample_vcf),
-            "--output", str(output_dir),
+            "--output", str(output_bcf),
+            "--stats-dir", str(stats_dir),
             "-y", str(TEST_PARAMS)
         ], check=True, timeout=120)
-
-        sample_name = sample_vcf.name.replace(".bcf", "").replace(".vcf", "")
-        output_bcf = output_dir / f"{sample_name}_vc.bcf"
 
     else:  # vanilla
         # Run direct annotation
@@ -490,15 +487,17 @@ def test_cache_hit_statistics(test_scenario, test_sample_with_hits_and_misses,
     from tests.conftest import get_vcfcache_root
     vep_params = get_vcfcache_root() / "recipes" / "docker-annotated" / "params.yaml"
 
-    output_dir = Path(test_output_dir) / "cache_stats_test"
-    if output_dir.exists():
-        shutil.rmtree(output_dir)
+    output_bcf = Path(test_output_dir) / "cache_stats_test.bcf"
+    stats_dir = Path(test_output_dir) / "cache_stats"
+    if output_bcf.exists():
+        output_bcf.unlink()
 
     cmd = [
         "vcfcache", "annotate",
         "-a", str(annotation_cache_path),
         "--vcf", str(test_sample_with_hits_and_misses),
-        "--output", str(output_dir),
+        "--output", str(output_bcf),
+        "--stats-dir", str(stats_dir),
         "-y", str(vep_params),
         "-vv"
     ]
@@ -536,15 +535,17 @@ def test_annotation_performance_with_cache(test_scenario, annotation_cache_path,
     from tests.conftest import get_vcfcache_root
     vep_params = get_vcfcache_root() / "recipes" / "docker-annotated" / "params.yaml"
 
-    output_dir = Path(test_output_dir) / "perf_test"
-    if output_dir.exists():
-        shutil.rmtree(output_dir)
+    output_bcf = Path(test_output_dir) / "perf_test.bcf"
+    stats_dir = Path(test_output_dir) / "perf_stats"
+    if output_bcf.exists():
+        output_bcf.unlink()
 
     cmd = [
         "vcfcache", "annotate",
         "-a", str(annotation_cache_path),
         "--vcf", str(test_sample_with_hits_and_misses),
-        "--output", str(output_dir),
+        "--output", str(output_bcf),
+        "--stats-dir", str(stats_dir),
         "-y", str(vep_params)
     ]
 

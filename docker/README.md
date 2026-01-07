@@ -17,7 +17,8 @@ docker run --rm -v $(pwd):/work ghcr.io/julius-muller/vcfcache:latest \
   annotate \
     -a cache-hg38-gnomad-4.1joint-AF0100-vep-115.2-basic \
     --vcf /work/sample.bcf \
-    --output /work/out \
+    --output /work/sample_vc.bcf \
+    --stats-dir /work/out \
     --force
 ```
 

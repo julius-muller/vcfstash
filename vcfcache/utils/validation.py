@@ -378,7 +378,8 @@ def generate_test_command(
     input_vcf_path="${VCFCACHE_ROOT}/tests/data/nodata/sample4.bcf",
     annotate_name="testor",
     annotation_db="/tmp/vcfcache/test_cache/cache/testor",
-    annotation_output="/tmp/vcfcache/aout",
+    annotation_output="/tmp/vcfcache/aout.bcf",
+    annotation_stats_dir="/tmp/vcfcache/aout_stats",
     force=True,
 ):
     """Generate a nicely formatted test command string for vcfcache operations.
@@ -412,6 +413,7 @@ def generate_test_command(
         f"--vcf {input_vcf_path} "
         f"{'-f' if force else ''} "
         f"--output {annotation_output} "
+        f"--stats-dir {annotation_stats_dir} "
     ).strip()
 
     # Combine commands
@@ -450,14 +452,14 @@ alias stx="{full_cmd}"
 # ~/projects/vcfcache/vcfcache.py blueprint-init --vcf ~/projects/vcfcache/tests/data/nodata/crayz_db.bcf --output ~/tmp/vcfcache/test_cache -c ~/projects/vcfcache/tests/config/env_test.config -f
 # ~/projects/vcfcache/vcfcache.py blueprint-extend --db /home/j380r/tmp/test/test_out -i ~/projects/vcfcache/tests/data/nodata/crayz_db2.bcf
 # ~/projects/vcfcache/vcfcache.py cache-build --name testor --db test_out/nftest --test -vv -f
-# ~/projects/vcfcache/vcfcache.py annotate --a ~/tmp/test/test_out/nftest/cache/testor --vcf ~/projects/vcfcache/tests/data/nodata/sample4.bcf --output ~/tmp/test/aout --test -f
+# ~/projects/vcfcache/vcfcache.py annotate --a ~/tmp/test/test_out/nftest/cache/testor --vcf ~/projects/vcfcache/tests/data/nodata/sample4.bcf --output ~/tmp/test/aout.bcf --stats-dir /tmp/test/aout_stats --test -f
 
 # as one:
 cmd = """alias stx="
 ~/projects/vcfcache/vcfcache.py blueprint-init --vcf ~/projects/vcfcache/tests/data/nodata/crayz_db.bcf --output ~/tmp/vcfcache/test_cache -y ~/projects/vcfcache/tests/config/example_params.yaml -f;
 ~/projects/vcfcache/vcfcache.py blueprint-extend --db ~/tmp/vcfcache/test_cache/ -i ~/projects/vcfcache/tests/data/nodata/crayz_db2.bcf ; 
 ~/projects/vcfcache/vcfcache.py cache-build --name testor -a ~/projects/vcfcache/tests/config/example_annotation.config --db ~/tmp/vcfcache/test_cache -f;
-~/projects/vcfcache/vcfcache.py annotate -a ~/tmp/vcfcache/test_cache/cache/testor --vcf ~/projects/vcfcache/tests/data/nodata/sample4.bcf --output ~/tmp/vcfcache/aout -f
+~/projects/vcfcache/vcfcache.py annotate -a ~/tmp/vcfcache/test_cache/cache/testor --vcf ~/projects/vcfcache/tests/data/nodata/sample4.bcf --output ~/tmp/vcfcache/aout.bcf --stats-dir /tmp/vcfcache/aout_stats -f
 """
 
 
@@ -466,5 +468,5 @@ cmd2 = """
 ~/projects/vcfcache/vcfcache.py blueprint-init --vcf /mnt/data/resources/gnomad/vcf_gnomad_v4_hg19_exomes/gnomad.exomes.v4.1.sites.grch37.trimmed_liftover_norm_1e-1.bcf --output gnomad_1e-1  -c ~/projects/vcfcache/tests/config/nextflow_gnomadhg19.config;
 ~/projects/vcfcache/vcfcache.py blueprint-extend --db gnomad_1e-1 -i /mnt/data/resources/gnomad/vcf_gnomad_v4_hg19_genomes/gnomad.genomes.v4.1.sites.grch37.trimmed_liftover_norm_1e-1.bcf;
 ~/projects/vcfcache/vcfcache.py cache-build --name gen_ex -a ~/projects/vcfcache/tests/config/example_annotation.config --db gnomad_1e-1;
-~/projects/vcfcache/vcfcache.py annotate -a gnomad_1e-1/cache/gen_ex --vcf /mnt/data/samples/test_mgm/mgm_WGS_32.gatkWGS_norm.bcf --output mgm_WGS_32 -p;
+~/projects/vcfcache/vcfcache.py annotate -a gnomad_1e-1/cache/gen_ex --vcf /mnt/data/samples/test_mgm/mgm_WGS_32.gatkWGS_norm.bcf --output mgm_WGS_32.bcf --stats-dir mgm_WGS_32_stats -p;
 """

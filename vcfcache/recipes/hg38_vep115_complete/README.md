@@ -49,7 +49,8 @@ vcfcache cache-build \
 vcfcache annotate \
   -a /data/vcfcache_cache/cache/vep_gnomad \
   --vcf your_sample.vcf.gz \
-  --output results \
+  --output your_sample_vc.bcf \
+  --stats-dir results \
   -y params.yaml
 ```
 

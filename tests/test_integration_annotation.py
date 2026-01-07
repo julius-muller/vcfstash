@@ -30,13 +30,16 @@ def test_full_integration_annotation():
 
     outdir = Path(tempfile.mkdtemp(prefix="vcfcache_integration_"))
     home = outdir / "home"
+    output_bcf = outdir / "sample4_vc.bcf"
+    stats_dir = outdir / "stats"
     home.mkdir(parents=True, exist_ok=True)
 
     try:
         cmd = (
             f"vcfcache annotate -a {alias} "
             f"--vcf {sample_vcf} "
-            f"--output {outdir} "
+            f"--output {output_bcf} "
+            f"--stats-dir {stats_dir} "
             f"-y {params} "
             f"--force "
         )
@@ -45,11 +48,10 @@ def test_full_integration_annotation():
         run_cmd(cmd, env=env)
 
         # Validate output exists
-        produced = outdir / f"{sample_vcf.stem}_vc.bcf"
-        assert produced.exists(), f"Annotated BCF missing: {produced}"
+        assert output_bcf.exists(), f"Annotated BCF missing: {output_bcf}"
 
         # bcftools sanity check
-        run_cmd(f"bcftools view -h {produced}")
+        run_cmd(f"bcftools view -h {output_bcf}")
 
     finally:
         shutil.rmtree(outdir, ignore_errors=True)

@@ -26,7 +26,7 @@ description: |
   VEP cache: Ensembl 115, GRCh37
 
   Usage:
-    vcfcache annotate -a <cache_dir> -i sample.vcf.gz -o output/
+    vcfcache annotate -a <cache_dir> -i sample.vcf.gz -o sample_vc.bcf --stats-dir output/
 
 upload_type: dataset
 

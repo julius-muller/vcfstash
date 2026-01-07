@@ -36,6 +36,7 @@ def create_workflow(**kwargs) -> WorkflowBase:
                  - name: Workflow instance name
                  - anno_config_file: Optional annotation config
                  - params_file: Optional YAML params
+                 - output_file: Optional output BCF path for annotate modes
                  - verbosity: Verbosity level
 
     Returns:

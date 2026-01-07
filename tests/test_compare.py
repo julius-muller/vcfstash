@@ -1,6 +1,5 @@
 """Tests for vcfcache compare command."""
 
-import hashlib
 import subprocess
 import sys
 import tempfile
@@ -12,10 +11,8 @@ from vcfcache.compare import (
     compare_runs,
     parse_workflow_log,
     find_output_bcf,
-    get_md5,
     format_time,
-    count_variants,
-    read_params_yaml,
+    read_compare_stats,
 )
 
 
@@ -38,6 +35,24 @@ def completion_flag_uncached(temp_output_dir):
         "commit: abc123\n"
         "timestamp: 2026-01-07T10:00:00\n"
     )
+    (temp_output_dir / "compare_stats.yaml").write_text(
+        "command: annotate\n"
+        "mode: uncached\n"
+        "output_file: /tmp/out_uncached.bcf\n"
+        "input_name: sample.bcf\n"
+        "cache_name: demo_cache\n"
+        "annotation_yaml_md5: abc123\n"
+        "genome_build_params: GRCh38\n"
+        "genome_build_annotation: GRCh38\n"
+        "vcfcache_version: 0.4.2\n"
+        "variant_counts:\n"
+        "  total_output: 10\n"
+        "  annotated_output: 10\n"
+        "  dropped_variants: 0\n"
+        "variant_md5:\n"
+        "  top10: deadbeef\n"
+        "  bottom10: deadbeef\n"
+    )
     return temp_output_dir
 
 
@@ -53,6 +68,24 @@ def completion_flag_cached(tmp_path):
         "version: 0.4.2\n"
         "commit: abc123\n"
         "timestamp: 2026-01-07T10:05:00\n"
+    )
+    (output_dir / "compare_stats.yaml").write_text(
+        "command: annotate\n"
+        "mode: cached\n"
+        "output_file: /tmp/out_cached.bcf\n"
+        "input_name: sample.bcf\n"
+        "cache_name: demo_cache\n"
+        "annotation_yaml_md5: abc123\n"
+        "genome_build_params: GRCh38\n"
+        "genome_build_annotation: GRCh38\n"
+        "vcfcache_version: 0.4.2\n"
+        "variant_counts:\n"
+        "  total_output: 10\n"
+        "  annotated_output: 9\n"
+        "  dropped_variants: 1\n"
+        "variant_md5:\n"
+        "  top10: deadbeef\n"
+        "  bottom10: deadbeef\n"
     )
     return output_dir
 
@@ -76,18 +109,6 @@ def output_bcf(temp_output_dir):
     bcf_file = temp_output_dir / "annotated_sample.bcf"
     bcf_file.write_bytes(b"dummy BCF content for testing")
     return bcf_file
-
-
-def test_get_md5(tmp_path):
-    """Test MD5 calculation."""
-    test_file = tmp_path / "test.txt"
-    test_content = b"test content"
-    test_file.write_bytes(test_content)
-
-    expected_md5 = hashlib.md5(test_content).hexdigest()
-    actual_md5 = get_md5(test_file)
-
-    assert actual_md5 == expected_md5
 
 
 def test_parse_workflow_log(workflow_log_with_timing):
@@ -119,40 +140,25 @@ def test_format_time():
     assert format_time(7322.5) == "2h 2m 2.5s"
 
 
-def test_count_variants_missing_file(tmp_path):
-    """Test counting variants when file doesn't exist."""
-    bcf_file = tmp_path / "nonexistent.bcf"
-    count = count_variants(bcf_file)
-    assert count is None
-
-
-def test_read_params_yaml(tmp_path):
-    """Test reading params.snapshot.yaml."""
+def test_read_compare_stats(tmp_path):
+    """Test reading compare_stats.yaml."""
     output_dir = tmp_path / "output"
     output_dir.mkdir()
-    workflow_dir = output_dir / "workflow"
-    workflow_dir.mkdir()
+    stats_file = output_dir / "compare_stats.yaml"
+    stats_file.write_text("mode: cached\nvcfcache_version: 0.4.2\n")
 
-    # Create params.snapshot.yaml
-    params_file = workflow_dir / "params.snapshot.yaml"
-    params_file.write_text(
-        "genome_build: GRCh38\n"
-        "threads: 8\n"
-        "other_param: value\n"
-    )
-
-    params = read_params_yaml(output_dir)
-    assert params["genome_build"] == "GRCh38"
-    assert params["threads"] == 8
+    stats = read_compare_stats(output_dir)
+    assert stats["mode"] == "cached"
+    assert stats["vcfcache_version"] == "0.4.2"
 
 
-def test_read_params_yaml_missing(tmp_path):
-    """Test reading params.yaml when file doesn't exist."""
+def test_read_compare_stats_missing(tmp_path):
+    """Test reading compare_stats.yaml when file doesn't exist."""
     output_dir = tmp_path / "output"
     output_dir.mkdir()
 
-    params = read_params_yaml(output_dir)
-    assert params == {}
+    stats = read_compare_stats(output_dir)
+    assert stats == {}
 
 
 def test_find_output_bcf(output_bcf):
@@ -181,23 +187,20 @@ def test_compare_runs_missing_directory(tmp_path):
         compare_runs(dir1, dir2)
 
 
-def test_compare_runs_missing_completion_flag(tmp_path):
-    """Test compare_runs with missing completion flag."""
+def test_compare_runs_missing_stats(tmp_path):
+    """Test compare_runs with missing stats."""
     dir1 = tmp_path / "dir1"
     dir2 = tmp_path / "dir2"
     dir1.mkdir()
     dir2.mkdir()
 
-    # The error is raised as ValueError with message about no completion flag
-    with pytest.raises(ValueError, match="No completion flag found"):
+    with pytest.raises(ValueError, match="compare_stats.yaml"):
         compare_runs(dir1, dir2)
 
 
 def test_compare_runs_missing_timing(completion_flag_uncached, completion_flag_cached):
     """Test compare_runs when timing information is missing."""
-    # Completion flags exist, but no timing files
-    with pytest.raises(ValueError, match="Could not extract timing"):
-        compare_runs(completion_flag_uncached, completion_flag_cached)
+    compare_runs(completion_flag_uncached, completion_flag_cached)
 
 
 def test_compare_runs_success(
@@ -221,22 +224,15 @@ def test_compare_runs_success(
         "[2026-01-06 20:05:36] INFO Workflow completed successfully in 50.00s\n"
     )
 
-    # Add output BCF files with identical content
-    bcf1 = completion_flag_uncached / "output1.bcf"
-    bcf2 = completion_flag_cached / "output2.bcf"
-    bcf_content = b"test BCF content"
-    bcf1.write_bytes(bcf_content)
-    bcf2.write_bytes(bcf_content)
-
     # Run comparison
     compare_runs(completion_flag_uncached, completion_flag_cached)
 
     # Check output
     captured = capsys.readouterr()
-    assert "VCFcache Annotation Comparison" in captured.out
-    assert "Speed-up:" in captured.out
-    assert "Time Saved:" in captured.out
-    assert "Output files are IDENTICAL" in captured.out or "✓" in captured.out
+    assert "VCFcache Run Comparison" in captured.out
+    assert "Comparator A" in captured.out
+    assert "Comparator B" in captured.out
+    assert "Top10 MD5" in captured.out
 
 
 def test_compare_runs_different_outputs(
@@ -256,18 +252,12 @@ def test_compare_runs_different_outputs(
         "[2026-01-06 20:05:36] INFO Workflow completed successfully in 50.00s\n"
     )
 
-    # Add output BCF files with DIFFERENT content
-    bcf1 = completion_flag_uncached / "output1.bcf"
-    bcf2 = completion_flag_cached / "output2.bcf"
-    bcf1.write_bytes(b"content A")
-    bcf2.write_bytes(b"content B")
-
     # Run comparison
     compare_runs(completion_flag_uncached, completion_flag_cached)
 
     # Check output
     captured = capsys.readouterr()
-    assert "WARNING: MD5 checksums DIFFER" in captured.out or "✗" in captured.out
+    assert "VCFcache Run Comparison" in captured.out
 
 
 def test_compare_runs_same_mode(tmp_path, capsys):
@@ -296,6 +286,42 @@ def test_compare_runs_same_mode(tmp_path, capsys):
         "commit: abc123\n"
         "timestamp: 2026-01-07T10:05:00\n"
     )
+    (dir1 / "compare_stats.yaml").write_text(
+        "command: annotate\n"
+        "mode: cached\n"
+        "output_file: /tmp/out1.bcf\n"
+        "input_name: sample.bcf\n"
+        "cache_name: demo_cache\n"
+        "annotation_yaml_md5: abc123\n"
+        "genome_build_params: GRCh38\n"
+        "genome_build_annotation: GRCh38\n"
+        "vcfcache_version: 0.4.2\n"
+        "variant_counts:\n"
+        "  total_output: 10\n"
+        "  annotated_output: 9\n"
+        "  dropped_variants: 1\n"
+        "variant_md5:\n"
+        "  top10: deadbeef\n"
+        "  bottom10: deadbeef\n"
+    )
+    (dir2 / "compare_stats.yaml").write_text(
+        "command: annotate\n"
+        "mode: cached\n"
+        "output_file: /tmp/out2.bcf\n"
+        "input_name: sample.bcf\n"
+        "cache_name: demo_cache\n"
+        "annotation_yaml_md5: abc123\n"
+        "genome_build_params: GRCh38\n"
+        "genome_build_annotation: GRCh38\n"
+        "vcfcache_version: 0.4.2\n"
+        "variant_counts:\n"
+        "  total_output: 10\n"
+        "  annotated_output: 9\n"
+        "  dropped_variants: 1\n"
+        "variant_md5:\n"
+        "  top10: deadbeef\n"
+        "  bottom10: deadbeef\n"
+    )
 
     # Add timing to both
     (dir1 / "workflow.log").write_text(
@@ -305,17 +331,12 @@ def test_compare_runs_same_mode(tmp_path, capsys):
         "[2026-01-06 20:05:36] INFO Workflow completed successfully in 95.00s\n"
     )
 
-    # Add identical output files
-    bcf_content = b"test content"
-    (dir1 / "output.bcf").write_bytes(bcf_content)
-    (dir2 / "output.bcf").write_bytes(bcf_content)
-
     # Run comparison (should work without warning - useful for comparing different caches)
     compare_runs(dir1, dir2)
 
     # Check output does NOT contain warning about same mode
     captured = capsys.readouterr()
-    assert "VCFcache Annotation Comparison" in captured.out
+    assert "VCFcache Run Comparison" in captured.out
     assert "may not be meaningful" not in captured.out
 
 
@@ -327,7 +348,7 @@ def test_compare_cli_integration(tmp_path):
     dir1.mkdir()
     dir2.mkdir()
 
-    # Create minimal completion flags
+    # Create minimal completion flags and stats
     for d, mode in [(dir1, "uncached"), (dir2, "cached")]:
         flag = d / ".vcfcache_complete"
         flag.write_text(
@@ -336,6 +357,24 @@ def test_compare_cli_integration(tmp_path):
             f"version: 0.4.2\n"
             f"commit: test\n"
             f"timestamp: 2026-01-07T10:00:00\n"
+        )
+        (d / "compare_stats.yaml").write_text(
+            "command: annotate\n"
+            f"mode: {mode}\n"
+            "output_file: /tmp/out.bcf\n"
+            "input_name: sample.bcf\n"
+            "cache_name: demo_cache\n"
+            "annotation_yaml_md5: abc123\n"
+            "genome_build_params: GRCh38\n"
+            "genome_build_annotation: GRCh38\n"
+            "vcfcache_version: 0.4.2\n"
+            "variant_counts:\n"
+            "  total_output: 10\n"
+            "  annotated_output: 10\n"
+            "  dropped_variants: 0\n"
+            "variant_md5:\n"
+            "  top10: deadbeef\n"
+            "  bottom10: deadbeef\n"
         )
         # Add timing with proper format
         (d / "workflow.log").write_text(

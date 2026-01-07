@@ -174,7 +174,8 @@ run_bench() {
          --force \
          -a /cache/db/cache/vep_gnomad \
          --vcf /work/input.bcf \
-         --output ${run_dir_cont} \
+         --output ${run_dir_cont}/${out_name} \
+         --stats-dir ${run_dir_cont} \
          -y /app/recipes/docker-annotated/params.yaml"
   status=$?
   set -e

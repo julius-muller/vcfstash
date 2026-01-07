@@ -178,7 +178,8 @@ docker run --rm -v $(pwd):/work ghcr.io/julius-muller/vcfcache:latest \
   annotate \
     -a cache-hg38-gnomad-4.1joint-AF0100-vep-115.2-basic \
     --vcf /work/sample.bcf \
-    --output /work/out \
+    --output /work/sample_vc.bcf \
+    --stats-dir /work/out \
     --force
 ```
 
@@ -400,7 +401,8 @@ This section covers how to annotate a sample file once you have a cache.
 vcfcache annotate \
   -a cache-hg38-gnomad-4.1joint-AF0100-vep-115.2-basic \
   --vcf sample.bcf \
-  --output outdir \
+  --output sample_vc.bcf \
+  --stats-dir outdir \
   --force
 ```
 
@@ -411,7 +413,8 @@ vcfcache annotate \
 vcfcache annotate \
   -a /path/to/cache_root/cache/<annotation_name> \
   --vcf sample.bcf \
-  --output outdir \
+  --output sample_vc.bcf \
+  --stats-dir outdir \
   --force
 ```
 
@@ -423,19 +426,19 @@ vcfcache annotate \
   ```
 - Run an uncached annotation pass (useful for benchmarking/debugging):
   ```bash
-  vcfcache annotate -a /path/to/cache_root/cache/<annotation_name> --vcf sample.bcf --output outdir --uncached --force
+  vcfcache annotate -a /path/to/cache_root/cache/<annotation_name> --vcf sample.bcf --output sample_vc.bcf --stats-dir outdir --uncached --force
   ```
 - Convert output to Parquet (for downstream querying):
   ```bash
-  vcfcache annotate -a /path/to/cache_root/cache/<annotation_name> --vcf sample.bcf --output outdir --parquet --force
+  vcfcache annotate -a /path/to/cache_root/cache/<annotation_name> --vcf sample.bcf --output sample_vc.bcf --stats-dir outdir --parquet --force
   ```
 - Preserve variants without annotation in output (by default, vcfcache mirrors annotation tool behavior):
   ```bash
-  vcfcache annotate -a /path/to/cache_root/cache/<annotation_name> --vcf sample.bcf --output outdir --preserve-unannotated --force
+  vcfcache annotate -a /path/to/cache_root/cache/<annotation_name> --vcf sample.bcf --output sample_vc.bcf --stats-dir outdir --preserve-unannotated --force
   ```
 - Skip splitting multiallelic variants for small speedup (~6% of runtime):
   ```bash
-  vcfcache annotate -a /path/to/cache_root/cache/<annotation_name> --vcf sample.bcf --output outdir --skip-split-multiallelic --force
+  vcfcache annotate -a /path/to/cache_root/cache/<annotation_name> --vcf sample.bcf --output sample_vc.bcf --stats-dir outdir --skip-split-multiallelic --force
   ```
   **WARNING**: Use `--skip-split-multiallelic` ONLY if you are certain your input VCF has no multiallelic variants (no commas in ALT field). If multiallelic variants are present, this will cause format inconsistencies between cached and uncached outputs. By default, vcfcache always splits multiallelic variants using `bcftools norm -m-` to ensure consistent output format.
 
@@ -496,7 +499,7 @@ Variables you can use:
 Many annotation tools can produce extra outputs besides the annotated BCF (HTML reports, JSON/TSV sidecars, warnings/stderr logs, summary stats, plugin outputs, etc.). VCFcache will **only keep those extra files** if your `annotation_cmd` writes them into `${AUXILIARY_DIR}`.
 
 Important implications:
-- Where it ends up: during `cache-build` it is stored inside the cache annotation directory (next to `vcfcache_annotated.bcf`); during `annotate` it is stored in your chosen `--output` directory as `./auxiliary/`.
+- Where it ends up: during `cache-build` it is stored inside the cache annotation directory (next to `vcfcache_annotated.bcf`); during `annotate` it is stored under your stats directory at `./<output_file>_vcstats/auxiliary/`.
 - If you run the tool in Docker/Apptainer, ensure `${AUXILIARY_DIR}` is a path that exists **inside** the container (VCFcache creates it on the host and substitutes the path into the command). Your wrapper/command must actually write/copy outputs there.
 - If the tool writes to the current working directory or to some internal temp directory, those files may be lost after the workflow finishes.
 - If nothing is written to `${AUXILIARY_DIR}`, VCFcache removes the empty directory automatically.
@@ -622,7 +625,8 @@ Annotate a sample VCF/BCF using a cache.
 
 - `-a/--annotation_db`: cache annotation directory (local path) or cache alias (Zenodo).
 - `-i/--vcf`: input sample VCF/BCF.
-- `-o/--output`: output directory.
+- `-o/--output`: output BCF file (use `-`/`stdout` to stream).
+- `--stats-dir`: optional directory for logs/workflow/auxiliary (written under `<output_file>_vcstats`).
 - `-y/--yaml`: params YAML for runtime (copied to workflow `params.snapshot.yaml`).
 - `-t/--threads`: threads for `bcftools` (default: 1).
 - `-f/--force`: overwrite outputs.
@@ -685,7 +689,7 @@ Convenience command for smoke testing and benchmarking.
 
 2. **Benchmark mode**: Compares cached vs uncached annotation performance
    ```bash
-   vcfcache demo -a <cache> --vcf <file> -y <params> [--output <dir>]
+   vcfcache demo -a <cache> --vcf <file> -y <params> [--output <file>] [--stats-dir <dir>]
    ```
 
 **Options**:
@@ -693,7 +697,8 @@ Convenience command for smoke testing and benchmarking.
 - `-a/--annotation_db CACHE`: benchmark mode - path to annotation cache (requires `--vcf` and `-y`).
 - `--vcf VCF`: benchmark mode - path to VCF/BCF file to annotate (requires `-a` and `-y`).
 - `-y/--yaml PARAMS`: params YAML file (required for benchmark mode).
-- `--output DIR`: benchmark mode - output directory for results (default: temporary directory in /tmp).
+- `--output FILE`: benchmark mode - output BCF path (default: temporary file in /tmp).
+- `--stats-dir DIR`: benchmark mode - stats directory (default: temporary directory in /tmp).
 - `--debug`: keep intermediate files for inspection; also enables detailed timing output.
 - `-q/--quiet`: suppress detailed output (show only essential information).
 

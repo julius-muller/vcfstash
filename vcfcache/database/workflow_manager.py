@@ -134,6 +134,7 @@ class WorkflowManager(WorkflowBase):
         workflow: Path | None = None,
         anno_config_file: Optional[Path] = None,
         params_file: Optional[Path] = None,
+        output_file: Optional[Path | str] = None,
         verbosity: int = 0,
     ):
         """Initialize the pure Python workflow manager.
@@ -145,6 +146,7 @@ class WorkflowManager(WorkflowBase):
             name: Unique name for this workflow instance
             anno_config_file: Optional annotation configuration YAML file
             params_file: Required YAML parameters file
+            output_file: Optional output BCF path for annotate modes (or '-' for stdout)
             verbosity: Verbosity level (0=quiet, 1=info, 2=debug)
         """
         super().__init__(
@@ -165,6 +167,13 @@ class WorkflowManager(WorkflowBase):
         )
 
         self.logger.debug(f"Initializing Pure Python workflow in: {self.output_dir}")
+        if output_file is not None:
+            if str(output_file) in {"-", "stdout"}:
+                self.output_file = "-"
+            else:
+                self.output_file = Path(output_file).expanduser().resolve()
+        else:
+            self.output_file = None
 
         # Load and validate params file (required for all modes)
         if params_file:
@@ -483,6 +492,12 @@ class WorkflowManager(WorkflowBase):
 
         return result
 
+    def _resolve_output_bcf(self, sample_name: str) -> Path | str:
+        """Resolve output target for annotate modes."""
+        if self.output_file is None:
+            return self.output_dir / f"{sample_name}_vc.bcf"
+        return self.output_file
+
     def _run_annotate(self, db_bcf: Path, preserve_unannotated: bool = False, skip_split_multiallelic: bool = False) -> subprocess.CompletedProcess:
         """Annotate sample using cache - 4-step caching process.
 
@@ -637,7 +652,10 @@ class WorkflowManager(WorkflowBase):
 
         # First merge annotations into a temporary file
         step4_bcf = work_task / f"{sample_name}_merged.bcf"
-        output_bcf = self.output_dir / f"{sample_name}_vc.bcf"
+        output_bcf = self._resolve_output_bcf(sample_name)
+        output_target = output_bcf
+        if output_bcf == "-":
+            output_target = work_task / f"{sample_name}_vc.bcf"
 
         if missing_count > 0:
             # Check if annotation tool dropped any variants
@@ -651,6 +669,7 @@ class WorkflowManager(WorkflowBase):
                 int(step3_count_result.stdout.strip()) if step3_count_result.returncode == 0 else 0
             )
 
+            dropped_count = 0
             if step3_count < missing_count:
                 dropped_count = missing_count - step3_count
                 self.logger.info(
@@ -666,6 +685,8 @@ class WorkflowManager(WorkflowBase):
         else:
             # No new annotations, just copy step1
             cmd4 = f"cp {step1_bcf} {step4_bcf} && cp {step1_bcf}.csi {step4_bcf}.csi"
+            step3_count = 0
+            dropped_count = 0
 
         BcftoolsCommand(cmd4, self.logger, work_task).run()
 
@@ -676,15 +697,30 @@ class WorkflowManager(WorkflowBase):
             self.logger.info(
                 "Preserving unannotated variants in output (--preserve-unannotated flag set)"
             )
-            copy_cmd = f"cp {step4_bcf} {output_bcf} && cp {step4_bcf}.csi {output_bcf}.csi"
-            result = BcftoolsCommand(copy_cmd, self.logger, work_task).run()
+            if output_bcf == "-":
+                copy_cmd = f"{bcftools} view {step4_bcf} -Ob -o -"
+                result = BcftoolsCommand(copy_cmd, self.logger, work_task).run()
+            else:
+                copy_cmd = f"cp {step4_bcf} {output_bcf} && cp {step4_bcf}.csi {output_bcf}.csi"
+                result = BcftoolsCommand(copy_cmd, self.logger, work_task).run()
         else:
-            filter_cmd = (
-                f"{bcftools} view -i 'INFO/{tag}!=\"\"' {step4_bcf} "
-                f"-o {output_bcf} -Ob -W --threads {threads}"
-            )
+            if output_bcf == "-":
+                filter_cmd = (
+                    f"{bcftools} view -i 'INFO/{tag}!=\"\"' {step4_bcf} "
+                    f"-o - -Ob --threads {threads}"
+                )
+            else:
+                filter_cmd = (
+                    f"{bcftools} view -i 'INFO/{tag}!=\"\"' {step4_bcf} "
+                    f"-o {output_bcf} -Ob -W --threads {threads}"
+                )
             result = BcftoolsCommand(filter_cmd, self.logger, work_task).run()
 
+        self.last_run_stats = {
+            "missing_variants": missing_count,
+            "missing_annotated": step3_count,
+            "dropped_variants": dropped_count if missing_count > 0 else 0,
+        }
         self.logger.info(f"Annotation complete: {output_bcf}")
 
         return result
@@ -707,7 +743,10 @@ class WorkflowManager(WorkflowBase):
 
         sample_name = self.input_file.stem
         input_bcf = self.input_file
-        output_bcf = self.output_dir / f"{sample_name}_vc.bcf"
+        output_bcf = self._resolve_output_bcf(sample_name)
+        output_target = output_bcf
+        if output_bcf == "-":
+            output_target = work_task / f"{sample_name}_vc.bcf"
         aux_dir = self.output_dir / "auxiliary"
         aux_dir.mkdir(exist_ok=True)
         bcftools = self.params_file_content["bcftools_cmd"]
@@ -744,20 +783,50 @@ class WorkflowManager(WorkflowBase):
             self.nfa_config_content["annotation_cmd"],
             extra_vars={
                 "INPUT_BCF": str(input_bcf),
-                "OUTPUT_BCF": str(output_bcf),
+                "OUTPUT_BCF": str(output_target),
                 "AUXILIARY_DIR": str(aux_dir),
             },
         )
 
         result = BcftoolsCommand(anno_cmd, self.logger, work_task).run()
 
+        if output_bcf == "-":
+            stream_cmd = f"{bcftools} view {output_target} -Ob -o -"
+            result = BcftoolsCommand(stream_cmd, self.logger, work_task).run()
+
         # Validate output
         tag = self.nfa_config_content["must_contain_info_tag"]
-        self._validate_info_tag(output_bcf, tag)
+        self._validate_info_tag(output_target, tag)
+
+        input_count = self._count_variants(input_bcf, bcftools)
+        output_count = self._count_variants(output_target, bcftools)
+        dropped = 0
+        if input_count is not None and output_count is not None:
+            dropped = max(input_count - output_count, 0)
+        self.last_run_stats = {
+            "input_variants": input_count,
+            "output_variants": output_count,
+            "dropped_variants": dropped,
+        }
 
         self.logger.info(f"Direct annotation complete: {output_bcf}")
 
         return result
+
+    @staticmethod
+    def _count_variants(path: Path, bcftools_cmd: str) -> Optional[int]:
+        try:
+            result = subprocess.run(
+                f"{bcftools_cmd} index -n {path}",
+                shell=True,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                return None
+            return int(result.stdout.strip())
+        except Exception:
+            return None
 
     def _substitute_variables(
         self, text: str, extra_vars: Optional[Dict[str, str]] = None, skip_vars: Optional[list] = None

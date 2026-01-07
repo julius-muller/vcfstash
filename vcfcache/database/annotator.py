@@ -7,7 +7,9 @@ This module provides classes for annotating the variant database and for annotat
 user VCF files using the annotated database.
 """
 
+import hashlib
 import shutil
+import tempfile
 import subprocess
 import sys
 import time
@@ -18,6 +20,7 @@ from pathlib import Path
 from typing import Optional, Union
 
 import pysam
+import yaml
 
 from vcfcache.database.base import VCFDatabase
 from vcfcache.database.outputs import AnnotatedCacheOutput, AnnotatedUserOutput
@@ -287,7 +290,7 @@ class VCFAnnotator(VCFDatabase):
         input_vcf (Path): Path to the input VCF/BCF file.
         annotation_db_path (Path): Path to the structured annotation database directory.
         annotation_name (str): Name derived from the annotation database.
-        output_dir (Path): Directory where annotated output files will be stored.
+        output_dir (Path): Directory where annotation-related files are stored.
         params_file (Path): Path to the parameters YAML file.
         logger (Logger): Logging instance for the class.
         nx_workflow (WorkflowManager): Instance of the workflow manager.
@@ -295,7 +298,7 @@ class VCFAnnotator(VCFDatabase):
     Args:
         input_vcf (Path | str): Path to the input VCF/BCF file, which must be indexed.
         annotation_db (Path | str): Path to the annotation database.
-        output_dir (Path | str): Path where annotated results will be stored.
+        output_file (Path | str): Path where annotated results will be written (or '-'/'stdout').
         params_file (Optional[Path | str]): Path to a custom parameters file; if
             not provided, defaults to "annotation.yaml" from the annotation database.
         verbosity (int): Logging verbosity level; 0 (WARNING), 1 (INFO), or 2 (DEBUG).
@@ -329,9 +332,10 @@ class VCFAnnotator(VCFDatabase):
         self,
         input_vcf: Path | str,
         annotation_db: Path | str,
-        output_dir: Path | str,
+        output_file: Path | str,
         bcftools_path: Path,
         params_file: Optional[Path | str] = None,
+        stats_dir: Optional[Path | str] = None,
         verbosity: int = 0,
         force: bool = False,
         debug: bool = False,
@@ -341,7 +345,7 @@ class VCFAnnotator(VCFDatabase):
         Args:
             input_vcf: Path to the input BCF/VCF file, needs to be indexed!
             annotation_db: Path to the annotation database
-            output_dir: Path to the output directory
+            output_file: Path to the output BCF file, or '-'/'stdout' to stream
             force: Whether to overwrite existing output directory
             debug: Whether to enable debug mode
             verbosity: Logging verbosity level (0=WARNING, 1=INFO, 2=DEBUG)
@@ -363,11 +367,54 @@ class VCFAnnotator(VCFDatabase):
             self.cached_annotations.cache_output.root_dir, verbosity, debug, bcftools_path
         )
 
-        self.output_annotations = AnnotatedUserOutput(str(output_dir))
-        self.output_annotations.validate_label(self.output_annotations.name)
+        self.output_to_stdout = str(output_file) in {"-", "stdout"}
+        self.output_vcf: Optional[Path]
+        if self.output_to_stdout:
+            self.output_vcf = None
+            output_name = "stdout"
+        else:
+            output_path = Path(output_file).expanduser()
+            if output_path.exists() and output_path.is_dir():
+                raise ValueError(
+                    f"Output path is a directory: {output_path}\n"
+                    "Provide a file path (e.g., sample_vc.bcf) and use --stats-dir for logs."
+                )
+            if output_path.suffix == "":
+                output_path = output_path.with_suffix(".bcf")
+            if output_path.suffix != ".bcf":
+                raise ValueError(
+                    f"Output file must end with .bcf or be '-'/'stdout': {output_file}"
+                )
+            output_path = output_path.resolve()
+            if output_path.exists():
+                if force:
+                    output_path.unlink()
+                    csi_path = output_path.with_suffix(output_path.suffix + ".csi")
+                    if csi_path.exists():
+                        csi_path.unlink()
+                else:
+                    raise FileExistsError(
+                        f"Output file already exists: {output_path}\nIf intended, use --force to overwrite."
+                    )
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            self.output_vcf = output_path
+            output_name = output_path.name
 
-        self._setup_output(force=force)
-        self.output_dir = self.output_annotations.root_dir
+        self.stats_dir = Path(stats_dir).expanduser().resolve() if stats_dir else None
+        self._temp_stats_dir: Optional[Path] = None
+
+        if self.stats_dir:
+            stats_output_dir = self.stats_dir / f"{output_name}_vcstats"
+            self.output_annotations = AnnotatedUserOutput(str(stats_output_dir))
+            self.output_annotations.validate_label(self.output_annotations.name)
+            self._setup_output(force=force)
+            self.output_dir = self.output_annotations.root_dir
+        else:
+            self._temp_stats_dir = Path(tempfile.mkdtemp(prefix="vcfcache_annotate_"))
+            self.output_annotations = AnnotatedUserOutput(str(self._temp_stats_dir))
+            self.output_annotations.create_structure()
+            self.output_dir = self.output_annotations.root_dir
+
         self.logger: Logger = setup_logging(
             verbosity=self.verbosity,
             log_file=self.output_dir / "annotation.log",
@@ -376,14 +423,14 @@ class VCFAnnotator(VCFDatabase):
         self.annotation_wfl_path = self.output_annotations.workflow_dir
         self.annotation_wfl_path.mkdir(parents=True, exist_ok=True)
 
-        self.output_vcf = Path(self.output_dir / f"{self.vcf_name}_vc{fext}")
-
         # now also import the mandatory annotation file, that cannot be provided by the user at this stage
         self.anno_config_file = self.annotation_db_path / "annotation.yaml"
         if not self.anno_config_file.exists():
             raise FileNotFoundError(
                 f"Annotation config file not found: {self.anno_config_file}"
             )
+        self.anno_snapshot_file = self.annotation_wfl_path / "annotation.snapshot.yaml"
+        shutil.copyfile(self.anno_config_file, self.anno_snapshot_file)
 
         self.params_file = self.annotation_wfl_path / "params.snapshot.yaml"
         if params_file:
@@ -415,6 +462,7 @@ class VCFAnnotator(VCFDatabase):
             anno_config_file=self.anno_config_file,
             params_file=self.params_file,
             verbosity=self.verbosity,
+            output_file=self.output_vcf if not self.output_to_stdout else "-",
         )
 
         self._validate_inputs()
@@ -722,7 +770,7 @@ class VCFAnnotator(VCFDatabase):
         Returns:
             Path to output file (BCF or Parquet)
             self = VCFAnnotator(input_vcf="~/projects/vcfcache/tests/data/nodata/sample4.bcf",
-             annotation_db = "~/tmp/test/test_out/cache/testor", output_dir="~/tmp/test/aout" ,force=True)
+             annotation_db="~/tmp/test/test_out/cache/testor", output_file="~/tmp/test/aout.bcf", stats_dir="~/tmp/test/aout_stats", force=True)
 
         """
         start_time = time.time()
@@ -747,14 +795,17 @@ class VCFAnnotator(VCFDatabase):
             # Always show completion (even in default mode)
             print(f"Annotation completed in {duration:.1f}s")
 
-            # Write completion flag
-            from vcfcache.utils.completion import write_completion_flag
-            mode = "uncached" if uncached else "cached"
-            write_completion_flag(
-                output_dir=self.output_annotations.root_dir,
-                command="annotate",
-                mode=mode
-            )
+            # Write completion flag only if stats directory is requested
+            if getattr(self, "stats_dir", None):
+                from vcfcache.utils.completion import write_completion_flag
+                mode = "uncached" if uncached else "cached"
+                write_completion_flag(
+                    output_dir=self.output_annotations.root_dir,
+                    command="annotate",
+                    mode=mode,
+                    output_file=str(self.output_vcf) if self.output_vcf else "stdout",
+                )
+                self._write_compare_stats(mode=mode)
 
         except Exception:
             if self.logger:
@@ -762,11 +813,125 @@ class VCFAnnotator(VCFDatabase):
             raise
 
         if convert_parquet:
+            if self.output_vcf is None:
+                raise ValueError("Parquet conversion is not supported when output is stdout.")
             # threads = self.nx_workflow.nf_config_content['params'].get('vep_max_forks',1) * self.nx_workflow.nf_config_content['params'].get('vep_max_chr_parallel', 1)
             self._convert_to_parquet(self.output_vcf)  # , threads=threads)
 
         if not self.debug:
             self.nx_workflow.cleanup_work_dir()
+            temp_stats_dir = getattr(self, "_temp_stats_dir", None)
+            if temp_stats_dir:
+                shutil.rmtree(temp_stats_dir, ignore_errors=True)
+
+    def _write_compare_stats(self, mode: str) -> None:
+        stats_file = self.output_dir / "compare_stats.yaml"
+        output_file = str(self.output_vcf) if self.output_vcf else "stdout"
+        anno_md5 = None
+        if self.anno_snapshot_file.exists():
+            from vcfcache.utils.validation import compute_md5
+            anno_md5 = compute_md5(self.anno_snapshot_file)
+
+        stats = {
+            "command": "annotate",
+            "mode": mode,
+            "output_file": output_file,
+            "input_file": str(self.input_vcf),
+            "input_name": self.input_vcf.name,
+            "cache_name": self.annotation_name,
+            "annotation_yaml_md5": anno_md5,
+            "genome_build_params": self.nx_workflow.params_file_content.get("genome_build"),
+            "genome_build_annotation": self.nx_workflow.nfa_config_content.get("genome_build"),
+            "vcfcache_version": getattr(sys.modules.get("vcfcache"), "__version__", "unknown"),
+            "variant_counts": {
+                "total_output": None,
+                "annotated_output": None,
+                "dropped_variants": None,
+                "missing_variants": None,
+                "missing_annotated": None,
+            },
+            "variant_md5": {
+                "top10": None,
+                "bottom10": None,
+                "all": None,
+            },
+        }
+
+        last_stats = getattr(self.nx_workflow, "last_run_stats", {}) or {}
+        stats["variant_counts"]["dropped_variants"] = last_stats.get("dropped_variants")
+        stats["variant_counts"]["missing_variants"] = last_stats.get("missing_variants")
+        stats["variant_counts"]["missing_annotated"] = last_stats.get("missing_annotated")
+
+        if self.output_vcf and self.output_vcf.exists():
+            stats["variant_counts"]["total_output"] = self._count_variants(self.output_vcf)
+            tag = self.nx_workflow.nfa_config_content.get("must_contain_info_tag")
+            stats["variant_counts"]["annotated_output"] = self._count_annotated_variants(self.output_vcf, tag)
+            top_md5, bottom_md5 = self._compute_top_bottom_md5(self.output_vcf)
+            stats["variant_md5"]["top10"] = top_md5
+            stats["variant_md5"]["bottom10"] = bottom_md5
+
+        stats_file.write_text(yaml.safe_dump(stats, sort_keys=False))
+
+    def _count_variants(self, bcf_path: Path) -> Optional[int]:
+        result = subprocess.run(
+            [str(self.bcftools_path), "index", "-n", str(bcf_path)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            return None
+        try:
+            return int(result.stdout.strip())
+        except ValueError:
+            return None
+
+    def _count_annotated_variants(self, bcf_path: Path, tag: Optional[str]) -> Optional[int]:
+        if not tag:
+            return None
+        result = subprocess.run(
+            [str(self.bcftools_path), "view", "-H", "-i", f"INFO/{tag}!=\"\"", str(bcf_path)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            return None
+        return len([line for line in result.stdout.splitlines() if line.strip()])
+
+    def _compute_top_bottom_md5(self, bcf_path: Path) -> tuple[Optional[str], Optional[str]]:
+        try:
+            proc = subprocess.Popen(
+                [str(self.bcftools_path), "view", "-H", str(bcf_path)],
+                stdout=subprocess.PIPE,
+                text=True,
+            )
+        except Exception:
+            return None, None
+
+        top_lines = []
+        bottom_lines = []
+        for line in proc.stdout:  # type: ignore[union-attr]
+            line = line.rstrip("\n")
+            if len(top_lines) < 10:
+                top_lines.append(line)
+            bottom_lines.append(line)
+            if len(bottom_lines) > 10:
+                bottom_lines.pop(0)
+        proc.wait()
+
+        if not top_lines:
+            return None, None
+
+        def _md5(lines):
+            h = hashlib.md5()
+            for l in lines:
+                h.update((l + "\n").encode())
+            return h.hexdigest()
+
+        top_md5 = _md5(top_lines)
+        bottom_md5 = _md5(bottom_lines)
+        if len(top_lines) <= 10 and len(bottom_lines) <= 10 and len(top_lines) == len(bottom_lines):
+            bottom_md5 = top_md5
+        return top_md5, bottom_md5
 
     def _convert_to_parquet(self, bcf_path: Path, threads: int = 2) -> Path:
         """Convert annotated BCF to optimized Parquet format"""
@@ -796,7 +961,9 @@ class VCFAnnotator(VCFDatabase):
                 raise ValueError("No valid variants found in annotated file")
 
             combined_df = pd.concat(dataframes, ignore_index=True)
-            output_file = self.output_dir / f"{self.input_vcf.stem}.parquet"
+            output_vcf = getattr(self, "output_vcf", None)
+            output_base = output_vcf.parent if output_vcf else self.output_dir
+            output_file = output_base / f"{self.input_vcf.stem}.parquet"
             if self.logger:
                 self.logger.info(f"Writing Parquet file: {output_file}")
                 self.logger.debug(f"Total variants: {len(combined_df)}")

@@ -696,7 +696,8 @@ def test_vcf_annotator_init_minimal(monkeypatch, tmp_path):
     annotator = VCFAnnotator(
         input_vcf=input_vcf,
         annotation_db=anno_dir,
-        output_dir=tmp_path / "out",
+        output_file=tmp_path / "out.bcf",
+        stats_dir=tmp_path / "out_stats",
         bcftools_path=Path("/usr/bin/bcftools"),
     )
 

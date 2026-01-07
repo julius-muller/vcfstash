@@ -205,7 +205,8 @@ def test_push_and_pull_roundtrip_via_sandbox(tmp_path: Path):
         assert annotation_dir.is_dir()
 
         # Annotate a small sample using the pulled cache
-        out_anno = tmp_path / "annotated"
+        out_anno = tmp_path / "annotated.bcf"
+        stats_dir = tmp_path / "annotated_stats"
         _run(
             [
                 "vcfcache",
@@ -216,6 +217,8 @@ def test_push_and_pull_roundtrip_via_sandbox(tmp_path: Path):
                 str(vcfcache_root / "tests" / "data" / "nodata" / "sample4.bcf"),
                 "--output",
                 str(out_anno),
+                "--stats-dir",
+                str(stats_dir),
                 "-y",
                 str(params_file),
                 "--force",
@@ -223,8 +226,7 @@ def test_push_and_pull_roundtrip_via_sandbox(tmp_path: Path):
             env=env,
             cwd=work_dir,
         )
-        produced = out_anno / "sample4_vc.bcf"
-        assert produced.exists()
+        assert out_anno.exists()
 
     finally:
         if dep_id and token:
