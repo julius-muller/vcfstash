@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from vcfcache.compare import compare_runs, extract_timing, find_output_bcf, get_md5
+from vcfcache.compare import compare_runs, parse_workflow_log, find_output_bcf, get_md5, format_time
 
 
 @pytest.fixture
@@ -54,10 +54,10 @@ def workflow_log_with_timing(temp_output_dir):
     """Create a workflow.log file with timing information."""
     workflow_log = temp_output_dir / "workflow.log"
     workflow_log.write_text(
-        "Starting annotation...\n"
-        "Processing variants...\n"
-        "Command completed in 123.45s\n"
-        "Done.\n"
+        "[2026-01-06 18:49:03] INFO Starting annotation...\n"
+        "[2026-01-06 18:49:36] INFO Command completed in 32.733s: bcftools norm\n"
+        "[2026-01-06 18:51:25] INFO Command completed in 109.151s: bcftools annotate\n"
+        "[2026-01-06 20:05:36] INFO Workflow completed successfully in 4592.2s\n"
     )
     return temp_output_dir
 
@@ -82,38 +82,33 @@ def test_get_md5(tmp_path):
     assert actual_md5 == expected_md5
 
 
-def test_extract_timing_from_workflow_log(workflow_log_with_timing):
-    """Test extracting timing from workflow.log."""
-    timing = extract_timing(workflow_log_with_timing)
-    assert timing == 123.45
+def test_parse_workflow_log(workflow_log_with_timing):
+    """Test parsing workflow.log for timing and steps."""
+    total_time, steps = parse_workflow_log(workflow_log_with_timing)
+    assert total_time == 4592.2
+    assert len(steps) == 2
+    assert steps[0]["command"] == "bcftools norm"
+    assert steps[0]["duration"] == 32.733
+    assert steps[1]["command"] == "bcftools annotate"
+    assert steps[1]["duration"] == 109.151
 
 
-def test_extract_timing_from_timing_file(tmp_path):
-    """Test extracting timing from work/timing.txt when workflow.log exists but has no timing."""
+def test_parse_workflow_log_missing(tmp_path):
+    """Test parsing workflow.log when file doesn't exist."""
     output_dir = tmp_path / "output"
     output_dir.mkdir()
 
-    # Create workflow.log without timing info
-    workflow_log = output_dir / "workflow.log"
-    workflow_log.write_text("Some log without timing\n")
-
-    # Create timing in work/timing.txt
-    work_dir = output_dir / "work"
-    work_dir.mkdir()
-    timing_file = work_dir / "timing.txt"
-    timing_file.write_text("98.76")
-
-    timing = extract_timing(output_dir)
-    assert timing == 98.76
+    total_time, steps = parse_workflow_log(output_dir)
+    assert total_time is None
+    assert steps == []
 
 
-def test_extract_timing_missing(tmp_path):
-    """Test extracting timing when no timing files exist."""
-    output_dir = tmp_path / "output"
-    output_dir.mkdir()
-
-    timing = extract_timing(output_dir)
-    assert timing is None
+def test_format_time():
+    """Test time formatting."""
+    assert format_time(45.6) == "45.6s"
+    assert format_time(125.5) == "2m 5.5s"
+    assert format_time(3665.0) == "1h 1m 5.0s"
+    assert format_time(7322.5) == "2h 2m 2.5s"
 
 
 def test_find_output_bcf(output_bcf):
@@ -169,11 +164,18 @@ def test_compare_runs_success(
     """Test successful comparison of two runs."""
     # Add timing to uncached run
     workflow_log1 = completion_flag_uncached / "workflow.log"
-    workflow_log1.write_text("Command completed in 150.00s\n")
+    workflow_log1.write_text(
+        "[2026-01-06 20:06:44] INFO Command completed in 100.00s: bcftools norm\n"
+        "[2026-01-07 02:58:55] INFO Workflow completed successfully in 150.00s\n"
+    )
 
     # Add timing to cached run
     workflow_log2 = completion_flag_cached / "workflow.log"
-    workflow_log2.write_text("Command completed in 50.00s\n")
+    workflow_log2.write_text(
+        "[2026-01-06 18:49:03] INFO Command completed in 10.00s: bcftools norm\n"
+        "[2026-01-06 18:49:36] INFO Command completed in 20.00s: bcftools annotate\n"
+        "[2026-01-06 20:05:36] INFO Workflow completed successfully in 50.00s\n"
+    )
 
     # Add output BCF files with identical content
     bcf1 = completion_flag_uncached / "output1.bcf"
@@ -189,8 +191,8 @@ def test_compare_runs_success(
     captured = capsys.readouterr()
     assert "VCFcache Annotation Comparison" in captured.out
     assert "Speed-up:" in captured.out
-    assert "Time saved:" in captured.out
-    assert "Output files are identical" in captured.out or "✓" in captured.out
+    assert "Time Saved:" in captured.out
+    assert "Output files are IDENTICAL" in captured.out or "✓" in captured.out
 
 
 def test_compare_runs_different_outputs(
@@ -201,10 +203,14 @@ def test_compare_runs_different_outputs(
     """Test comparison when output files differ."""
     # Add timing to both runs
     workflow_log1 = completion_flag_uncached / "workflow.log"
-    workflow_log1.write_text("Command completed in 150.00s\n")
+    workflow_log1.write_text(
+        "[2026-01-07 02:58:55] INFO Workflow completed successfully in 150.00s\n"
+    )
 
     workflow_log2 = completion_flag_cached / "workflow.log"
-    workflow_log2.write_text("Command completed in 50.00s\n")
+    workflow_log2.write_text(
+        "[2026-01-06 20:05:36] INFO Workflow completed successfully in 50.00s\n"
+    )
 
     # Add output BCF files with DIFFERENT content
     bcf1 = completion_flag_uncached / "output1.bcf"
@@ -248,8 +254,12 @@ def test_compare_runs_same_mode(tmp_path, capsys):
     )
 
     # Add timing to both
-    (dir1 / "workflow.log").write_text("Command completed in 100.00s\n")
-    (dir2 / "workflow.log").write_text("Command completed in 95.00s\n")
+    (dir1 / "workflow.log").write_text(
+        "[2026-01-06 20:05:36] INFO Workflow completed successfully in 100.00s\n"
+    )
+    (dir2 / "workflow.log").write_text(
+        "[2026-01-06 20:05:36] INFO Workflow completed successfully in 95.00s\n"
+    )
 
     # Add identical output files
     bcf_content = b"test content"
@@ -282,8 +292,10 @@ def test_compare_cli_integration(tmp_path):
             f"commit: test\n"
             f"timestamp: 2026-01-07T10:00:00\n"
         )
-        # Add timing
-        (d / "workflow.log").write_text("Command completed in 100.00s\n")
+        # Add timing with proper format
+        (d / "workflow.log").write_text(
+            "[2026-01-06 20:05:36] INFO Workflow completed successfully in 100.00s\n"
+        )
         # Add output file
         (d / "output.bcf").write_bytes(b"test")
 

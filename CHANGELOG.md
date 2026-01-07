@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Contig overlap is now reported on every cached annotation run and no-overlap failures are surfaced early.
 - Fixed `AttributeError: 'Namespace' object has no attribute 'verbose'` when running `vcfcache compare` command
   - Added missing parent parser to compare command to inherit `--verbose`, `--quiet`, and `--debug` flags
+- Enhanced `vcfcache compare` to show detailed timing breakdown similar to old benchmark mode
+  - Now displays detailed step-by-step timings for each bcftools command in both cached and uncached runs
+  - Shows comprehensive summary with total time, speedup factor, time saved (in seconds, minutes, and hours)
+  - Improved workflow.log parsing to correctly extract "Workflow completed successfully in X.Xs" timing
+  - Human-readable time formatting (e.g., "1h 23m 45.6s" or "12m 34.5s")
   - Added comprehensive test suite for compare command (`tests/test_compare.py`) with 13 tests
 
 ## 0.4.1 (2026-01-06)

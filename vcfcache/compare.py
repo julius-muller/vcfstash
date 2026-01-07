@@ -5,9 +5,9 @@ runs (typically cached vs uncached) and display performance metrics.
 """
 
 import hashlib
-import subprocess
+import re
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 
 from vcfcache.utils.completion import read_completion_flag, validate_compatibility
 
@@ -28,46 +28,59 @@ def get_md5(file_path: Path) -> str:
     return md5_hash.hexdigest()
 
 
-def extract_timing(output_dir: Path) -> Optional[float]:
-    """Extract timing information from a vcfcache annotate run.
+def parse_workflow_log(output_dir: Path) -> Tuple[Optional[float], List[Dict[str, str]]]:
+    """Parse workflow.log to extract total time and detailed step timings.
 
     Args:
         output_dir: Output directory from vcfcache annotate
 
     Returns:
-        Duration in seconds, or None if timing not found
+        Tuple of (total_time, step_timings)
+        - total_time: Total workflow duration in seconds, or None if not found
+        - step_timings: List of dicts with 'step', 'command', 'duration' keys
     """
-    # Check workflow.log for timing information
     workflow_log = output_dir / "workflow.log"
     if not workflow_log.exists():
-        return None
+        return None, []
+
+    total_time = None
+    step_timings = []
 
     try:
         with open(workflow_log, "r") as f:
             for line in f:
-                # Look for timing lines like "Command completed in 123.45s"
-                if "completed in" in line and "s" in line:
-                    # Extract the number before 's'
-                    parts = line.split("completed in")
-                    if len(parts) == 2:
-                        time_str = parts[1].strip().rstrip("s")
-                        try:
-                            return float(time_str)
-                        except ValueError:
-                            continue
+                # Look for overall workflow completion: "Workflow completed successfully in 4592.2s"
+                if "Workflow completed successfully in" in line:
+                    match = re.search(r"completed successfully in ([\d.]+)s", line)
+                    if match:
+                        total_time = float(match.group(1))
+
+                # Look for individual command timings: "Command completed in 32.733s: bcftools norm"
+                elif "Command completed in" in line:
+                    match = re.search(r"Command completed in ([\d.]+)s: (.+)$", line)
+                    if match:
+                        duration = float(match.group(1))
+                        command = match.group(2).strip()
+                        step_timings.append({
+                            "duration": duration,
+                            "command": command,
+                        })
+
+                # Also capture step descriptions for context
+                elif "Step " in line and "/4:" in line:
+                    # Extract step descriptions like "Step 1/4: Adding cache annotations"
+                    match = re.search(r"Step (\d+/\d+): (.+)$", line)
+                    if match:
+                        step_num = match.group(1)
+                        description = match.group(2).strip()
+                        # Store this for the next timing entry
+                        if step_timings and "step" not in step_timings[-1]:
+                            step_timings[-1]["step"] = f"Step {step_num}: {description}"
+
     except Exception:
         pass
 
-    # Try timing.txt file in work directory
-    timing_file = output_dir / "work" / "timing.txt"
-    if timing_file.exists():
-        try:
-            content = timing_file.read_text().strip()
-            return float(content)
-        except (ValueError, IOError):
-            pass
-
-    return None
+    return total_time, step_timings
 
 
 def find_output_bcf(output_dir: Path) -> Optional[Path]:
@@ -85,6 +98,28 @@ def find_output_bcf(output_dir: Path) -> Optional[Path]:
         return bcf_files[0]
 
     return None
+
+
+def format_time(seconds: float) -> str:
+    """Format seconds into a human-readable string.
+
+    Args:
+        seconds: Duration in seconds
+
+    Returns:
+        Formatted string like "1h 23m 45.6s" or "12m 34.5s" or "45.6s"
+    """
+    if seconds >= 3600:
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = seconds % 60
+        return f"{hours}h {minutes}m {secs:.1f}s"
+    elif seconds >= 60:
+        minutes = int(seconds // 60)
+        secs = seconds % 60
+        return f"{minutes}m {secs:.1f}s"
+    else:
+        return f"{seconds:.1f}s"
 
 
 def compare_runs(dir1: Path, dir2: Path) -> None:
@@ -125,19 +160,25 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
     else:
         # Both are same mode or unknown, just compare them as run1 vs run2
         print(
-            f"\nNote: Both runs are in {mode1} mode. Comparison may not be meaningful.\n"
+            f"\nNote: Both runs are in '{mode1}' mode. Comparison may not be meaningful.\n"
         )
         uncached_dir, cached_dir = dir1, dir2
         uncached_data, cached_data = data1, data2
 
-    # Extract timing
-    uncached_time = extract_timing(uncached_dir)
-    cached_time = extract_timing(cached_dir)
+    # Parse workflow logs
+    uncached_time, uncached_steps = parse_workflow_log(uncached_dir)
+    cached_time, cached_steps = parse_workflow_log(cached_dir)
 
     if uncached_time is None:
-        raise ValueError(f"Could not extract timing from {uncached_dir}")
+        raise ValueError(
+            f"Could not extract timing from {uncached_dir}. "
+            f"Check that workflow.log exists and contains 'Workflow completed successfully in' line."
+        )
     if cached_time is None:
-        raise ValueError(f"Could not extract timing from {cached_dir}")
+        raise ValueError(
+            f"Could not extract timing from {cached_dir}. "
+            f"Check that workflow.log exists and contains 'Workflow completed successfully in' line."
+        )
 
     # Find output BCF files
     uncached_bcf = find_output_bcf(uncached_dir)
@@ -148,35 +189,79 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
     cached_md5 = get_md5(cached_bcf) if cached_bcf and cached_bcf.exists() else "N/A"
 
     # Display results
-    print("\n" + "=" * 70)
+    print("\n" + "=" * 80)
     print("  VCFcache Annotation Comparison")
-    print("=" * 70)
+    print("=" * 80)
     print()
-    print(f"Run 1 ({uncached_data.get('mode', 'unknown')}): {uncached_dir}")
-    print(f"Run 2 ({cached_data.get('mode', 'unknown')}): {cached_dir}")
+    print(f"Uncached run: {uncached_dir}")
+    print(f"  Mode: {uncached_data.get('mode', 'unknown')}")
+    print(f"  Version: {uncached_data.get('version', 'unknown')}")
+    print(f"  Timestamp: {uncached_data.get('timestamp', 'unknown')}")
     print()
-    print("-" * 70)
-    print("  Timing Results")
-    print("-" * 70)
+    print(f"Cached run: {cached_dir}")
+    print(f"  Mode: {cached_data.get('mode', 'unknown')}")
+    print(f"  Version: {cached_data.get('version', 'unknown')}")
+    print(f"  Timestamp: {cached_data.get('timestamp', 'unknown')}")
     print()
-    print(f"{'Uncached annotation time:':<30} {uncached_time:>10.2f}s")
-    print(f"{'Cached annotation time:':<30} {cached_time:>10.2f}s")
+
+    # Display detailed step timings
+    if cached_steps:
+        print("-" * 80)
+        print("  Detailed Step Timings (Cached Run)")
+        print("-" * 80)
+        print()
+        for i, step in enumerate(cached_steps, 1):
+            duration = step.get("duration", 0)
+            command = step.get("command", "unknown")
+            print(f"  Step {i}: {command}")
+            print(f"    Duration: {format_time(duration)} ({duration:.2f}s)")
+        print()
+
+    if uncached_steps:
+        print("-" * 80)
+        print("  Detailed Step Timings (Uncached Run)")
+        print("-" * 80)
+        print()
+        for i, step in enumerate(uncached_steps, 1):
+            duration = step.get("duration", 0)
+            command = step.get("command", "unknown")
+            print(f"  Step {i}: {command}")
+            print(f"    Duration: {format_time(duration)} ({duration:.2f}s)")
+        print()
+
+    # Summary comparison
+    print("=" * 80)
+    print("  Summary")
+    print("=" * 80)
     print()
-    print(f"{'Speed-up:':<30} {uncached_time / cached_time:>10.2f}x")
-    print(f"{'Time saved:':<30} {uncached_time - cached_time:>10.2f}s ({(uncached_time - cached_time) / 60:.1f} minutes)")
+    print(f"  {'Total Time (Uncached):':<35} {format_time(uncached_time):>20} ({uncached_time:,.2f}s)")
+    print(f"  {'Total Time (Cached):':<35} {format_time(cached_time):>20} ({cached_time:,.2f}s)")
     print()
-    print("-" * 70)
-    print("  Output Verification")
-    print("-" * 70)
+    speedup = uncached_time / cached_time if cached_time > 0 else 0
+    time_saved = uncached_time - cached_time
+    print(f"  {'Speed-up:':<35} {speedup:>20.2f}x")
+    print(f"  {'Time Saved:':<35} {format_time(time_saved):>20} ({time_saved:,.2f}s)")
+    if time_saved >= 60:
+        print(f"  {'':35} ({time_saved / 60:>19.1f} minutes)")
+    if time_saved >= 3600:
+        print(f"  {'':35} ({time_saved / 3600:>19.2f} hours)")
     print()
-    print(f"Uncached output MD5: {uncached_md5}")
-    print(f"Cached output MD5:   {cached_md5}")
+
+    # Output verification
+    print("-" * 80)
+    print("  Output Verification (MD5)")
+    print("-" * 80)
+    print()
+    print(f"  Uncached: {uncached_md5}")
+    print(f"  Cached:   {cached_md5}")
     print()
     if uncached_md5 != "N/A" and cached_md5 != "N/A":
         if uncached_md5 == cached_md5:
-            print("✓ Output files are identical")
+            print("  ✓ Output files are IDENTICAL")
         else:
-            print("✗ WARNING: Output files differ!")
+            print("  ✗ WARNING: Output files DIFFER!")
+    else:
+        print("  ⚠ Could not verify outputs (BCF files not found)")
     print()
-    print("=" * 70)
+    print("=" * 80)
     print()
