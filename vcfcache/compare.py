@@ -120,7 +120,13 @@ def _load_annotation_snapshot(stats_dir: Path) -> str:
 
 
 def _required_param_keys(annotation_text: str) -> set[str]:
-    keys = set(re.findall(r"\$\{params\.([A-Za-z0-9_\\.]+)\}", annotation_text))
+    filtered_lines = []
+    for line in annotation_text.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        filtered_lines.append(line)
+    filtered_text = "\n".join(filtered_lines)
+    keys = set(re.findall(r"\$\{params\.([A-Za-z0-9_\\.]+)\}", filtered_text))
     top_level = set()
     for key in keys:
         top_level.add(key.split(".")[0])
@@ -317,10 +323,10 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
     tool_annotated_a = _fallback_tool_annotated(stats_a, tool_annotated_a, missing_a, total_a)
     tool_annotated_b = _fallback_tool_annotated(stats_b, tool_annotated_b, missing_b, total_b)
 
-    def _rate(annotated: Optional[int], duration: Optional[float]) -> Optional[float]:
-        if annotated is None or duration is None or duration <= 0:
+    def _rate(count: Optional[int], duration: Optional[float]) -> Optional[float]:
+        if count is None or duration is None or duration <= 0:
             return None
-        return annotated / duration
+        return count / duration
 
     def _tool_step_time(steps: List[Dict[str, str]], mode: str) -> Optional[float]:
         if not steps:
@@ -337,8 +343,8 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
     tool_time_a = _tool_step_time(steps_a, stats_a.get("mode", ""))
     tool_time_b = _tool_step_time(steps_b, stats_b.get("mode", ""))
 
-    rate_a = _rate(tool_annotated_a or annotated_a, time_a)
-    rate_b = _rate(tool_annotated_b or annotated_b, time_b)
+    rate_a = _rate(total_a, time_a)
+    rate_b = _rate(total_b, time_b)
     tool_rate_a = _rate(tool_annotated_a or annotated_a, tool_time_a)
     tool_rate_b = _rate(tool_annotated_b or annotated_b, tool_time_b)
 
@@ -409,7 +415,7 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
             ("Annotated variants in output", f"{annotated:,}" if annotated is not None else None),
             ("Annotated variants (tool)", f"{tool_annotated:,}" if tool_annotated is not None else None),
             ("Dropped variants", f"{dropped:,}" if dropped is not None else None),
-            ("Annotated variants/sec (end-to-end)", f"{total_rate:,.2f}" if total_rate is not None else None),
+            ("Output variants/sec (end-to-end)", f"{total_rate:,.2f}" if total_rate is not None else None),
             ("Annotated variants/sec (tool step)", f"{tool_rate:,.2f}" if tool_rate is not None else None),
             ("Total time", f"{format_time(total_time)} ({total_time:,.2f}s)" if total_time is not None else None),
             ("Tool time", f"{format_time(tool_time)} ({tool_time:,.2f}s)" if tool_time is not None else None),
@@ -450,6 +456,8 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
         extra_params2 if stats_b is stats2 else extra_params1,
     )
 
+    print("Note: Output variants (total) can include unannotated records (e.g., --preserve-unannotated).")
+    print()
     print(_hdr("Detailed Step Timings"))
     def _print_steps(label: str, steps: List[Dict[str, str]]) -> None:
         print(f"  {label}:")
@@ -475,12 +483,6 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
         speedup = time_a / time_b
         time_saved = time_a - time_b
 
-    tool_speedup = None
-    tool_time_saved = None
-    if tool_time_a is not None and tool_time_b is not None and tool_time_b > 0:
-        tool_speedup = tool_time_a / tool_time_b
-        tool_time_saved = tool_time_a - tool_time_b
-
     print("+---------------------------+----------------------+----------------------+")
     print("| Metric                    | Comparator A         | Comparator B         |")
     print("+---------------------------+----------------------+----------------------+")
@@ -490,23 +492,22 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
     print(f"| Tool rate (var/s)         | {f'{tool_rate_a:,.2f}' if tool_rate_a is not None else 'N/A':<20} | {f'{tool_rate_b:,.2f}' if tool_rate_b is not None else 'N/A':<20} |")
     print("+---------------------------+----------------------+----------------------+")
     if speedup is not None and time_saved is not None:
-        print(f"  {_ok('[OK]')} Speed-up (A/B): {speedup:.2f}x  (end-to-end)")
-        print(f"  {_ok('[OK]')} Time saved: {format_time(time_saved)} ({time_saved:,.2f}s)")
+        print(f"  Speed-up (A/B): {speedup:.2f}x  (end-to-end)")
+        print(f"  Time saved: {format_time(time_saved)} ({time_saved:,.2f}s)")
     else:
         print(f"  {_warn('[!]')} Speed-up: N/A (end-to-end timing missing)")
-    if tool_speedup is not None and tool_time_saved is not None:
-        print(f"  {_ok('[OK]')} Tool speed-up (A/B): {tool_speedup:.2f}x  (tool step)")
-        print(f"  {_ok('[OK]')} Tool time saved: {format_time(tool_time_saved)} ({tool_time_saved:,.2f}s)")
-    else:
-        print(f"  {_warn('[!]')} Tool speed-up: N/A (tool timing missing)")
 
-    print(f"  {_ok('[OK]')} Output verification:")
-    print(f"    Top10 MD5 A: {md5_a.get('top10') or 'N/A'}")
-    print(f"    Top10 MD5 B: {md5_b.get('top10') or 'N/A'}")
-    print(f"    Bottom10 MD5 A: {md5_a.get('bottom10') or 'N/A'}")
-    print(f"    Bottom10 MD5 B: {md5_b.get('bottom10') or 'N/A'}")
-    print(f"    Total MD5 A (all variants): {md5_all_a or 'N/A'}")
-    print(f"    Total MD5 B (all variants): {md5_all_b or 'N/A'}")
+    def _md5_status(a: Optional[str], b: Optional[str]) -> str:
+        if not a or not b:
+            return _warn("[!]") + " N/A"
+        if a == b:
+            return _ok("[OK]") + " match"
+        return _warn("[!]") + " differ"
+
+    print("  Output verification:")
+    print(f"    Top10 MD5: {md5_a.get('top10') or 'N/A'} vs {md5_b.get('top10') or 'N/A'}  {_md5_status(md5_a.get('top10'), md5_b.get('top10'))}")
+    print(f"    Bottom10 MD5: {md5_a.get('bottom10') or 'N/A'} vs {md5_b.get('bottom10') or 'N/A'}  {_md5_status(md5_a.get('bottom10'), md5_b.get('bottom10'))}")
+    print(f"    Total MD5 (all variants): {md5_all_a or 'N/A'} vs {md5_all_b or 'N/A'}  {_md5_status(md5_all_a, md5_all_b)}")
     print()
     print("=" * 80)
     print()
