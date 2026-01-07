@@ -400,20 +400,16 @@ class VCFAnnotator(VCFDatabase):
             self.output_vcf = output_path
             output_name = output_path.name
 
-        self.stats_dir = Path(stats_dir).expanduser().resolve() if stats_dir else None
-        self._temp_stats_dir: Optional[Path] = None
-
-        if self.stats_dir:
-            stats_output_dir = self.stats_dir / f"{output_name}_vcstats"
-            self.output_annotations = AnnotatedUserOutput(str(stats_output_dir))
-            self.output_annotations.validate_label(self.output_annotations.name)
-            self._setup_output(force=force)
-            self.output_dir = self.output_annotations.root_dir
+        if stats_dir:
+            stats_output_dir = Path(stats_dir).expanduser().resolve() / f"{output_name}_vcstats"
         else:
-            self._temp_stats_dir = Path(tempfile.mkdtemp(prefix="vcfcache_annotate_"))
-            self.output_annotations = AnnotatedUserOutput(str(self._temp_stats_dir))
-            self.output_annotations.create_structure()
-            self.output_dir = self.output_annotations.root_dir
+            stats_output_dir = Path.cwd() / f"{self._input_basename()}_vcstats"
+
+        self.stats_dir = stats_output_dir
+        self.output_annotations = AnnotatedUserOutput(str(stats_output_dir))
+        self.output_annotations.validate_label(self.output_annotations.name)
+        self._setup_output(force=force)
+        self.output_dir = self.output_annotations.root_dir
 
         self.logger: Logger = setup_logging(
             verbosity=self.verbosity,
@@ -796,17 +792,15 @@ class VCFAnnotator(VCFDatabase):
             # Always show completion (even in default mode)
             print(f"Annotation completed in {duration:.1f}s")
 
-            # Write completion flag only if stats directory is requested
-            if getattr(self, "stats_dir", None):
-                from vcfcache.utils.completion import write_completion_flag
-                mode = "uncached" if uncached else "cached"
-                write_completion_flag(
-                    output_dir=self.output_annotations.root_dir,
-                    command="annotate",
-                    mode=mode,
-                    output_file=str(self.output_vcf) if self.output_vcf else "stdout",
-                )
-                self._write_compare_stats(mode=mode, md5_all=md5_all)
+            from vcfcache.utils.completion import write_completion_flag
+            mode = "uncached" if uncached else "cached"
+            write_completion_flag(
+                output_dir=self.output_annotations.root_dir,
+                command="annotate",
+                mode=mode,
+                output_file=str(self.output_vcf) if self.output_vcf else "stdout",
+            )
+            self._write_compare_stats(mode=mode, md5_all=md5_all)
 
         except Exception:
             if self.logger:
@@ -821,9 +815,13 @@ class VCFAnnotator(VCFDatabase):
 
         if not self.debug:
             self.nx_workflow.cleanup_work_dir()
-            temp_stats_dir = getattr(self, "_temp_stats_dir", None)
-            if temp_stats_dir:
-                shutil.rmtree(temp_stats_dir, ignore_errors=True)
+
+    def _input_basename(self) -> str:
+        name = self.input_vcf.name
+        suffixes = "".join(self.input_vcf.suffixes)
+        if suffixes:
+            return name[: -len(suffixes)]
+        return self.input_vcf.stem
 
     def _write_compare_stats(self, mode: str, md5_all: bool = False) -> None:
         stats_file = self.output_dir / "compare_stats.yaml"

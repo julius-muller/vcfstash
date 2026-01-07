@@ -525,8 +525,9 @@ def main() -> None:
         required=False,
         metavar="DIR",
         help=(
-            "Optional directory to store annotation logs, workflow files, and auxiliary outputs. "
-            "All files will be written under <stats_dir>/<output_file>_vcstats."
+            "(optional) Directory to store annotation logs, workflow files, and auxiliary outputs. "
+            "If provided, files are written under <stats_dir>/<output_file>_vcstats. "
+            "If omitted, stats are written to <cwd>/<input_basename>_vcstats."
         ),
     )
     vcf_parser.add_argument(
@@ -716,7 +717,7 @@ def main() -> None:
         description=(
             "Compare two successful vcfcache annotate runs and display performance metrics.\n\n"
             "This command requires completion flags (.vcfcache_complete) in both stats directories,\n"
-            "which are created by vcfcache annotate when --stats-dir is used.\n\n"
+            "which are created by vcfcache annotate.\n\n"
             "Examples:\n"
             "  vcfcache compare run1/uncached_stats run1/cached_stats\n"
             "  vcfcache compare /path/to/stats1 /path/to/stats2"
@@ -935,7 +936,7 @@ def main() -> None:
 
                     logger.info(f"Pre-built cache ready at: {final_dir}")
                     logger.info(
-                        f"Use with: vcfcache annotate -a {final_dir} -i sample.vcf -o sample_vc.bcf --stats-dir output/"
+                        f"Use with: vcfcache annotate -a {final_dir} -i sample.vcf -o sample_vc.bcf [--stats-dir output/]"
                     )
                     is_prebuilt_cache = True
             else:
@@ -1394,7 +1395,7 @@ def main() -> None:
                 print(f"Download: vcfcache cache-build --doi <DOI>")
                 print(f"  (downloads to {cache_location}/caches/)")
                 print(
-                    f"Then use: vcfcache annotate -a {cache_location}/caches/<cache_name> -i sample.vcf -o sample_vc.bcf --stats-dir output/"
+                    f"Then use: vcfcache annotate -a {cache_location}/caches/<cache_name> -i sample.vcf -o sample_vc.bcf [--stats-dir output/]"
                 )
                 print(f"\nTip: Set VCFCACHE_DIR=/path/to/large/disk to change download location\n")
 

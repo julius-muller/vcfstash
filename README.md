@@ -86,6 +86,8 @@ vcfcache cache-build --name vep_cache --db ./cache -a annotation.yaml -y params.
 vcfcache annotate -a ./cache/cache/vep_cache --vcf sample.vcf.gz --output ./sample_vc.bcf --stats-dir ./results
 ```
 
+If `--stats-dir` is omitted, stats are written to `<cwd>/<input_basename>_vcstats`.
+
 ---
 
 ## Configuration

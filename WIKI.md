@@ -626,7 +626,7 @@ Annotate a sample VCF/BCF using a cache.
 - `-a/--annotation_db`: cache annotation directory (local path) or cache alias (Zenodo).
 - `-i/--vcf`: input sample VCF/BCF.
 - `-o/--output`: output BCF file (use `-`/`stdout` to stream).
-- `--stats-dir`: optional directory for logs/workflow/auxiliary (written under `<output_file>_vcstats`).
+- `--stats-dir`: optional directory for logs/workflow/auxiliary. If provided, stats are written under `<stats_dir>/<output_file>_vcstats`; if omitted, they default to `<cwd>/<input_basename>_vcstats`.
 - `--md5-all`: compute full MD5 of all variants (no header) and store in stats (slow; may differ between runs).
 - `-y/--yaml`: params YAML for runtime (copied to workflow `params.snapshot.yaml`).
 - `-t/--threads`: threads for `bcftools` (default: 1).
@@ -699,7 +699,7 @@ Convenience command for smoke testing and benchmarking.
 - `--vcf VCF`: benchmark mode - path to VCF/BCF file to annotate (requires `-a` and `-y`).
 - `-y/--yaml PARAMS`: params YAML file (required for benchmark mode).
 - `--output FILE`: benchmark mode - output BCF path (default: temporary file in /tmp).
-- `--stats-dir DIR`: benchmark mode - stats directory (default: temporary directory in /tmp).
+- `--stats-dir DIR`: benchmark mode - stats directory (optional). If omitted, annotate defaults to `<cwd>/<input_basename>_vcstats`.
 - `--debug`: keep intermediate files for inspection; also enables detailed timing output.
 - `-q/--quiet`: suppress detailed output (show only essential information).
 
