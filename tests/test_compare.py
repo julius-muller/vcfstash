@@ -27,6 +27,9 @@ def temp_output_dir(tmp_path):
 @pytest.fixture
 def completion_flag_uncached(temp_output_dir):
     """Create a completion flag for uncached run."""
+    workflow_dir = temp_output_dir / "workflow"
+    workflow_dir.mkdir()
+    (workflow_dir / "params.snapshot.yaml").write_text("threads: 4\n")
     flag_file = temp_output_dir / ".vcfcache_complete"
     flag_file.write_text(
         "command: annotate\n"
@@ -61,6 +64,9 @@ def completion_flag_cached(tmp_path):
     """Create a completion flag for cached run."""
     output_dir = tmp_path / "cached_output"
     output_dir.mkdir()
+    workflow_dir = output_dir / "workflow"
+    workflow_dir.mkdir()
+    (workflow_dir / "params.snapshot.yaml").write_text("threads: 4\n")
     flag_file = output_dir / ".vcfcache_complete"
     flag_file.write_text(
         "command: annotate\n"
@@ -267,6 +273,10 @@ def test_compare_runs_same_mode(tmp_path, capsys):
     dir2 = tmp_path / "cached2"
     dir1.mkdir()
     dir2.mkdir()
+    (dir1 / "workflow").mkdir()
+    (dir2 / "workflow").mkdir()
+    (dir1 / "workflow" / "params.snapshot.yaml").write_text("threads: 2\n")
+    (dir2 / "workflow" / "params.snapshot.yaml").write_text("threads: 2\n")
 
     # Create completion flags with same mode
     flag1 = dir1 / ".vcfcache_complete"
@@ -347,6 +357,10 @@ def test_compare_cli_integration(tmp_path):
     dir2 = tmp_path / "run2"
     dir1.mkdir()
     dir2.mkdir()
+    (dir1 / "workflow").mkdir()
+    (dir2 / "workflow").mkdir()
+    (dir1 / "workflow" / "params.snapshot.yaml").write_text("threads: 2\n")
+    (dir2 / "workflow" / "params.snapshot.yaml").write_text("threads: 2\n")
 
     # Create minimal completion flags and stats
     for d, mode in [(dir1, "uncached"), (dir2, "cached")]:
