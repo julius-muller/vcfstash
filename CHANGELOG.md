@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.5.0 (2026-01-07)
+
 ### Added
 - Enforced genome build metadata in configuration:
   - `genome_build` is now required in both `params.yaml` and `annotation.yaml`
@@ -27,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `vcfcache compare` output reformatted with structured sections and a summary table
 - `vcfcache compare` reports two rates (end-to-end output throughput and tool-step throughput)
 - `vcfcache compare` now reports extra params only when they differ between runs (with values)
+- Deprecated `scripts/release.sh` and simplified release steps in `RELEASE.md`
 - CI workflow now runs on both tag pushes and main branch pushes (for codecov badge updates)
 - Dockerfile optimizations: moved tests to test stage only, added pip cache mounts for faster builds
 

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vcfcache"
-version = "0.4.1"
+version = "0.5.0"
 include-package-data = true
 license = { text = "GPL-3.0-only" }
 classifiers = [
