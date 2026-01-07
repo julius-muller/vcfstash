@@ -470,13 +470,16 @@ def test_annotate_calls_cleanup(monkeypatch, tmp_path):
     annotator = VCFAnnotator.__new__(VCFAnnotator)
     annotator.logger = None
     annotator.debug = False
+    annotator.no_stats = False
     annotator.output_vcf = tmp_path / "out.bcf"
     annotator.cache_file = tmp_path / "cache.bcf"
     annotator.cache_file.write_text("bcf")
+    annotator.output_dir = tmp_path
     annotator.output_annotations = type("Out", (), {"root_dir": tmp_path})()
     annotator.nx_workflow = type(
         "WF", (), {"run": lambda *_a, **_k: None, "cleanup_work_dir": lambda *_: None}
     )()
+    monkeypatch.setattr(annotator, "_write_compare_stats", lambda *_a, **_k: None)
     annotator._convert_to_parquet = lambda *_args, **_kwargs: tmp_path / "out.parquet"  # type: ignore[assignment]
     annotator.annotate(uncached=True, convert_parquet=True)
 
@@ -515,6 +518,7 @@ def test_annotate_raises_on_workflow_error(tmp_path):
     annotator = VCFAnnotator.__new__(VCFAnnotator)
     annotator.logger = None
     annotator.debug = True
+    annotator.no_stats = False
     annotator.output_vcf = tmp_path / "out.bcf"
     annotator.cache_file = tmp_path / "cache.bcf"
     annotator.cache_file.write_text("bcf")

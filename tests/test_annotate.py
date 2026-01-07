@@ -453,7 +453,10 @@ def test_full_annotation_workflow(test_output_dir, test_scenario, prebuilt_cache
     print("MOCK_ANNO tag found in variants")
 
     # Step 13: Verify the output contains the auxiliary information
-    auxiliary_dir = stats_dir / f"{output_file.name}_vcstats" / "auxiliary"
+    input_name = Path(TEST_SAMPLE).name
+    suffixes = "".join(Path(TEST_SAMPLE).suffixes)
+    input_basename = input_name[: -len(suffixes)] if suffixes else Path(TEST_SAMPLE).stem
+    auxiliary_dir = stats_dir / f"{input_basename}_vcstats" / "auxiliary"
     assert auxiliary_dir.exists(), "Auxiliary directory was not created"
     assert auxiliary_dir.is_dir(), "Auxiliary directory is not a directory"
 
