@@ -29,7 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Shows comprehensive summary with total time, speedup factor, time saved (in seconds, minutes, and hours)
   - Improved workflow.log parsing to correctly extract "Workflow completed successfully in X.Xs" timing
   - Human-readable time formatting (e.g., "1h 23m 45.6s" or "12m 34.5s")
-  - Added comprehensive test suite for compare command (`tests/test_compare.py`) with 13 tests
+  - **NEW:** Displays genome_build and threads from params.snapshot.yaml for both runs
+  - **NEW:** Counts and compares total variants in output files using `bcftools index -n`
+  - **NEW:** Shows both variant count comparison and MD5 checksum verification
+  - Removed warning about comparing runs in same mode (useful for comparing different caches)
+  - Added comprehensive test suite for compare command (`tests/test_compare.py`) with 16 tests
 
 ## 0.4.1 (2026-01-06)
 

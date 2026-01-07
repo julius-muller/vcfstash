@@ -6,8 +6,11 @@ runs (typically cached vs uncached) and display performance metrics.
 
 import hashlib
 import re
+import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+import yaml
 
 from vcfcache.utils.completion import read_completion_flag, validate_compatibility
 
@@ -26,6 +29,53 @@ def get_md5(file_path: Path) -> str:
         for chunk in iter(lambda: f.read(4096), b""):
             md5_hash.update(chunk)
     return md5_hash.hexdigest()
+
+
+def count_variants(bcf_path: Path) -> Optional[int]:
+    """Count total number of variants in a BCF file using bcftools index -n.
+
+    Args:
+        bcf_path: Path to the BCF file
+
+    Returns:
+        Number of variants, or None if counting failed
+    """
+    try:
+        # Use bcftools index -n to get variant count
+        result = subprocess.run(
+            ["bcftools", "index", "-n", str(bcf_path)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        count = int(result.stdout.strip())
+        return count
+    except (subprocess.CalledProcessError, ValueError, FileNotFoundError):
+        return None
+
+
+def read_params_yaml(output_dir: Path) -> Dict[str, any]:
+    """Read params.snapshot.yaml from workflow directory.
+
+    Args:
+        output_dir: Output directory from vcfcache annotate
+
+    Returns:
+        Dictionary with genome_build and threads, or empty dict if not found
+    """
+    params_file = output_dir / "workflow" / "params.snapshot.yaml"
+    if not params_file.exists():
+        return {}
+
+    try:
+        with open(params_file, "r") as f:
+            params = yaml.safe_load(f)
+            return {
+                "genome_build": params.get("genome_build", "N/A"),
+                "threads": params.get("threads", "N/A"),
+            }
+    except Exception:
+        return {}
 
 
 def parse_workflow_log(output_dir: Path) -> Tuple[Optional[float], List[Dict[str, str]]]:
@@ -159,15 +209,16 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
         uncached_data, cached_data = data2, data1
     else:
         # Both are same mode or unknown, just compare them as run1 vs run2
-        print(
-            f"\nNote: Both runs are in '{mode1}' mode. Comparison may not be meaningful.\n"
-        )
         uncached_dir, cached_dir = dir1, dir2
         uncached_data, cached_data = data1, data2
 
     # Parse workflow logs
     uncached_time, uncached_steps = parse_workflow_log(uncached_dir)
     cached_time, cached_steps = parse_workflow_log(cached_dir)
+
+    # Read params from both runs
+    uncached_params = read_params_yaml(uncached_dir)
+    cached_params = read_params_yaml(cached_dir)
 
     if uncached_time is None:
         raise ValueError(
@@ -188,6 +239,10 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
     uncached_md5 = get_md5(uncached_bcf) if uncached_bcf and uncached_bcf.exists() else "N/A"
     cached_md5 = get_md5(cached_bcf) if cached_bcf and cached_bcf.exists() else "N/A"
 
+    # Count variants in output files
+    uncached_count = count_variants(uncached_bcf) if uncached_bcf and uncached_bcf.exists() else None
+    cached_count = count_variants(cached_bcf) if cached_bcf and cached_bcf.exists() else None
+
     # Display results
     print("\n" + "=" * 80)
     print("  VCFcache Annotation Comparison")
@@ -197,11 +252,19 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
     print(f"  Mode: {uncached_data.get('mode', 'unknown')}")
     print(f"  Version: {uncached_data.get('version', 'unknown')}")
     print(f"  Timestamp: {uncached_data.get('timestamp', 'unknown')}")
+    print(f"  Genome build: {uncached_params.get('genome_build', 'N/A')}")
+    print(f"  Threads: {uncached_params.get('threads', 'N/A')}")
+    if uncached_count is not None:
+        print(f"  Variants: {uncached_count:,}")
     print()
     print(f"Cached run: {cached_dir}")
     print(f"  Mode: {cached_data.get('mode', 'unknown')}")
     print(f"  Version: {cached_data.get('version', 'unknown')}")
     print(f"  Timestamp: {cached_data.get('timestamp', 'unknown')}")
+    print(f"  Genome build: {cached_params.get('genome_build', 'N/A')}")
+    print(f"  Threads: {cached_params.get('threads', 'N/A')}")
+    if cached_count is not None:
+        print(f"  Variants: {cached_count:,}")
     print()
 
     # Display detailed step timings
@@ -249,19 +312,32 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
 
     # Output verification
     print("-" * 80)
-    print("  Output Verification (MD5)")
+    print("  Output Verification")
     print("-" * 80)
     print()
-    print(f"  Uncached: {uncached_md5}")
-    print(f"  Cached:   {cached_md5}")
+
+    # Variant counts
+    if uncached_count is not None and cached_count is not None:
+        print(f"  Variant count (Uncached): {uncached_count:,}")
+        print(f"  Variant count (Cached):   {cached_count:,}")
+        print()
+        if uncached_count == cached_count:
+            print("  ✓ Variant counts are IDENTICAL")
+        else:
+            print(f"  ✗ WARNING: Variant counts DIFFER! (diff: {abs(uncached_count - cached_count):,})")
+        print()
+
+    # MD5 checksums
+    print(f"  MD5 (Uncached): {uncached_md5}")
+    print(f"  MD5 (Cached):   {cached_md5}")
     print()
     if uncached_md5 != "N/A" and cached_md5 != "N/A":
         if uncached_md5 == cached_md5:
-            print("  ✓ Output files are IDENTICAL")
+            print("  ✓ MD5 checksums are IDENTICAL")
         else:
-            print("  ✗ WARNING: Output files DIFFER!")
+            print("  ✗ WARNING: MD5 checksums DIFFER!")
     else:
-        print("  ⚠ Could not verify outputs (BCF files not found)")
+        print("  ⚠ Could not verify MD5 (BCF files not found)")
     print()
     print("=" * 80)
     print()

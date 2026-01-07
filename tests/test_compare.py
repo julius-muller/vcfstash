@@ -8,7 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from vcfcache.compare import compare_runs, parse_workflow_log, find_output_bcf, get_md5, format_time
+from vcfcache.compare import (
+    compare_runs,
+    parse_workflow_log,
+    find_output_bcf,
+    get_md5,
+    format_time,
+    count_variants,
+    read_params_yaml,
+)
 
 
 @pytest.fixture
@@ -109,6 +117,42 @@ def test_format_time():
     assert format_time(125.5) == "2m 5.5s"
     assert format_time(3665.0) == "1h 1m 5.0s"
     assert format_time(7322.5) == "2h 2m 2.5s"
+
+
+def test_count_variants_missing_file(tmp_path):
+    """Test counting variants when file doesn't exist."""
+    bcf_file = tmp_path / "nonexistent.bcf"
+    count = count_variants(bcf_file)
+    assert count is None
+
+
+def test_read_params_yaml(tmp_path):
+    """Test reading params.snapshot.yaml."""
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    workflow_dir = output_dir / "workflow"
+    workflow_dir.mkdir()
+
+    # Create params.snapshot.yaml
+    params_file = workflow_dir / "params.snapshot.yaml"
+    params_file.write_text(
+        "genome_build: GRCh38\n"
+        "threads: 8\n"
+        "other_param: value\n"
+    )
+
+    params = read_params_yaml(output_dir)
+    assert params["genome_build"] == "GRCh38"
+    assert params["threads"] == 8
+
+
+def test_read_params_yaml_missing(tmp_path):
+    """Test reading params.yaml when file doesn't exist."""
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    params = read_params_yaml(output_dir)
+    assert params == {}
 
 
 def test_find_output_bcf(output_bcf):
@@ -223,14 +267,14 @@ def test_compare_runs_different_outputs(
 
     # Check output
     captured = capsys.readouterr()
-    assert "WARNING: Output files differ" in captured.out or "✗" in captured.out
+    assert "WARNING: MD5 checksums DIFFER" in captured.out or "✗" in captured.out
 
 
 def test_compare_runs_same_mode(tmp_path, capsys):
-    """Test comparison when both runs are in same mode."""
-    # Create two uncached runs
-    dir1 = tmp_path / "uncached1"
-    dir2 = tmp_path / "uncached2"
+    """Test comparison when both runs are in same mode (no warning - useful for comparing different caches)."""
+    # Create two runs both in cached mode
+    dir1 = tmp_path / "cached1"
+    dir2 = tmp_path / "cached2"
     dir1.mkdir()
     dir2.mkdir()
 
@@ -238,7 +282,7 @@ def test_compare_runs_same_mode(tmp_path, capsys):
     flag1 = dir1 / ".vcfcache_complete"
     flag1.write_text(
         "command: annotate\n"
-        "mode: uncached\n"
+        "mode: cached\n"
         "version: 0.4.2\n"
         "commit: abc123\n"
         "timestamp: 2026-01-07T10:00:00\n"
@@ -247,7 +291,7 @@ def test_compare_runs_same_mode(tmp_path, capsys):
     flag2 = dir2 / ".vcfcache_complete"
     flag2.write_text(
         "command: annotate\n"
-        "mode: uncached\n"
+        "mode: cached\n"
         "version: 0.4.2\n"
         "commit: abc123\n"
         "timestamp: 2026-01-07T10:05:00\n"
@@ -266,12 +310,13 @@ def test_compare_runs_same_mode(tmp_path, capsys):
     (dir1 / "output.bcf").write_bytes(bcf_content)
     (dir2 / "output.bcf").write_bytes(bcf_content)
 
-    # Run comparison
+    # Run comparison (should work without warning - useful for comparing different caches)
     compare_runs(dir1, dir2)
 
-    # Check output contains warning about same mode
+    # Check output does NOT contain warning about same mode
     captured = capsys.readouterr()
-    assert "Both runs are in" in captured.out
+    assert "VCFcache Annotation Comparison" in captured.out
+    assert "may not be meaningful" not in captured.out
 
 
 def test_compare_cli_integration(tmp_path):
