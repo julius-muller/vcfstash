@@ -1297,6 +1297,22 @@ def main() -> None:
                 bcftools = find_bcftools()
                 if not bcftools:
                     return None
+                bcf = root / "blueprint" / "vcfcache.bcf"
+                if not bcf.exists():
+                    return None
+                try:
+                    index_path = bcf.with_suffix(bcf.suffix + ".csi")
+                    target = index_path if index_path.exists() else bcf
+                    result = subprocess.run(
+                        [bcftools, "index", "-n", str(target)],
+                        capture_output=True,
+                        text=True,
+                    )
+                    if result.returncode != 0:
+                        return None
+                    return int(result.stdout.strip())
+                except Exception:
+                    return None
 
             def _cache_dir_size_mb(root: Path) -> float:
                 cache_dir = root / "cache"
@@ -1321,18 +1337,20 @@ def main() -> None:
                     if not bcf.exists():
                         continue
                     try:
+                        index_path = bcf.with_suffix(bcf.suffix + ".csi")
+                        target = index_path if index_path.exists() else bcf
                         result = subprocess.run(
-                            [bcftools, "index", "-n", str(bcf)],
+                            [bcftools, "index", "-n", str(target)],
                             capture_output=True,
                             text=True,
-                            check=True,
                         )
+                        if result.returncode != 0:
+                            continue
                         total += int(result.stdout.strip())
                         any_found = True
                     except Exception:
                         continue
                 return total if any_found else None
-                bcf = root / "blueprint" / "vcfcache.bcf"
                 if not bcf.exists():
                     return None
                 try:
