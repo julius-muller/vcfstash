@@ -481,6 +481,36 @@ def test_annotate_calls_cleanup(monkeypatch, tmp_path):
     annotator.annotate(uncached=True, convert_parquet=True)
 
 
+def test_annotate_no_stats_skips_outputs(monkeypatch, tmp_path):
+    annotator = VCFAnnotator.__new__(VCFAnnotator)
+    annotator.logger = None
+    annotator.debug = False
+    annotator.no_stats = True
+    annotator.output_vcf = tmp_path / "out.bcf"
+    annotator.cache_file = tmp_path / "cache.bcf"
+    annotator.cache_file.write_text("bcf")
+    annotator.output_dir = tmp_path / "stats"
+    annotator.output_dir.mkdir()
+    annotator.output_annotations = type("Out", (), {"root_dir": annotator.output_dir})()
+    annotator.nx_workflow = type(
+        "WF", (), {"run": lambda *_a, **_k: None, "cleanup_work_dir": lambda *_: None}
+    )()
+
+    called = {"completion": False, "compare": False}
+
+    def _flag(**_kwargs):
+        called["completion"] = True
+
+    monkeypatch.setattr("vcfcache.utils.completion.write_completion_flag", _flag)
+    annotator._write_compare_stats = lambda *_a, **_k: called.__setitem__("compare", True)  # type: ignore[assignment]
+
+    annotator.annotate(uncached=True)
+
+    assert not called["completion"]
+    assert not called["compare"]
+    assert not annotator.output_dir.exists()
+
+
 def test_annotate_raises_on_workflow_error(tmp_path):
     annotator = VCFAnnotator.__new__(VCFAnnotator)
     annotator.logger = None

@@ -42,7 +42,8 @@ def parse_workflow_log(output_dir: Path) -> Tuple[Optional[float], List[Dict[str
         return None, []
 
     total_time = None
-    step_timings = []
+    step_timings: List[Dict[str, str]] = []
+    current_step = None
 
     try:
         with open(workflow_log, "r") as f:
@@ -53,6 +54,14 @@ def parse_workflow_log(output_dir: Path) -> Tuple[Optional[float], List[Dict[str
                     if match:
                         total_time = float(match.group(1))
 
+                # Capture step descriptions like "Step 1/4: Adding cache annotations"
+                elif "Step " in line and "/4:" in line:
+                    match = re.search(r"Step (\d+/\d+): (.+)$", line)
+                    if match:
+                        step_num = match.group(1)
+                        description = match.group(2).strip()
+                        current_step = f"Step {step_num}: {description}"
+
                 # Look for individual command timings: "Command completed in 32.733s: bcftools norm"
                 elif "Command completed in" in line:
                     match = re.search(r"Command completed in ([\d.]+)s: (.+)$", line)
@@ -62,18 +71,8 @@ def parse_workflow_log(output_dir: Path) -> Tuple[Optional[float], List[Dict[str
                         step_timings.append({
                             "duration": duration,
                             "command": command,
+                            "step": current_step,
                         })
-
-                # Also capture step descriptions for context
-                elif "Step " in line and "/4:" in line:
-                    # Extract step descriptions like "Step 1/4: Adding cache annotations"
-                    match = re.search(r"Step (\d+/\d+): (.+)$", line)
-                    if match:
-                        step_num = match.group(1)
-                        description = match.group(2).strip()
-                        # Store this for the next timing entry
-                        if step_timings and "step" not in step_timings[-1]:
-                            step_timings[-1]["step"] = f"Step {step_num}: {description}"
 
     except Exception:
         pass
@@ -190,26 +189,29 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
         time_a, time_b = time1, time2
         steps_a, steps_b = steps1, steps2
 
-    def _counts(stats: Dict[str, any]) -> tuple[Optional[int], Optional[int], Optional[int]]:
+    def _counts(stats: Dict[str, any]) -> tuple[Optional[int], Optional[int], Optional[int], Optional[int]]:
         counts = stats.get("variant_counts", {}) or {}
         total = counts.get("total_output")
         annotated = counts.get("annotated_output")
+        tool_annotated = counts.get("tool_annotated")
         dropped = counts.get("dropped_variants")
         mode = stats.get("mode")
         if annotated is None and mode == "uncached":
             annotated = total
-        return total, annotated, dropped
+        if tool_annotated is None:
+            tool_annotated = annotated
+        return total, annotated, tool_annotated, dropped
 
-    total_a, annotated_a, dropped_a = _counts(stats_a)
-    total_b, annotated_b, dropped_b = _counts(stats_b)
+    total_a, annotated_a, tool_annotated_a, dropped_a = _counts(stats_a)
+    total_b, annotated_b, tool_annotated_b, dropped_b = _counts(stats_b)
 
     def _rate(annotated: Optional[int], duration: Optional[float]) -> Optional[float]:
         if annotated is None or duration is None or duration <= 0:
             return None
         return annotated / duration
 
-    rate_a = _rate(annotated_a, time_a)
-    rate_b = _rate(annotated_b, time_b)
+    rate_a = _rate(tool_annotated_a or annotated_a, time_a)
+    rate_b = _rate(tool_annotated_b or annotated_b, time_b)
 
     md5_a = stats_a.get("variant_md5", {}) or {}
     md5_b = stats_b.get("variant_md5", {}) or {}
@@ -222,7 +224,6 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
     print("=" * 80)
     print()
     print(f"Input file: {stats_a.get('input_name', 'unknown')}")
-    print(f"Cache name: {stats_a.get('cache_name', 'unknown')}")
     print()
     if warnings:
         print("WARNINGS:")
@@ -230,39 +231,38 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
             print(f"  {w}")
         print()
 
-    print(f"Comparator A (slower): {dir_a}")
-    print(f"  Mode: {stats_a.get('mode', 'unknown')}")
-    print(f"  Version: {stats_a.get('vcfcache_version', 'unknown')}")
-    print(f"  Genome build (params.yaml): {stats_a.get('genome_build_params', 'N/A')}")
-    print(f"  Genome build (annotation.yaml): {stats_a.get('genome_build_annotation', 'N/A')}")
-    if total_a is not None:
-        print(f"  Output variants: {total_a:,}")
-    if annotated_a is not None:
-        print(f"  Annotated variants: {annotated_a:,}")
-    if dropped_a is not None:
-        print(f"  Dropped variants: {dropped_a:,}")
-    if rate_a is not None:
-        print(f"  Annotated variants/sec: {rate_a:,.2f}")
-    if time_a is not None:
-        print(f"  Total time: {format_time(time_a)} ({time_a:,.2f}s)")
-    print()
+    def _print_comparator(label: str, stats: Dict[str, any], total: Optional[int], annotated: Optional[int], tool_annotated: Optional[int], dropped: Optional[int], rate: Optional[float], total_time: Optional[float]) -> None:
+        print(f"{label}: {stats.get('stats_dir', 'unknown')}")
+        print(f"  Mode: {stats.get('mode', 'unknown')}")
+        print(f"  Input file: {stats.get('input_name', 'unknown')}")
+        print(f"  Cache name: {stats.get('cache_name', 'unknown')}")
+        if stats.get("cache_path"):
+            print(f"  Cache path: {stats.get('cache_path')}")
+        print(f"  Version: {stats.get('vcfcache_version', 'unknown')}")
+        print(f"  Run timestamp: {stats.get('run_timestamp', 'unknown')}")
+        print(f"  Threads: {stats.get('threads', 'unknown')}")
+        print(f"  Genome build (params.yaml): {stats.get('genome_build_params', 'N/A')}")
+        print(f"  Genome build (annotation.yaml): {stats.get('genome_build_annotation', 'N/A')}")
+        if total is not None:
+            print(f"  Output variants: {total:,}")
+        if tool_annotated is not None:
+            print(f"  Annotated variants (tool): {tool_annotated:,}")
+        if annotated is not None:
+            print(f"  Annotated variants (output): {annotated:,}")
+        if dropped is not None:
+            print(f"  Dropped variants: {dropped:,}")
+        if rate is not None:
+            print(f"  Annotated variants/sec: {rate:,.2f}")
+        if total_time is not None:
+            print(f"  Total time: {format_time(total_time)} ({total_time:,.2f}s)")
+        print()
 
-    print(f"Comparator B (faster): {dir_b}")
-    print(f"  Mode: {stats_b.get('mode', 'unknown')}")
-    print(f"  Version: {stats_b.get('vcfcache_version', 'unknown')}")
-    print(f"  Genome build (params.yaml): {stats_b.get('genome_build_params', 'N/A')}")
-    print(f"  Genome build (annotation.yaml): {stats_b.get('genome_build_annotation', 'N/A')}")
-    if total_b is not None:
-        print(f"  Output variants: {total_b:,}")
-    if annotated_b is not None:
-        print(f"  Annotated variants: {annotated_b:,}")
-    if dropped_b is not None:
-        print(f"  Dropped variants: {dropped_b:,}")
-    if rate_b is not None:
-        print(f"  Annotated variants/sec: {rate_b:,.2f}")
-    if time_b is not None:
-        print(f"  Total time: {format_time(time_b)} ({time_b:,.2f}s)")
-    print()
+    stats_a["stats_dir"] = str(dir_a)
+    stats_b["stats_dir"] = str(dir_b)
+    print("Comparator A (slower)")
+    _print_comparator("  Stats dir", stats_a, total_a, annotated_a, tool_annotated_a, dropped_a, rate_a, time_a)
+    print("Comparator B (faster)")
+    _print_comparator("  Stats dir", stats_b, total_b, annotated_b, tool_annotated_b, dropped_b, rate_b, time_b)
 
     if time_a is not None and time_b is not None:
         speedup = time_a / time_b if time_b > 0 else 0
@@ -279,6 +279,22 @@ def compare_runs(dir1: Path, dir2: Path) -> None:
     print(f"  Bottom10 MD5 B: {md5_b.get('bottom10') or 'N/A'}")
     print(f"  Total MD5 A (all variants): {md5_all_a or 'N/A'}")
     print(f"  Total MD5 B (all variants): {md5_all_b or 'N/A'}")
+    print()
+    print("Detailed Step Timings:")
+    def _print_steps(label: str, steps: List[Dict[str, str]]) -> None:
+        print(f"  {label}:")
+        if not steps:
+            print("    (no detailed timings found)")
+            return
+        for entry in steps:
+            step = entry.get("step")
+            if step:
+                print(f"    {step}")
+            if entry.get("command") and entry.get("duration") is not None:
+                print(f"      {format_time(entry['duration'])}  {entry['command']}")
+
+    _print_steps("Comparator A", steps_a)
+    _print_steps("Comparator B", steps_b)
     print()
     print("=" * 80)
     print()

@@ -87,6 +87,7 @@ vcfcache annotate -a ./cache/cache/vep_cache --vcf sample.vcf.gz --output ./samp
 ```
 
 If `--stats-dir` is omitted, stats are written to `<cwd>/<input_basename>_vcstats`.
+Use `--no-stats` to skip writing stats/logs (disables `vcfcache compare`).
 
 ---
 

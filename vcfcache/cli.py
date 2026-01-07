@@ -519,7 +519,8 @@ def main() -> None:
             "If no extension is provided, '.bcf' is appended."
         ),
     )
-    vcf_parser.add_argument(
+    stats_group = vcf_parser.add_mutually_exclusive_group()
+    stats_group.add_argument(
         "--stats-dir",
         dest="stats_dir",
         required=False,
@@ -529,6 +530,12 @@ def main() -> None:
             "If provided, files are written under <stats_dir>/<output_file>_vcstats. "
             "If omitted, stats are written to <cwd>/<input_basename>_vcstats."
         ),
+    )
+    stats_group.add_argument(
+        "--no-stats",
+        action="store_true",
+        default=False,
+        help="(optional) Disable stats/logs output (disables vcfcache compare).",
     )
     vcf_parser.add_argument(
         "--md5-all",
@@ -1005,6 +1012,7 @@ def main() -> None:
                 params_file=Path(args.params) if args.params else None,
                 output_file=args.output_file,
                 stats_dir=args.stats_dir,
+                no_stats=args.no_stats,
                 verbosity=args.verbose,
                 force=args.force,
                 debug=args.debug,

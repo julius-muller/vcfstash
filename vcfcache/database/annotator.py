@@ -336,6 +336,7 @@ class VCFAnnotator(VCFDatabase):
         bcftools_path: Path,
         params_file: Optional[Path | str] = None,
         stats_dir: Optional[Path | str] = None,
+        no_stats: bool = False,
         verbosity: int = 0,
         force: bool = False,
         debug: bool = False,
@@ -351,6 +352,7 @@ class VCFAnnotator(VCFDatabase):
             verbosity: Logging verbosity level (0=WARNING, 1=INFO, 2=DEBUG)
         """
         self.input_vcf = Path(input_vcf).expanduser().resolve()
+        self.no_stats = no_stats
         self.vcf_name, fext = self._validate_and_extract_sample_name()
 
         if not self.input_vcf.exists():
@@ -400,7 +402,12 @@ class VCFAnnotator(VCFDatabase):
             self.output_vcf = output_path
             output_name = output_path.name
 
-        if stats_dir:
+        if self.no_stats and stats_dir:
+            raise ValueError("--no-stats cannot be used together with --stats-dir.")
+
+        if self.no_stats:
+            stats_output_dir = Path(tempfile.mkdtemp(prefix="vcfcache_stats_")).resolve()
+        elif stats_dir:
             stats_output_dir = Path(stats_dir).expanduser().resolve() / f"{output_name}_vcstats"
         else:
             stats_output_dir = Path.cwd() / f"{self._input_basename()}_vcstats"
@@ -792,29 +799,33 @@ class VCFAnnotator(VCFDatabase):
             # Always show completion (even in default mode)
             print(f"Annotation completed in {duration:.1f}s")
 
-            from vcfcache.utils.completion import write_completion_flag
-            mode = "uncached" if uncached else "cached"
-            write_completion_flag(
-                output_dir=self.output_annotations.root_dir,
-                command="annotate",
-                mode=mode,
-                output_file=str(self.output_vcf) if self.output_vcf else "stdout",
-            )
-            self._write_compare_stats(mode=mode, md5_all=md5_all)
+            if not self.no_stats:
+                from vcfcache.utils.completion import write_completion_flag
+                mode = "uncached" if uncached else "cached"
+                write_completion_flag(
+                    output_dir=self.output_annotations.root_dir,
+                    command="annotate",
+                    mode=mode,
+                    output_file=str(self.output_vcf) if self.output_vcf else "stdout",
+                )
+                self._write_compare_stats(mode=mode, md5_all=md5_all)
+
+            if convert_parquet:
+                if self.output_vcf is None:
+                    raise ValueError("Parquet conversion is not supported when output is stdout.")
+                # threads = self.nx_workflow.nf_config_content['params'].get('vep_max_forks',1) * self.nx_workflow.nf_config_content['params'].get('vep_max_chr_parallel', 1)
+                self._convert_to_parquet(self.output_vcf)  # , threads=threads)
+
+            if not self.debug:
+                self.nx_workflow.cleanup_work_dir()
 
         except Exception:
             if self.logger:
                 self.logger.error("Annotation failed", exc_info=True)
             raise
-
-        if convert_parquet:
-            if self.output_vcf is None:
-                raise ValueError("Parquet conversion is not supported when output is stdout.")
-            # threads = self.nx_workflow.nf_config_content['params'].get('vep_max_forks',1) * self.nx_workflow.nf_config_content['params'].get('vep_max_chr_parallel', 1)
-            self._convert_to_parquet(self.output_vcf)  # , threads=threads)
-
-        if not self.debug:
-            self.nx_workflow.cleanup_work_dir()
+        finally:
+            if self.no_stats:
+                shutil.rmtree(self.output_dir, ignore_errors=True)
 
     def _input_basename(self) -> str:
         name = self.input_vcf.name
@@ -831,20 +842,29 @@ class VCFAnnotator(VCFDatabase):
             from vcfcache.utils.validation import compute_md5
             anno_md5 = compute_md5(self.anno_snapshot_file)
 
+        threads = None
+        if hasattr(self.nx_workflow, "params_file_content"):
+            threads = self.nx_workflow.params_file_content.get("threads")
+
         stats = {
             "command": "annotate",
             "mode": mode,
+            "run_timestamp": datetime.now().isoformat(timespec="seconds"),
             "output_file": output_file,
             "input_file": str(self.input_vcf),
             "input_name": self.input_vcf.name,
             "cache_name": self.annotation_name,
+            "cache_path": str(self.annotation_db_path),
             "annotation_yaml_md5": anno_md5,
             "genome_build_params": self.nx_workflow.params_file_content.get("genome_build"),
             "genome_build_annotation": self.nx_workflow.nfa_config_content.get("genome_build"),
             "vcfcache_version": getattr(sys.modules.get("vcfcache"), "__version__", "unknown"),
+            "threads": threads,
             "variant_counts": {
                 "total_output": None,
                 "annotated_output": None,
+                "tool_annotated": None,
+                "input_variants": None,
                 "dropped_variants": None,
                 "missing_variants": None,
                 "missing_annotated": None,
@@ -860,6 +880,7 @@ class VCFAnnotator(VCFDatabase):
         stats["variant_counts"]["dropped_variants"] = last_stats.get("dropped_variants")
         stats["variant_counts"]["missing_variants"] = last_stats.get("missing_variants")
         stats["variant_counts"]["missing_annotated"] = last_stats.get("missing_annotated")
+        stats["variant_counts"]["input_variants"] = last_stats.get("input_variants")
 
         if self.output_vcf and self.output_vcf.exists():
             stats["variant_counts"]["total_output"] = self._count_variants(self.output_vcf)
@@ -870,6 +891,15 @@ class VCFAnnotator(VCFDatabase):
             stats["variant_md5"]["bottom10"] = bottom_md5
             if md5_all:
                 stats["variant_md5"]["all"] = self._compute_all_md5(self.output_vcf)
+
+        tool_annotated = None
+        if mode == "cached":
+            tool_annotated = last_stats.get("missing_annotated")
+        elif mode == "uncached":
+            tool_annotated = last_stats.get("output_variants")
+        if tool_annotated is None:
+            tool_annotated = stats["variant_counts"]["annotated_output"]
+        stats["variant_counts"]["tool_annotated"] = tool_annotated
 
         stats_file.write_text(yaml.safe_dump(stats, sort_keys=False))
 
