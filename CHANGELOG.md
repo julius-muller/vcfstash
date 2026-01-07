@@ -12,15 +12,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `genome_build` is now required in both `params.yaml` and `annotation.yaml`
   - Workflow startup logs the genome build from both configs
   - Mismatched genome builds now fail fast
+- `vcfcache compare` now captures run timestamps and thread counts from snapshots/completion flags
+- Added `--no-stats` to disable stats/log output from `vcfcache annotate`
 
 ### Changed
 - **BREAKING:** Removed all contig renaming/variant-generation support.
   - The `--generate-contig-variants` option is removed.
   - Annotation now logs contig overlap at startup and fails if there is no overlap.
 - **BREAKING:** `vcfcache annotate` now writes directly to an output BCF file instead of creating an output directory.
-  - Use `--stats-dir` to store workflow logs/auxiliary files under `<output_file>_vcstats`.
+  - Use `--stats-dir` to store workflow logs/auxiliary files under `<input_basename>_vcstats`.
   - Use `-` or `stdout` to stream output to stdout.
   - Any tooling or scripts that expected an output directory now need to pass a file path (e.g., `sample_vc.bcf`).
+- `--stats-dir` now always uses the input basename (`<input_basename>_vcstats`) for the stats directory name
+- `vcfcache compare` output reformatted with structured sections and a summary table
+- `vcfcache compare` reports two rates (end-to-end output throughput and tool-step throughput)
+- `vcfcache compare` now reports extra params only when they differ between runs (with values)
 - CI workflow now runs on both tag pushes and main branch pushes (for codecov badge updates)
 - Dockerfile optimizations: moved tests to test stage only, added pip cache mounts for faster builds
 

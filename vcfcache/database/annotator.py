@@ -405,12 +405,13 @@ class VCFAnnotator(VCFDatabase):
         if self.no_stats and stats_dir:
             raise ValueError("--no-stats cannot be used together with --stats-dir.")
 
+        input_stats_name = f"{self._input_basename()}_vcstats"
         if self.no_stats:
             stats_output_dir = Path(tempfile.mkdtemp(prefix="vcfcache_stats_")).resolve()
         elif stats_dir:
-            stats_output_dir = Path(stats_dir).expanduser().resolve() / f"{output_name}_vcstats"
+            stats_output_dir = Path(stats_dir).expanduser().resolve() / input_stats_name
         else:
-            stats_output_dir = Path.cwd() / f"{self._input_basename()}_vcstats"
+            stats_output_dir = Path.cwd() / input_stats_name
 
         self.stats_dir = stats_output_dir
         self.output_annotations = AnnotatedUserOutput(str(stats_output_dir))

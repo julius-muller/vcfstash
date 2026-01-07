@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Deprecated: use RELEASE.md instead of this script.
+echo "ERROR: scripts/release.sh is deprecated. Use RELEASE.md for the release flow."
+exit 1
+
 # Release automation script for vcfcache
 # Usage: ./scripts/release.sh <version>
 

@@ -86,7 +86,7 @@ vcfcache cache-build --name vep_cache --db ./cache -a annotation.yaml -y params.
 vcfcache annotate -a ./cache/cache/vep_cache --vcf sample.vcf.gz --output ./sample_vc.bcf --stats-dir ./results
 ```
 
-If `--stats-dir` is omitted, stats are written to `<cwd>/<input_basename>_vcstats`.
+If `--stats-dir` is provided, stats are written to `<stats_dir>/<input_basename>_vcstats`. Otherwise, they default to `<cwd>/<input_basename>_vcstats`.
 Use `--no-stats` to skip writing stats/logs (disables `vcfcache compare`).
 
 ---

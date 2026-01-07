@@ -527,7 +527,7 @@ def main() -> None:
         metavar="DIR",
         help=(
             "(optional) Directory to store annotation logs, workflow files, and auxiliary outputs. "
-            "If provided, files are written under <stats_dir>/<output_file>_vcstats. "
+            "If provided, files are written under <stats_dir>/<input_basename>_vcstats. "
             "If omitted, stats are written to <cwd>/<input_basename>_vcstats."
         ),
     )
