@@ -1176,22 +1176,88 @@ def main() -> None:
                 return total / (1024 * 1024)
 
             def _is_valid_blueprint_root(root: Path) -> bool:
-                return (root / "blueprint" / "vcfcache.bcf").exists() and not (
-                    (root / "cache").is_dir() and any((root / "cache").iterdir())
-                )
+                """Check if directory is a valid blueprint using .vcfcache_complete."""
+                complete_file = root / ".vcfcache_complete"
+                if not complete_file.exists():
+                    return False
+                try:
+                    complete_data = yaml.safe_load(complete_file.read_text())
+                    return (
+                        complete_data.get("completed") is True
+                        and complete_data.get("mode") == "blueprint-init"
+                    )
+                except Exception:
+                    return False
 
             def _is_valid_cache_root(root: Path) -> bool:
-                if not (root / "blueprint" / "vcfcache.bcf").exists():
-                    return False
+                """Check if directory contains valid caches using .vcfcache_complete."""
                 cache_dir = root / "cache"
                 if not cache_dir.is_dir():
                     return False
                 for p in cache_dir.iterdir():
                     if not p.is_dir():
                         continue
-                    if (p / "vcfcache_annotated.bcf").exists() and (p / "annotation.yaml").exists():
-                        return True
+                    complete_file = p / ".vcfcache_complete"
+                    if not complete_file.exists():
+                        continue
+                    try:
+                        complete_data = yaml.safe_load(complete_file.read_text())
+                        if (
+                            complete_data.get("completed") is True
+                            and complete_data.get("mode") == "cache-build"
+                        ):
+                            return True
+                    except Exception:
+                        continue
                 return False
+
+            def _get_genome_build(root: Path, item_type: str) -> str | None:
+                """Extract genome_build from appropriate YAML file."""
+                try:
+                    if item_type == "blueprints":
+                        # Read from workflow/init.yaml
+                        yaml_file = root / "workflow" / "init.yaml"
+                    else:
+                        # Read from cache/<cache_name>/params.snapshot.yaml
+                        cache_dir = root / "cache"
+                        if not cache_dir.is_dir():
+                            return None
+                        # Find first valid cache subdirectory
+                        for p in cache_dir.iterdir():
+                            if p.is_dir():
+                                yaml_file = p / "params.snapshot.yaml"
+                                if yaml_file.exists():
+                                    break
+                        else:
+                            return None
+
+                    if yaml_file.exists():
+                        data = yaml.safe_load(yaml_file.read_text())
+                        return data.get("genome_build")
+                except Exception:
+                    pass
+                return None
+
+            def _matches_filters(root: Path, item_type: str, genome_filter: str | None, source_filter: str | None) -> bool:
+                """Check if item matches genome and source filters."""
+                from vcfcache.utils.naming import CacheName
+
+                # Apply genome filter
+                if genome_filter:
+                    genome_build = _get_genome_build(root, item_type)
+                    if not genome_build or genome_build.lower() != genome_filter.lower():
+                        return False
+
+                # Apply source filter
+                if source_filter:
+                    try:
+                        parsed = CacheName.parse(root.name)
+                        if parsed.source.lower() != source_filter.lower():
+                            return False
+                    except Exception:
+                        return False
+
+                return True
 
             def _cache_relevant_size_mb(root: Path) -> float:
                 # Cheap “semantic size” to avoid crawling arbitrary large folders.
@@ -1225,7 +1291,7 @@ def main() -> None:
                         continue
                 return total / (1024 * 1024)
 
-            def _list_local(item_type: str, base_dir: str | None) -> None:
+            def _list_local(item_type: str, base_dir: str | None, genome_filter: str | None = None, source_filter: str | None = None) -> None:
                 default_base = Path(os.environ.get("VCFCACHE_DIR", "~/.cache/vcfcache")).expanduser()
                 base = Path(base_dir).expanduser() if base_dir else default_base
 
@@ -1258,12 +1324,25 @@ def main() -> None:
                     else:
                         if not _is_valid_cache_root(root):
                             continue
+
+                    # Apply genome and source filters
+                    if not _matches_filters(root, item_type, genome_filter, source_filter):
+                        continue
+
                     size_mb = _cache_relevant_size_mb(root)
                     if size_mb < 1.0:
                         continue
                     entries.append(root)
                 if not entries:
-                    print(f"No local {item_type} found at: {search_dir}")
+                    filter_msg = ""
+                    if genome_filter or source_filter:
+                        filters = []
+                        if genome_filter:
+                            filters.append(f"genome={genome_filter}")
+                        if source_filter:
+                            filters.append(f"source={source_filter}")
+                        filter_msg = f" (with filters: {', '.join(filters)})"
+                    print(f"No local {item_type} found at: {search_dir}{filter_msg}")
                     return
 
                 print(f"\nLocal vcfcache {item_type}:")
@@ -1357,7 +1436,9 @@ def main() -> None:
             if args.local is not None:
                 # --local was provided, with optional path argument
                 local_path = args.local if args.local else None
-                _list_local(item_type, local_path)
+                genome_filter = args.genome if hasattr(args, "genome") else None
+                source_filter = args.source if hasattr(args, "source") else None
+                _list_local(item_type, local_path, genome_filter, source_filter)
                 return
 
             zenodo_env = "sandbox" if args.debug else "production"
