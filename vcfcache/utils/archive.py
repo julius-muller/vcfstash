@@ -87,7 +87,8 @@ def tar_cache_subset(
             if include_cache_name and rel[1] == include_cache_name:
                 return tarinfo
             return None
-        return None
+        # Keep root-level files (e.g., .vcfcache_complete, README/info files).
+        return tarinfo
 
     with tarfile.open(tar_path, mode) as tf:
         tf.add(cache_dir, arcname=cache_dir.name, filter=_filter)

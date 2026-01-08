@@ -27,17 +27,18 @@ creators:
   affiliation: DKFZ Heidelberg, Germany
   orcid: 0000-0002-1046-2968
 keywords:
-- vcfcache
-- cache
-- gnomAD
+- Ensembl
 - GRCh38
 - VEP
-- Ensembl
-- variant annotation
 - allele frequency
+- bcftools
+- cache
+- cache-gnomad-v4.1-GRCh38-joint-af01-vep115.2-e
+- gnomAD
 - performance
 - pipeline
-- bcftools
+- variant annotation
+- vcfcache
 license: cc-by-4.0
 access_right: open
 related_identifiers:

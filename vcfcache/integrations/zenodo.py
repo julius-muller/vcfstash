@@ -154,29 +154,8 @@ def search_zenodo_records(
     Returns:
         List of record dictionaries with blueprints
     """
-    # Build search query using Elasticsearch query string syntax
-    # Search in keywords field using field-specific syntax
-    query_parts = ["keywords:vcfcache"]
-
-    if item_type == "blueprints":
-        query_parts.append("keywords:blueprint")
-    else:
-        query_parts.append("keywords:cache")
-
-    if genome:
-        query_parts.append(f"keywords:{genome}")
-    if source:
-        query_parts.append(f"keywords:{source}")
-
-    # Combine with AND to require all terms
-    query = " AND ".join(query_parts)
-
-    # Zenodo search API
-    search_url = f"{_api_base(sandbox)}/records/"
-
-    try:
-        # Note: unauthenticated requests limited to 25 results
-        # Could be increased to 100 with authentication if needed
+    def _search(query: str) -> list[dict]:
+        search_url = f"{_api_base(sandbox)}/records/"
         resp = None
         last_err: Exception | None = None
         for attempt in range(3):
@@ -204,7 +183,6 @@ def search_zenodo_records(
         if resp is None:
             raise ZenodoError(f"Failed to search Zenodo after retries: {last_err}")
 
-        # Better error handling - show actual response
         if not resp.ok:
             error_detail = ""
             try:
@@ -216,17 +194,13 @@ def search_zenodo_records(
             )
 
         data = resp.json()
-
         records = []
         for hit in data.get("hits", {}).get("hits", []):
             metadata = hit.get("metadata", {})
 
-            # Calculate total size
             files = hit.get("files", [])
             total_size = sum(f.get("size", 0) for f in files)
             size_mb = total_size / (1024 * 1024)
-
-            # Ignore placeholder/empty records (common when experimenting in Zenodo sandbox).
             if size_mb < min_size_mb:
                 continue
 
@@ -241,7 +215,50 @@ def search_zenodo_records(
                     "creators": metadata.get("creators", []),
                 }
             )
+        return records
 
+    def _matches_item_type(record: dict) -> bool:
+        keywords = [k.lower() for k in (record.get("keywords") or []) if isinstance(k, str)]
+        title = str(record.get("title", "")).lower()
+        desc = str(record.get("description", "")).lower()
+        if item_type == "blueprints":
+            if "blueprint" in keywords:
+                return True
+            return "blueprint" in title or "blueprint" in desc
+        if "cache" in keywords:
+            return True
+        return " cache" in title or " cache" in desc or "cache " in title or "cache " in desc
+
+    # Primary keyword search
+    query_parts = ["keywords:vcfcache"]
+    if item_type == "blueprints":
+        query_parts.append("keywords:blueprint")
+    else:
+        query_parts.append("keywords:cache")
+    if genome:
+        query_parts.append(f"keywords:{genome}")
+    if source:
+        query_parts.append(f"keywords:{source}")
+    primary_query = " AND ".join(query_parts)
+
+    # Secondary title-based search (catches records missing keywords).
+    secondary_query = "metadata.title:vcfcache"
+    if genome:
+        secondary_query += f" AND metadata.title:{genome}"
+    if source:
+        secondary_query += f" AND metadata.title:{source}"
+
+    try:
+        primary = _search(primary_query)
+        secondary = _search(secondary_query)
+
+        merged: dict[str, dict] = {}
+        for rec in primary + secondary:
+            doi = rec.get("doi", "")
+            if doi not in merged:
+                merged[doi] = rec
+
+        records = [r for r in merged.values() if _matches_item_type(r)]
         return records
 
     except requests.exceptions.RequestException as e:
