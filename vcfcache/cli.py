@@ -1563,7 +1563,7 @@ def main() -> None:
 
                     title = root.name
                     # If the directory name is an alias, format it like Zenodo titles.
-                    fake_record = {"title": root.name, "keywords": [root.name]}
+                    fake_record = {"title": "", "keywords": [root.name]}
                     title = _display_title(fake_record, "caches" if item_type == "caches" else "blueprints")
 
                     print(f"\n{title}")
@@ -1735,10 +1735,12 @@ def main() -> None:
             base_dir = cache_dir
 
             if cache_dir.name == "cache" and cache_dir.is_dir():
-                raise ValueError(
-                    f"Cache directory {cache_dir} is the cache root. "
-                    "Provide a specific cache at <base>/cache/<cache_name> or the base directory."
-                )
+                is_cache_root = (cache_dir.parent / "blueprint").is_dir() and not (cache_dir / "blueprint").is_dir()
+                if is_cache_root:
+                    raise ValueError(
+                        f"Cache directory {cache_dir} is the cache root. "
+                        "Provide a specific cache at <base>/cache/<cache_name> or the base directory."
+                    )
 
             if cache_dir.parent.name == "cache":
                 selected_cache_name = cache_dir.name

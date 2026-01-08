@@ -1383,6 +1383,7 @@ def test_push_requires_completion_flags(monkeypatch, tmp_path):
             "push",
             "--cache-dir",
             str(base),
+            "--yes",
         ],
     )
     with pytest.raises(ValueError, match="Missing .vcfcache_complete"):
@@ -1404,6 +1405,7 @@ def test_push_requires_completion_flags(monkeypatch, tmp_path):
             "push",
             "--cache-dir",
             str(cache_root),
+            "--yes",
         ],
     )
     with pytest.raises(ValueError, match="Missing .vcfcache_complete"):

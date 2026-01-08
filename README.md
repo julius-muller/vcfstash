@@ -129,6 +129,8 @@ To see requirements for a downloaded cache, run:
 vcfcache annotate --requirements -a <cache_dir>
 ```
 
+For publishing to Zenodo, prepare a metadata YAML and use `vcfcache push` (details in the wiki).
+
 Minimal example (bcftools annotate):
 ```yaml
 annotation_cmd: "bcftools annotate -a /path/to/anno.bcf -c INFO -o $OUTPUT_BCF -Ob -W --threads ${params.threads} $INPUT_BCF"

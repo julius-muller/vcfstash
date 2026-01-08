@@ -674,9 +674,17 @@ Upload a local blueprint or cache directory to Zenodo (great for sharing caches)
 - `--cache-dir`: path to a vcfcache base directory (blueprint upload) **or** a specific cache directory under `<base>/cache/<cache_name>` (cache+blueprint upload).
 - `--dest`: upload destination (currently `zenodo`).
 - `--test`: upload to Zenodo sandbox (uses `ZENODO_SANDBOX_TOKEN`).
-- `--metadata`: optional YAML/JSON file to set Zenodo metadata (title/description/creators/keywords).
+- `--metadata`: YAML/JSON file with Zenodo metadata (title/description/creators/keywords, etc.). Required for real uploads.
 - `--publish`: publish the record immediately after upload.
 - `--yes`: skip confirmation prompt.
+
+**What gets uploaded**
+- **Blueprint upload** (base dir): tarball contains the full `blueprint/` plus an empty `cache/` directory.
+- **Cache upload** (`<base>/cache/<name>`): tarball contains `blueprint/` and only the selected cache under `cache/<name>`.
+
+**Zenodo metadata tips**
+- Include keywords: `vcfcache`, `blueprint` or `cache`, and the alias (`bp-...` / `cache-...`) so `vcfcache list` can find it.
+- The metadata templates in `resources/zenodo/` already include these keywords.
 
 Environment variables:
 - `ZENODO_TOKEN`: production token.

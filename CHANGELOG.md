@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Local `vcfcache list` now reports variant counts for both blueprints and caches (via `bcftools index -n`).
 - `vcfcache push` now verifies `.vcfcache_complete` with `completed: true` for blueprints and cache entries.
 - Codecov patch coverage target set to 50% to prevent CI failures on small diffs.
+- Zenodo metadata templates now include cache/blueprint alias keywords and a wiki link.
 
 ### Changed
 - Renamed `--show-command` to `--requirements` and expanded output to explain cache YAMLs, required params, and tool checks.
@@ -21,10 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release process simplified and documented in `RELEASE.md`; `scripts/release.sh` is deprecated.
 - README/WIKI streamlined and expanded with container-first quick start and a clear “start with `--requirements`” workflow.
 - Zenodo metadata templates refreshed for gnomAD v4.1 cache uploads; older metadata placeholders removed.
+- `vcfcache list` now prefers Zenodo record titles over alias-derived titles when available.
+- `vcfcache list --debug` includes `--debug` in the download hints.
+- `blueprint-init --doi` now defaults to `VCFCACHE_DIR/blueprints` when `-o` is not explicitly set.
 
 ### Fixed
 - `git_commit` now falls back to `VCFCACHE_GIT_COMMIT`/`GIT_COMMIT` or `unknown` when running outside a git repo.
 - Tests updated for `.vcfcache_complete` requirements and `--requirements` output.
+- Zenodo record parsing now reads `metadata` instead of the deprecated `blueprints` field.
+- `tar_cache_subset` now preserves root-level files (e.g., `.vcfcache_complete`) in uploaded tarballs.
 
 ## 0.5.1 (2026-01-07)
 

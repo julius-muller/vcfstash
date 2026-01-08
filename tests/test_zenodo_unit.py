@@ -137,12 +137,12 @@ def test_search_zenodo_records_uses_timeout_and_filters_small_records():
         "hits": {
             "hits": [
                 {
-                    "blueprints": {"title": "tiny", "publication_date": "2025-01-01", "keywords": []},
+                    "metadata": {"title": "tiny", "publication_date": "2025-01-01", "keywords": ["vcfcache", "cache"]},
                     "doi": "10.5072/zenodo.tiny",
                     "files": [{"size": 10}],
                 },
                 {
-                    "blueprints": {"title": "big", "publication_date": "2025-01-01", "keywords": []},
+                    "metadata": {"title": "big", "publication_date": "2025-01-01", "keywords": ["vcfcache", "cache"]},
                     "doi": "10.5072/zenodo.big",
                     "files": [{"size": 2 * 1024 * 1024}],
                 },
