@@ -118,15 +118,28 @@ def upload_file(
 ) -> dict:
     bucket = deposition["links"]["bucket"]
     filename = path.name
-    with open(path, "rb") as fp:
-        resp = requests.put(
-            f"{bucket}/{filename}",
-            data=fp,
-            params={"access_token": token},
-            timeout=120,
-        )
-    resp.raise_for_status()
-    return resp.json()
+    last_err: Exception | None = None
+    for attempt in range(3):
+        try:
+            with open(path, "rb") as fp:
+                resp = requests.put(
+                    f"{bucket}/{filename}",
+                    data=fp,
+                    params={"access_token": token},
+                    timeout=120,
+                )
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.RequestException as exc:
+            last_err = exc
+            if attempt < 2:
+                import time
+                time.sleep(2 + attempt)
+                continue
+            raise
+
+    if last_err:
+        raise last_err
 
 
 def publish_deposit(deposition: dict, token: str, sandbox: bool = False) -> dict:
