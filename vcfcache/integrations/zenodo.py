@@ -219,7 +219,7 @@ def search_zenodo_records(
 
         records = []
         for hit in data.get("hits", {}).get("hits", []):
-            metadata = hit.get("blueprints", {})
+            metadata = hit.get("metadata", {})
 
             # Calculate total size
             files = hit.get("files", [])
@@ -230,15 +230,17 @@ def search_zenodo_records(
             if size_mb < min_size_mb:
                 continue
 
-            records.append({
-                "title": metadata.get("title", "Unknown"),
-                "doi": hit.get("doi", "Unknown"),
-                "created": metadata.get("publication_date", "Unknown"),
-                "description": metadata.get("description", ""),
-                "keywords": metadata.get("keywords", []),
-                "size_mb": size_mb,
-                "creators": metadata.get("creators", []),
-            })
+            records.append(
+                {
+                    "title": metadata.get("title", "Unknown"),
+                    "doi": hit.get("doi", "Unknown"),
+                    "created": metadata.get("publication_date", hit.get("created", "Unknown")),
+                    "description": metadata.get("description", ""),
+                    "keywords": metadata.get("keywords", []),
+                    "size_mb": size_mb,
+                    "creators": metadata.get("creators", []),
+                }
+            )
 
         return records
 
