@@ -22,6 +22,19 @@ class ZenodoError(RuntimeError):
     pass
 
 
+def _format_bytes(num: int) -> str:
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if num < 1024:
+            return f"{num:.0f}{unit}" if unit == "B" else f"{num:.1f}{unit}"
+        num /= 1024
+    return f"{num:.1f}PB"
+
+
+def _progress_enabled() -> bool:
+    import sys
+    return sys.stderr.isatty() or os.environ.get("VCFCACHE_UPLOAD_PROGRESS") == "1"
+
+
 def _zenodo_hard_timeout_seconds() -> int:
     raw = os.environ.get("VCFCACHE_ZENODO_HARD_TIMEOUT", "").strip()
     if not raw:
@@ -99,10 +112,32 @@ def download_doi(doi: str, dest: Path, sandbox: bool = False) -> Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
     with requests.get(file_url, stream=True, timeout=60) as r:
         r.raise_for_status()
+        total = 0
+        total_len = int(r.headers.get("Content-Length", "0") or 0)
+        show_progress = _progress_enabled()
+        if show_progress:
+            import sys
+            import time
+            last = 0.0
         with open(dest, "wb") as f:
             for chunk in r.iter_content(chunk_size=1 << 20):
                 if chunk:
                     f.write(chunk)
+                    if show_progress:
+                        total += len(chunk)
+                        now = time.time()
+                        if now - last >= 0.5 or (total_len and total == total_len):
+                            pct = (total / total_len * 100) if total_len else 0.0
+                            if total_len:
+                                msg = f"\rDownloading {dest.name}: {pct:5.1f}% ({_format_bytes(total)}/{_format_bytes(total_len)})"
+                            else:
+                                msg = f"\rDownloading {dest.name}: {_format_bytes(total)}"
+                            sys.stderr.write(msg)
+                            sys.stderr.flush()
+                            last = now
+        if show_progress:
+            import sys
+            sys.stderr.write("\n")
     return dest
 
 
@@ -119,17 +154,6 @@ def upload_file(
     bucket = deposition["links"]["bucket"]
     filename = path.name
     file_size = path.stat().st_size
-
-    def _format_bytes(num: int) -> str:
-        for unit in ("B", "KB", "MB", "GB", "TB"):
-            if num < 1024:
-                return f"{num:.0f}{unit}" if unit == "B" else f"{num:.1f}{unit}"
-            num /= 1024
-        return f"{num:.1f}PB"
-
-    def _progress_enabled() -> bool:
-        import sys
-        return sys.stderr.isatty() or os.environ.get("VCFCACHE_UPLOAD_PROGRESS") == "1"
 
     last_err: Exception | None = None
     for attempt in range(3):
