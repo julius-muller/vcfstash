@@ -1,76 +1,60 @@
-title: "VCFcache cache gnomAD v4.1 joint GRCh38 (AF ≥ 0.01) annotated with vep 115.2 -e"
-genome_build: "GRCh38"
-version: "0.5.1"
-
-description: |
-  VCFcache cache derived from gnomAD v4.1 joint frequency data (GRCh38).
-
-  NOTE: This upload includes both the annotation cache and its underlying blueprint.
-  The blueprint can be used to build new caches with different annotation recipes.
-
-  This underlying blueprint contains 19M high-quality variant sites filtered to
-  allele frequency (AF) ≥ 0.01 (1% or 1 in 100 individuals). All genotype
-  and INFO fields have been removed, retaining only genomic positions
-  (CHROM, POS, REF, ALT). Multiallelic sites have been split into separate records.
-
-  Coverage: chr1-22, chrX, chrY
-  Source: gnomAD v4.1.0 joint frequency (807,162 samples)
-  Processing: AF-filtered (≥10%), normalized, GT/INFO removed, multiallelics split, vep annotated
-  Annotation tool: Ensembl VEP 115.2 (via Apptainer)
-  VEP cache: Ensembl 115, GRCh38
-
-  VEP Annotations Included (CSQ INFO field):
-  - Comprehensive annotation (--everything)
-  - HGVS nomenclature (--hgvsg)
-
-  Setup:
-    vcfcache cache-build --doi <DOI>
-
-  Usage:
-    vcfcache annotate -a <cache_dir> -i sample.vcf.gz -o sample_vc.bcf --stats-dir output/
-
+title: "VCFcache cache gnomAD v4.1 joint GRCh38 (AF \u2265 0.01) annotated with vep\
+  \ 115.2 -e"
+genome_build: GRCh38
+version: 0.5.1
+description: "<p><strong>Abstract</strong> VCFcache cache derived from gnomAD v4.1\
+  \ joint frequency data (GRCh38).</p>\n<p><strong>Note</strong> NOTE: This upload\
+  \ includes both the annotation cache and its underlying blueprint. The blueprint\
+  \ can be used to build new caches with different annotation recipes.</p>\n<p><strong>Contents</strong>\
+  \ This underlying blueprint contains 19M high-quality variant sites filtered to\
+  \ allele frequency (AF) \u2265 0.01 (1% or 1 in 100 individuals). All genotype and\
+  \ INFO fields have been removed, retaining only genomic positions (CHROM, POS, REF,\
+  \ ALT). Multiallelic sites have been split into separate records.</p>\n<p><strong>Technical\
+  \ details</strong><br>Coverage: chr1-22, chrX, chrY<br>Source: gnomAD v4.1.0 joint\
+  \ frequency (807,162 samples)<br>Processing: AF-filtered (\u226510%), normalized,\
+  \ GT/INFO removed, multiallelics split, vep annotated<br>Annotation tool: Ensembl\
+  \ VEP 115.2 (via Apptainer)<br>VEP cache: Ensembl 115, GRCh38</p>\n<p><strong>Setup</strong>:\
+  \ <code>vcfcache cache-build --doi <DOI></code></p>\n<p><strong>Usage</strong>:\
+  \ <code>vcfcache annotate -a <cache_dir> -i sample.vcf.gz -o sample_vc.bcf --stats-dir\
+  \ output/</code></p>\n<p>VEP Annotations Included (CSQ INFO field): - Comprehensive\
+  \ annotation (--everything) - HGVS nomenclature (--hgvsg)</p>\n"
 upload_type: dataset
-
 creators:
-  - name: "Julius Müller"
-    affiliation: "DKFZ Heidelberg, Germany"
-    orcid: "0000-0002-1046-2968"
-
+- name: "Julius M\xFCller"
+  affiliation: DKFZ Heidelberg, Germany
+  orcid: 0000-0002-1046-2968
 keywords:
-  - vcfcache
-  - cache
-  - gnomAD
-  - GRCh38
-  - VEP
-  - Ensembl
-  - variant annotation
-  - allele frequency
-  - performance
-  - pipeline
-  - bcftools
-
-
+- vcfcache
+- cache
+- gnomAD
+- GRCh38
+- VEP
+- Ensembl
+- variant annotation
+- allele frequency
+- performance
+- pipeline
+- bcftools
 license: cc-by-4.0
-
 access_right: open
-
 related_identifiers:
-  - identifier: "10.5072/zenodo.414599"
-    relation: "isSupplementTo"
-    resource_type: "dataset"
-    scheme: "doi"
-    # gnomAD v4.1 GRCh38 Blueprint (AF ≥ 0.01) - this cache supplements the blueprint
-  - identifier: "10.1038/s41586-020-2308-7"
-    relation: "isDerivedFrom"
-    resource_type: "publication"
-    scheme: "doi"
-    # gnomAD v4 publication
-  - identifier: "https://www.ensembl.org/info/docs/tools/vep/index.html"
-    relation: "isDocumentedBy"
-    resource_type: "other"
-    scheme: "url"
-    # VEP documentation
-  - identifier: "https://gnomad.broadinstitute.org/"
-    relation: "isDocumentedBy"
-    resource_type: "other"
-    scheme: "url"
+- identifier: 10.5281/zenodo.18173489
+  relation: isCompiledBy
+  resource_type: software
+  scheme: doi
+- identifier: 10.5072/zenodo.414599
+  relation: isSupplementTo
+  resource_type: dataset
+  scheme: doi
+- identifier: 10.1038/s41586-020-2308-7
+  relation: isDerivedFrom
+  resource_type: publication
+  scheme: doi
+- identifier: https://www.ensembl.org/info/docs/tools/vep/index.html
+  relation: isDocumentedBy
+  resource_type: other
+  scheme: url
+- identifier: https://gnomad.broadinstitute.org/
+  relation: isDocumentedBy
+  resource_type: other
+  scheme: url
