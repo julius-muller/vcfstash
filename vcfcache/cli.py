@@ -23,6 +23,7 @@ import argparse
 import os
 import sys
 import subprocess
+import re
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 
@@ -120,8 +121,8 @@ def _show_detailed_timings(workflow_log: Path) -> None:
         print(f"    {'Total':30s}: {total_str:>10s}")
 
 
-def _print_annotation_command(path_hint: Path) -> None:
-    """Print the stored annotation_tool_cmd from an annotation cache.
+def _print_annotation_command(path_hint: Path, params_override: Path | None = None) -> None:
+    """Print cache requirements and the stored annotation command.
 
     Args:
         path_hint: Path to cache root, cache directory, or specific annotation directory.
@@ -162,9 +163,11 @@ def _print_annotation_command(path_hint: Path) -> None:
             )
 
     anno = yaml.safe_load(params_file.read_text()) or {}
-    params_snapshot = cache_dir / "params.snapshot.yaml"
     params = {}
-    if params_snapshot.exists():
+    params_snapshot = cache_dir / "params.snapshot.yaml"
+    if params_override:
+        params = yaml.safe_load(params_override.read_text()) or {}
+    elif params_snapshot.exists():
         params = yaml.safe_load(params_snapshot.read_text()) or {}
 
     # Try new format (annotation_cmd) first, then fall back to old format (annotation_tool_cmd)
@@ -174,23 +177,56 @@ def _print_annotation_command(path_hint: Path) -> None:
             "annotation_cmd or annotation_tool_cmd not found in annotation.yaml; cache may be incomplete"
         )
 
+    # Extract required ${params.*} keys from annotation_cmd
+    required_keys = sorted(set(re.findall(r"\$\{params\.([A-Za-z0-9_\\.]+)\}", command)))
+
     print("Annotation requirements (from cache):")
     if anno.get("genome_build"):
-        print(f"  genome_build (annotation.yaml): {anno.get('genome_build')}")
-    if params.get("genome_build"):
-        print(f"  genome_build (params.yaml): {params.get('genome_build')}")
+        print(f"  genome_build: {anno.get('genome_build')}")
     if anno.get("must_contain_info_tag"):
         print(f"  must_contain_info_tag: {anno.get('must_contain_info_tag')}")
     if anno.get("required_tool_version"):
         print(f"  required_tool_version: {anno.get('required_tool_version')}")
-    if params.get("annotation_tool_cmd"):
-        print(f"  annotation_tool_cmd: {params.get('annotation_tool_cmd')}")
-    if params.get("bcftools_cmd"):
-        print(f"  bcftools_cmd: {params.get('bcftools_cmd')}")
-    if params.get("tool_version_command"):
-        print(f"  tool_version_command: {params.get('tool_version_command')}")
-    if params.get("threads") is not None:
-        print(f"  threads: {params.get('threads')}")
+
+    if required_keys:
+        print("  required params:")
+        for key in required_keys:
+            parts = key.split(".")
+            cur = params
+            for part in parts:
+                if not isinstance(cur, dict) or part not in cur:
+                    cur = None
+                    break
+                cur = cur[part]
+            value = cur if cur is not None else "<missing>"
+            print(f"    {key}: {value}")
+    else:
+        print("  required params: (none)")
+
+    # Quick tool checks (if possible)
+    print("\nTool checks:")
+    bcftools_cmd = params.get("bcftools_cmd") or "bcftools"
+    try:
+        res = subprocess.run([str(bcftools_cmd), "--version-only"], capture_output=True, text=True)
+        if res.returncode == 0:
+            print(f"  bcftools: {res.stdout.strip()}")
+        else:
+            print(f"  bcftools: ERROR ({res.stderr.strip() or 'failed'})")
+    except Exception as exc:
+        print(f"  bcftools: ERROR ({exc})")
+
+    tool_version_cmd = params.get("tool_version_command")
+    if tool_version_cmd:
+        try:
+            res = subprocess.run(tool_version_cmd, shell=True, capture_output=True, text=True)
+            if res.returncode == 0:
+                print(f"  annotation tool: {res.stdout.strip()}")
+            else:
+                print(f"  annotation tool: ERROR ({res.stderr.strip() or 'failed'})")
+        except Exception as exc:
+            print(f"  annotation tool: ERROR ({exc})")
+    else:
+        print("  annotation tool: (no tool_version_command provided)")
 
     print("\nAnnotation command recorded in cache:")
     print(command)
@@ -1013,7 +1049,8 @@ def main() -> None:
 
         elif args.command == "annotate":
             if args.requirements:
-                _print_annotation_command(Path(args.a))
+                params_override = Path(args.params).expanduser().resolve() if getattr(args, "params", None) else None
+                _print_annotation_command(Path(args.a), params_override=params_override)
                 return
 
             if args.list:
