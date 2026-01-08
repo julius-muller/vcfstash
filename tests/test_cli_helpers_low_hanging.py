@@ -805,7 +805,8 @@ def test_main_push_metadata_error(monkeypatch, tmp_path):
     monkeypatch.setattr(integrations_mod, "zenodo", zenodo_mod)
     monkeypatch.setitem(sys.modules, "vcfcache.integrations.zenodo", zenodo_mod)
 
-    def _tar_cache(_cache_dir, tar_path):
+    def _tar_cache(*_args, **_kwargs):
+        tar_path = _args[1] if len(_args) > 1 else _kwargs.get("tar_path")
         Path(tar_path).write_text("tar")
         return Path(tar_path)
 
@@ -963,7 +964,8 @@ def test_main_push_publish_autometadata(monkeypatch, tmp_path):
     monkeypatch.setattr(integrations_mod, "zenodo", zenodo_mod)
     monkeypatch.setitem(sys.modules, "vcfcache.integrations.zenodo", zenodo_mod)
 
-    def _tar_cache(_cache_dir, tar_path):
+    def _tar_cache(*_args, **_kwargs):
+        tar_path = _args[1] if len(_args) > 1 else _kwargs.get("tar_path")
         Path(tar_path).write_text("tar")
         return Path(tar_path)
 
@@ -1010,7 +1012,8 @@ def test_main_push_test_token(monkeypatch, tmp_path):
     monkeypatch.setattr(integrations_mod, "zenodo", zenodo_mod)
     monkeypatch.setitem(sys.modules, "vcfcache.integrations.zenodo", zenodo_mod)
 
-    def _tar_cache(_cache_dir, tar_path):
+    def _tar_cache(*_args, **_kwargs):
+        tar_path = _args[1] if len(_args) > 1 else _kwargs.get("tar_path")
         Path(tar_path).write_text("tar")
         return Path(tar_path)
 
@@ -1389,7 +1392,7 @@ def test_push_requires_completion_flags(monkeypatch, tmp_path):
     with pytest.raises(ValueError, match="Missing .vcfcache_complete"):
         cli.main()
 
-    # Cache with missing per-annotation completion flag
+    # Cache with missing per-annotation completion flag (select cache explicitly)
     cache_root = tmp_path / "cache_root"
     (cache_root / "blueprint").mkdir(parents=True)
     (cache_root / "blueprint" / "vcfcache.bcf").write_text("bcf")
@@ -1404,7 +1407,7 @@ def test_push_requires_completion_flags(monkeypatch, tmp_path):
             "vcfcache",
             "push",
             "--cache-dir",
-            str(cache_root),
+            str(cache_root / "cache" / "anno1"),
             "--yes",
         ],
     )
@@ -1544,7 +1547,8 @@ def test_main_push_blueprint_success(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(integrations_mod, "zenodo", zenodo_mod)
     monkeypatch.setitem(sys.modules, "vcfcache.integrations.zenodo", zenodo_mod)
 
-    def _tar_cache(_cache_dir, tar_path):
+    def _tar_cache(*_args, **_kwargs):
+        tar_path = _args[1] if len(_args) > 1 else _kwargs.get("tar_path")
         Path(tar_path).write_text("tar")
         return Path(tar_path)
 
