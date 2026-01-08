@@ -82,10 +82,10 @@ def export_gnomad_bcf(
     """
     print(f"Initializing Hail with genome build: {genome_build}")
 
-    # For public buckets, prevent metadata server lookups by setting env var early
+    # For public buckets, prevent blueprints server lookups by setting env var early
     if use_public_bucket:
-        os.environ['GCE_METADATA_HOST'] = 'metadata.google.internal.invalid'
-        print("Disabled GCE metadata server for anonymous access")
+        os.environ['GCE_METADATA_HOST'] = 'blueprints.google.internal.invalid'
+        print("Disabled GCE blueprints server for anonymous access")
 
     # Download GCS connector JAR if needed
     gcs_jar = download_gcs_connector()

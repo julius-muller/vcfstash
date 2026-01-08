@@ -836,7 +836,7 @@ def test_main_push_metadata_error(monkeypatch, tmp_path):
             "push",
             "--cache-dir",
             str(cache_dir),
-            "--metadata",
+            "--blueprints",
             str(meta),
         ],
     )

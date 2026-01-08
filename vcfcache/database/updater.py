@@ -20,7 +20,7 @@ class DatabaseUpdater(VCFDatabase):
     configuration and parameters, and implements workflows to integrate new data into
     the database. The primary purpose is to ensure VCF/BCF files are merged seamlessly
     into the database while maintaining consistency and log tracking. It also keeps
-    metadata around input files and database statistics up-to-date. Validation of input
+    blueprints around input files and database statistics up-to-date. Validation of input
     VCF reference files against YAML configuration is supported as well.
 
     Attributes:

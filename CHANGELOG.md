@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+- New `-r/--requirements` for `vcfcache annotate` to print cache requirements, validate tools, and show a fully substituted annotation command.
+  - Uses `-y/--yaml` if provided, otherwise the cache’s `params.snapshot.yaml`.
+- Local `vcfcache list` now reports variant counts for both blueprints and caches (via `bcftools index -n`).
+- `vcfcache push` now verifies `.vcfcache_complete` with `completed: true` for blueprints and cache entries.
+- Codecov patch coverage target set to 50% to prevent CI failures on small diffs.
+
+### Changed
+- Renamed `--show-command` to `--requirements` and expanded output to explain cache YAMLs, required params, and tool checks.
+- Local `vcfcache list` shows actual directory sizes (blueprints: `blueprint/`, caches: `cache/`) instead of a small file subset.
+- Release process simplified and documented in `RELEASE.md`; `scripts/release.sh` is deprecated.
+- README/WIKI streamlined and expanded with container-first quick start and a clear “start with `--requirements`” workflow.
+- Zenodo metadata templates refreshed for gnomAD v4.1 cache uploads; older metadata placeholders removed.
+
+### Fixed
+- `git_commit` now falls back to `VCFCACHE_GIT_COMMIT`/`GIT_COMMIT` or `unknown` when running outside a git repo.
+- Tests updated for `.vcfcache_complete` requirements and `--requirements` output.
+
 ## 0.5.1 (2026-01-07)
 
 ### Fixed

@@ -5,6 +5,9 @@ version: "0.5.1"
 description: |
   VCFcache cache derived from gnomAD v4.1 joint frequency data (GRCh38).
 
+  NOTE: This upload includes both the annotation cache and its underlying blueprint.
+  The blueprint can be used to build new caches with different annotation recipes.
+
   This underlying blueprint contains 8M high-quality variant sites filtered to
   allele frequency (AF) ≥ 0.1 (10% or 1 in 10 individuals). All genotype
   and INFO fields have been removed, retaining only genomic positions
@@ -19,6 +22,9 @@ description: |
   VEP Annotations Included (CSQ INFO field):
   - Comprehensive annotation (--everything)
   - HGVS nomenclature (--hgvsg)
+
+  Setup:
+    vcfcache cache-build --doi <DOI>
 
   Usage:
     vcfcache annotate -a <cache_dir> -i sample.vcf.gz -o sample_vc.bcf --stats-dir output/
@@ -67,4 +73,3 @@ related_identifiers:
     relation: "isDocumentedBy"
     resource_type: "other"
     scheme: "url"
-

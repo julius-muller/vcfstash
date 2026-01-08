@@ -788,13 +788,13 @@ def main() -> None:
         )
     )
     push_parser.add_argument(
-        "--metadata",
+        "--blueprints",
         required=False,
         metavar="FILE",
         help=(
-            "(optional) Path to YAML/JSON file with Zenodo metadata. "
+            "(optional) Path to YAML/JSON file with Zenodo blueprints. "
             "Should contain: title, description, creators (name, affiliation, orcid), "
-            "keywords, upload_type. If not provided, minimal metadata will be auto-generated."
+            "keywords, upload_type. If not provided, minimal blueprints will be auto-generated."
         )
     )
     push_parser.add_argument(
@@ -1806,7 +1806,7 @@ def main() -> None:
                     metadata["keywords"] = keywords
 
             if args.publish and not metadata:
-                # Zenodo requires minimal metadata before publishing.
+                # Zenodo requires minimal blueprints before publishing.
                 item_type = "blueprint" if is_blueprint else "annotated cache"
                 metadata = {
                     "title": f"VCFcache {item_type}: {dir_name}",
@@ -1826,11 +1826,11 @@ def main() -> None:
                 resp = requests.put(
                     zenodo_url,
                     params={"access_token": token},
-                    json={"metadata": metadata},
+                    json={"blueprints": metadata},
                     timeout=30,
                 )
                 if not resp.ok:
-                    error_msg = f"Failed to update metadata: {resp.status_code} {resp.reason}"
+                    error_msg = f"Failed to update blueprints: {resp.status_code} {resp.reason}"
                     try:
                         error_detail = resp.json()
                         error_msg += f"\nZenodo error: {error_detail}"

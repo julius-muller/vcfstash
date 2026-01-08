@@ -1,6 +1,6 @@
 """Completion flag utilities for tracking successful vcfcache runs.
 
-This module provides utilities for writing and reading completion metadata
+This module provides utilities for writing and reading completion blueprints
 that signals successful completion of vcfcache operations (cache-build,
 blueprint-init, blueprint-extend, annotate).
 """
@@ -83,7 +83,7 @@ def read_completion_flag(output_dir: Path) -> Optional[dict]:
         output_dir: Output directory to check for completion flag
 
     Returns:
-        Dictionary with completion metadata, or None if flag doesn't exist
+        Dictionary with completion blueprints, or None if flag doesn't exist
     """
     flag_file = output_dir / ".vcfcache_complete"
     if not flag_file.exists():

@@ -152,7 +152,7 @@ def search_zenodo_records(
         sandbox: If True, search sandbox Zenodo
 
     Returns:
-        List of record dictionaries with metadata
+        List of record dictionaries with blueprints
     """
     # Build search query using Elasticsearch query string syntax
     # Search in keywords field using field-specific syntax
@@ -219,7 +219,7 @@ def search_zenodo_records(
 
         records = []
         for hit in data.get("hits", {}).get("hits", []):
-            metadata = hit.get("metadata", {})
+            metadata = hit.get("blueprints", {})
 
             # Calculate total size
             files = hit.get("files", [])

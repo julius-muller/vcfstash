@@ -104,17 +104,17 @@ def test_blueprint_has_variants(test_scenario):
 
 
 def test_cache_metadata(test_scenario):
-    """Test that cache metadata files exist."""
+    """Test that cache blueprints files exist."""
     _skip_if_vanilla(test_scenario)
 
     # Check for sources.info
     sources_info = Path("/cache/db/blueprint/sources.info")
     assert sources_info.exists(), "sources.info file not found"
 
-    # Verify it contains expected metadata
+    # Verify it contains expected blueprints
     with open(sources_info, 'r') as f:
         content = f.read()
-        # Should contain some metadata about the source BCF files
+        # Should contain some blueprints about the source BCF files
         assert len(content) > 0, "sources.info is empty"
 
 

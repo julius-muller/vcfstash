@@ -46,7 +46,7 @@ sandbox = sys.argv[2] == "1"
 tar_path = Path(sys.argv[3])
 alias = sys.argv[4]
 
-metadata = {
+blueprints = {
     "title": f"VCFcache dummy cache {alias}",
     "upload_type": "dataset",
     "description": "Dummy cache generated for automated testing of VCFcache Zenodo upload pipeline.",
@@ -59,7 +59,7 @@ dep = zenodo.create_deposit(token, sandbox=sandbox)
 requests.put(
     f"{api_base}/deposit/depositions/{dep['id']}",
     params={"access_token": token},
-    json={"metadata": metadata},
+    json={"metadata": blueprints},
     timeout=30,
 ).raise_for_status()
 zenodo.upload_file(dep, tar_path, token, sandbox=sandbox)

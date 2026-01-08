@@ -5,6 +5,9 @@ description: |
   VCFcache blueprint derived from gnomAD v4.1 joint frequency data,
   lifted over from GRCh38 to GRCh37 (hg19).
 
+  NOTE: This blueprint does not contain annotations.
+  A combined cache+blueprint bundle can be downloaded from the corresponding cache record.
+  
   This blueprint contains 98.9M high-quality variant sites lifted
   over from GRCh38 to GRCh37 using CrossMap and then filtered to
   allele frequency (AF) ≥ 0.001 (0.1% or 1 in 1000 individuals). 
@@ -24,6 +27,12 @@ description: |
   tools like VEP, SnpEff, or bcftools +split-vep, enabling rapid annotation
   of sample VCFs using GRCh37/hg19 coordinates with common variants
   (≥1% population frequency).
+
+  Setup:
+    vcfcache blueprint-init --doi <DOI> -o <output_dir>
+
+  Usage:
+    vcfcache cache-build --db <blueprint_dir> -a annotation.yaml -n <name>
 
 upload_type: dataset
 
