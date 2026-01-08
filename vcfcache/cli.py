@@ -217,7 +217,10 @@ def _print_annotation_command(path_hint: Path, params_override: Path | None = No
 
     print("\n" + _hdr("Params evaluation"))
     if params_path and params_path.exists():
-        print(f"  params.yaml: {params_path}")
+        if params_override is None:
+            print(f"  params.yaml: {params_path} (from cache snapshot; no -y provided)")
+        else:
+            print(f"  params.yaml: {params_path}")
     else:
         print("  params.yaml: (missing)")
 
@@ -261,8 +264,21 @@ def _print_annotation_command(path_hint: Path, params_override: Path | None = No
     else:
         print(f"  annotation tool: {_bad('no tool_version_command provided')}  {_bad('✗')}")
 
-    print("\n" + _hdr("Annotation command recorded in cache"))
-    print(command)
+    def _substitute_params(text: str, params_map: dict) -> str:
+        def _replace(match: re.Match) -> str:
+            key = match.group(1)
+            parts = key.split(".")
+            cur = params_map
+            for part in parts:
+                if not isinstance(cur, dict) or part not in cur:
+                    return match.group(0)
+                cur = cur[part]
+            return str(cur)
+        return re.sub(r"\$\{params\.([A-Za-z0-9_\\.]+)\}", _replace, text)
+
+    substituted = _substitute_params(command, params)
+    print("\n" + _hdr("Annotation command (with params substituted)"))
+    print(substituted)
 
 
 def _find_cache_dir(path_hint: Path) -> Path:
