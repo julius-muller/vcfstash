@@ -422,7 +422,7 @@ vcfcache annotate \
 
 - Print the stored annotation command (does not run annotation):
   ```bash
-  vcfcache annotate -a /path/to/cache_root/cache/<annotation_name> --show-command
+  vcfcache annotate -a /path/to/cache_root/cache/<annotation_name> --requirements
   ```
 - Run an uncached annotation pass (useful for benchmarking/debugging):
   ```bash
@@ -634,7 +634,7 @@ Annotate a sample VCF/BCF using a cache.
 - `-f/--force`: overwrite outputs.
 - `--uncached`: run annotation without using the cache (debug/benchmark).
 - `--parquet`: also convert output to Parquet for downstream querying.
-- `--show-command`: print stored annotation command and exit.
+- `--requirements`: print cache requirements and the stored annotation command, then exit.
 - `--list`: list annotation caches under `-a` (when `-a` points to a directory of caches).
 - `--debug`: keep intermediate files and use sandbox for alias resolution/downloads.
 - `-v/--verbose`: increase logging (`-v` INFO, `-vv` DEBUG).

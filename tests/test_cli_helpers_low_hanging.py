@@ -351,14 +351,14 @@ def test_main_annotate_list(monkeypatch, capsys, tmp_path):
     assert "Available cached annotations" in out
 
 
-def test_main_annotate_show_command(monkeypatch, tmp_path):
+def test_main_annotate_requirements(monkeypatch, tmp_path):
     called = {}
     monkeypatch.setattr(cli, "_print_annotation_command", lambda *_args, **_kwargs: called.__setitem__("ok", True))
     monkeypatch.setattr(cli, "setup_logging", lambda *_args, **_kwargs: type("L", (), {"debug": lambda *_: None, "info": lambda *_: None})())
     monkeypatch.setattr(cli, "log_command", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(cli, "check_bcftools_installed", lambda: "/usr/bin/bcftools")
 
-    monkeypatch.setattr(cli.sys, "argv", ["vcfcache", "annotate", "--show-command", "-a", str(tmp_path)])
+    monkeypatch.setattr(cli.sys, "argv", ["vcfcache", "annotate", "--requirements", "-a", str(tmp_path)])
     cli.main()
     assert called.get("ok") is True
 
@@ -1386,7 +1386,7 @@ def test_main_version_fallback_uses_package_version(monkeypatch):
         cli.main()
 
 
-def test_main_annotate_show_command_and_list_conflict(monkeypatch):
+def test_main_annotate_requirements_and_list_conflict(monkeypatch):
     monkeypatch.setattr(cli, "setup_logging", lambda *_a, **_k: type("L", (), {"debug": lambda *_: None, "info": lambda *_: None, "error": lambda *_: None})())
     monkeypatch.setattr(cli, "log_command", lambda *_a, **_k: None)
     monkeypatch.setattr(cli, "check_bcftools_installed", lambda: "/usr/bin/bcftools")
@@ -1397,7 +1397,7 @@ def test_main_annotate_show_command_and_list_conflict(monkeypatch):
         [
             "vcfcache",
             "annotate",
-            "--show-command",
+            "--requirements",
             "--list",
             "-a",
             "cache",

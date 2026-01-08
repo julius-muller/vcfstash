@@ -1,11 +1,12 @@
-title: "gnomAD v4.1 GRCh38 Blueprint (AF ≥ 0.01)"
+title: "VCFcache blueprint gnomAD v4.1 joint GRCh38 (AF ≥ 0.1)"
 genome_build: "GRCh38"
+version: "0.5.1"
 
 description: |
   VCFcache blueprint derived from gnomAD v4.1 joint frequency data (GRCh38).
 
-  This blueprint contains 18.9M high-quality variant sites filtered to
-  allele frequency (AF) ≥ 0.01 (1% or 1 in 100 individuals). All genotype
+  This blueprint contains 8.1M high-quality variant sites filtered to
+  allele frequency (AF) ≥ 0.1 (10% or 1 in 10 individuals). All genotype
   and INFO fields have been removed, retaining only genomic positions
   (CHROM, POS, REF, ALT). Multiallelic sites have been split into separate records.
 
@@ -48,5 +49,3 @@ related_identifiers:
     relation: "isDocumentedBy"
     resource_type: "other"
     scheme: "url"
-
-version: "4.1.0-af001"

@@ -1,0 +1,78 @@
+title: "VCFcache cache gnomAD v4.1 joint GRCh37 (AF ≥ 0.1, lifted from GRCh38) annotated with vep 115.2 -e"
+genome_build: "GRCh37"
+version: "0.5.1"
+
+description: |
+  VCFcache cache derived from gnomAD v4.1 joint frequency data,
+  lifted over from GRCh38 to GRCh37 (hg19).
+
+  The underlying blueprint contains 8M high-quality variant sites lifted
+  over from GRCh38 to GRCh37 using CrossMap and then filtered to
+  allele frequency (AF) ≥ 0.1 10% or 1 in 10 individuals). 
+  Multiallelic sites have been split into separate records.
+
+  Coverage: chr1-22, chrX, chrY (GRCh37 coordinates)
+  Source: gnomAD v4.1.0 joint frequency (807,162 samples)
+  Processing: GRCh38→GRCh37 liftover, AF-filtered (≥10%), normalized,
+              GT/INFO removed, multiallelics split, vep annotated
+  Annotation tool: Ensembl VEP 115.2
+  VEP cache: Ensembl 115, GRCh37
+
+  NOTE: This is a liftover from GRCh38. For native GRCh38 analysis, use the
+  GRCh38 cache instead.
+
+  VEP Annotations Included (CSQ INFO field):
+  - Comprehensive annotation (--everything)
+  - HGVS nomenclature (--hgvsg)
+
+  Usage:
+    vcfcache annotate -a <cache_dir> -i sample.vcf.gz -o sample_vc.bcf --stats-dir output/
+
+upload_type: dataset
+
+creators:
+  - name: "Julius Müller"
+    affiliation: "DKFZ Heidelberg, Germany"
+    orcid: "0000-0002-1046-2968"
+
+keywords:
+  - vcfcache
+  - cache
+  - gnomAD
+  - GRCh37
+  - hg19
+  - VEP
+  - Ensembl
+  - variant annotation
+  - allele frequency
+  - liftover
+  - common variants
+  - CSQ
+
+license: cc-by-4.0
+
+access_right: open
+
+related_identifiers:
+  - identifier: "10.5072/zenodo.414722"
+    relation: "isSupplementTo"
+    resource_type: "dataset"
+    scheme: "doi"
+    # gnomAD v4.1 GRCh37 Blueprint (AF ≥ 0.10) - this cache supplements the blueprint
+  - identifier: "10.1038/s41586-020-2308-7"
+    relation: "isDerivedFrom"
+    resource_type: "publication"
+    scheme: "doi"
+    # gnomAD v4 publication
+  - identifier: "https://www.ensembl.org/info/docs/tools/vep/index.html"
+    relation: "isDocumentedBy"
+    resource_type: "other"
+    scheme: "url"
+    # VEP documentation
+  - identifier: "https://gnomad.broadinstitute.org/"
+    relation: "isDocumentedBy"
+    resource_type: "other"
+    scheme: "url"
+
+
+

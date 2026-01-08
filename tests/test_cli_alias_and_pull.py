@@ -57,10 +57,10 @@ def test_cli_annotate_alias_resolves_and_prints_command(tmp_path, monkeypatch, c
         "-a",
         alias,
         "--vcf",
-        str(cache_root / "blueprint" / "dummy.bcf"),  # not used when --show-command
+        str(cache_root / "blueprint" / "dummy.bcf"),  # not used when --requirements
         "--output",
         str(tmp_path / "out"),
-        "--show-command",
+        "--requirements",
     ]
 
     monkeypatch.setattr(cli.Path, "home", lambda: tmp_path)

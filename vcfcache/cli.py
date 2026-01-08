@@ -129,6 +129,7 @@ def _print_annotation_command(path_hint: Path) -> None:
     # Try to find the annotation.yaml file
     # First check if path_hint itself has annotation.yaml (specific cache directory)
     params_file = path_hint / "annotation.yaml"
+    cache_dir = path_hint
 
     if not params_file.exists():
         # Try to find cache directory and list available caches
@@ -142,6 +143,7 @@ def _print_annotation_command(path_hint: Path) -> None:
             if len(caches) == 1:
                 # Only one cache, use it
                 params_file = caches[0] / "annotation.yaml"
+                cache_dir = caches[0]
                 if not params_file.exists():
                     raise FileNotFoundError(
                         f"Annotation config not found: {params_file} (cache may be incomplete)"
@@ -151,7 +153,7 @@ def _print_annotation_command(path_hint: Path) -> None:
                 print(f"Multiple caches found. Please specify which one:")
                 for cache in sorted(caches):
                     status = "" if (cache / "vcfcache_annotated.bcf").exists() else " (incomplete)"
-                    print(f"  vcfcache annotate --show-command -a {cache}{status}")
+                    print(f"  vcfcache annotate --requirements -a {cache}{status}")
                 return
         except Exception as e:
             raise FileNotFoundError(
@@ -159,17 +161,38 @@ def _print_annotation_command(path_hint: Path) -> None:
                 f"Please provide path to a specific cache directory. Error: {e}"
             )
 
-    params = yaml.safe_load(params_file.read_text()) or {}
+    anno = yaml.safe_load(params_file.read_text()) or {}
+    params_snapshot = cache_dir / "params.snapshot.yaml"
+    params = {}
+    if params_snapshot.exists():
+        params = yaml.safe_load(params_snapshot.read_text()) or {}
 
     # Try new format (annotation_cmd) first, then fall back to old format (annotation_tool_cmd)
-    command = params.get("annotation_cmd") or params.get("annotation_tool_cmd")
-
+    command = anno.get("annotation_cmd") or anno.get("annotation_tool_cmd")
     if not command:
         raise ValueError(
             "annotation_cmd or annotation_tool_cmd not found in annotation.yaml; cache may be incomplete"
         )
 
-    print("Annotation command recorded in cache:")
+    print("Annotation requirements (from cache):")
+    if anno.get("genome_build"):
+        print(f"  genome_build (annotation.yaml): {anno.get('genome_build')}")
+    if params.get("genome_build"):
+        print(f"  genome_build (params.yaml): {params.get('genome_build')}")
+    if anno.get("must_contain_info_tag"):
+        print(f"  must_contain_info_tag: {anno.get('must_contain_info_tag')}")
+    if anno.get("required_tool_version"):
+        print(f"  required_tool_version: {anno.get('required_tool_version')}")
+    if params.get("annotation_tool_cmd"):
+        print(f"  annotation_tool_cmd: {params.get('annotation_tool_cmd')}")
+    if params.get("bcftools_cmd"):
+        print(f"  bcftools_cmd: {params.get('bcftools_cmd')}")
+    if params.get("tool_version_command"):
+        print(f"  tool_version_command: {params.get('tool_version_command')}")
+    if params.get("threads") is not None:
+        print(f"  threads: {params.get('threads')}")
+
+    print("\nAnnotation command recorded in cache:")
     print(command)
 
 
@@ -505,7 +528,7 @@ def main() -> None:
         dest="i",
         required=False,
         metavar="VCF",
-        help="Input VCF/BCF file to annotate (required unless using --list or --show-command)",
+        help="Input VCF/BCF file to annotate (required unless using --list or --requirements)",
     )
     vcf_parser.add_argument(
         "-o",
@@ -515,7 +538,7 @@ def main() -> None:
         required=False,
         metavar="FILE",
         help=(
-            "Output BCF file (required unless using --list or --show-command). "
+            "Output BCF file (required unless using --list or --requirements). "
             "Use '-' or 'stdout' to stream to stdout. "
             "If no extension is provided, '.bcf' is appended."
         ),
@@ -582,12 +605,13 @@ def main() -> None:
         help="(optional) Also convert output to Parquet format for DuckDB access (default: False)",
     )
     vcf_parser.add_argument(
-        "--show-command",
+        "-r",
+        "--requirements",
         action="store_true",
         default=False,
         help=(
-            "(optional) Display the annotation command stored in the cache and exit. "
-            "Does not run annotation."
+            "(optional) Show cache requirements (tool, versions, genome build) "
+            "and the stored annotation command, then exit."
         ),
     )
     vcf_parser.add_argument(
@@ -747,17 +771,17 @@ def main() -> None:
     args = parser.parse_args(args=None if sys.argv[1:] else ["--help"])
 
     show_command_only = args.command == "annotate" and getattr(
-        args, "show_command", False
+        args, "requirements", False
     )
     list_only = args.command == "annotate" and getattr(args, "list", False)
 
     if show_command_only and list_only:
-        parser.error("--show-command and --list cannot be used together")
+        parser.error("--requirements and --list cannot be used together")
 
     if args.command == "annotate" and not (show_command_only or list_only):
         if not args.i or not args.output_file:
             parser.error(
-                "annotate command requires -i/--vcf and -o/--output unless --show-command is used"
+                "annotate command requires -i/--vcf and -o/--output unless --requirements is used"
             )
 
     # Setup logging with verbosity
@@ -988,7 +1012,7 @@ def main() -> None:
                 _show_detailed_timings(workflow_log)
 
         elif args.command == "annotate":
-            if args.show_command:
+            if args.requirements:
                 _print_annotation_command(Path(args.a))
                 return
 

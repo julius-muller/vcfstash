@@ -101,8 +101,8 @@ def test_vcf_reference_validation(test_scenario):
     assert "not found" in error
 
 
-def test_show_command_outputs_annotation_tool_cmd(test_output_dir):
-    """--show-command should print the frozen annotation tool command."""
+def test_requirements_outputs_annotation_tool_cmd(test_output_dir):
+    """--requirements should print the frozen annotation tool command."""
 
     annotation_dir = Path(test_output_dir) / "cache" / "vep_gnomad"
     annotation_dir.mkdir(parents=True, exist_ok=True)
@@ -119,7 +119,7 @@ def test_show_command_outputs_annotation_tool_cmd(test_output_dir):
     result = subprocess.run(
         VCFCACHE_CMD + [
             "annotate",
-            "--show-command",
+            "--requirements",
             "-a",
             str(annotation_dir),
         ],

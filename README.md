@@ -10,6 +10,8 @@
 
 VCFcache builds a normalized blueprint of common variants, annotates it once, and reuses those annotations so only novel variants are processed at runtime. It is genome‑agnostic and tool‑agnostic (VEP, SnpEff, ANNOVAR, custom scripts).
 
+Important: to use a cache, you must have the same annotation tool (and compatible version) installed locally.
+
 See [WIKI.md](WIKI.md) for full documentation, performance notes, and cache distribution via Zenodo.
 
 ---
@@ -120,6 +122,11 @@ It is required for `cache-build` (`-a/--anno-config`) and is stored in the cache
 
 The key field is `annotation_cmd`. It is a shell command string that must read from `$INPUT_BCF` and write to `$OUTPUT_BCF`.  
 You can include `$AUXILIARY_DIR` for tool side‑outputs. This is typically a direct translation of your annotation pipeline.
+
+To see requirements for a downloaded cache, run:
+```bash
+vcfcache annotate --requirements -a <cache_dir>
+```
 
 Minimal example (bcftools annotate):
 ```yaml
