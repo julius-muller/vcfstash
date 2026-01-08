@@ -218,18 +218,32 @@ def search_zenodo_records(
         return records
 
     def _matches_item_type(record: dict) -> bool:
-        keywords = [k.lower() for k in (record.get("keywords") or []) if isinstance(k, str)]
+        keywords_raw = record.get("keywords") or []
+        keywords = [k.lower() for k in keywords_raw if isinstance(k, str)]
         title = str(record.get("title", "")).lower()
         desc = str(record.get("description", "")).lower()
-        if item_type == "blueprints":
-            if "blueprint" in keywords:
-                return True
-            return "blueprint" in title or "blueprint" in desc
-        if "cache" in keywords:
-            return True
-        return " cache" in title or " cache" in desc or "cache " in title or "cache " in desc
 
-    # Primary keyword search
+        has_bp_kw = any(k.startswith("bp-") or k == "blueprint" for k in keywords)
+        has_cache_kw = any(k.startswith("cache-") or k == "cache" for k in keywords)
+
+        title_has_bp = "blueprint" in title
+        title_has_cache = "cache" in title
+
+        if item_type == "blueprints":
+            if has_cache_kw:
+                return False
+            if has_bp_kw:
+                return True
+            return title_has_bp and not title_has_cache
+
+        # caches
+        if has_bp_kw:
+            return False
+        if has_cache_kw:
+            return True
+        return title_has_cache and not title_has_bp
+
+    # Keyword-based search (keywords are required for vcfcache records).
     query_parts = ["keywords:vcfcache"]
     if item_type == "blueprints":
         query_parts.append("keywords:blueprint")
@@ -241,24 +255,9 @@ def search_zenodo_records(
         query_parts.append(f"keywords:{source}")
     primary_query = " AND ".join(query_parts)
 
-    # Secondary title-based search (catches records missing keywords).
-    secondary_query = "metadata.title:vcfcache"
-    if genome:
-        secondary_query += f" AND metadata.title:{genome}"
-    if source:
-        secondary_query += f" AND metadata.title:{source}"
-
     try:
         primary = _search(primary_query)
-        secondary = _search(secondary_query)
-
-        merged: dict[str, dict] = {}
-        for rec in primary + secondary:
-            doi = rec.get("doi", "")
-            if doi not in merged:
-                merged[doi] = rec
-
-        records = [r for r in merged.values() if _matches_item_type(r)]
+        records = [r for r in primary if _matches_item_type(r)]
         return records
 
     except requests.exceptions.RequestException as e:
