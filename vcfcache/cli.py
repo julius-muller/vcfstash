@@ -1685,12 +1685,15 @@ def main() -> None:
 
             # Show appropriate download instructions based on type
             cache_location = os.environ.get("VCFCACHE_DIR", "~/.cache/vcfcache")
+            debug_flag = " --debug" if args.debug else ""
             if item_type == "blueprints":
-                print(f"Download: vcfcache blueprint-init --doi <DOI> -o <output_dir>")
-                print(f"Or build cache: vcfcache cache-build --doi <DOI> -a <annotation.yaml> -n <name>")
+                print(f"Download: vcfcache blueprint-init --doi <DOI> -o <output_dir>{debug_flag}")
+                print(
+                    f"Or build cache: vcfcache cache-build --doi <DOI> -a <annotation.yaml> -n <name>{debug_flag}"
+                )
                 print(f"  (downloads to {cache_location}/blueprints/)\n")
             else:  # caches
-                print(f"Download: vcfcache cache-build --doi <DOI>")
+                print(f"Download: vcfcache cache-build --doi <DOI>{debug_flag}")
                 print(f"  (downloads to {cache_location}/caches/)")
                 print(
                     f"Then use: vcfcache annotate -a {cache_location}/caches/<cache_name> -i sample.vcf -o sample_vc.bcf [--stats-dir output/]"
