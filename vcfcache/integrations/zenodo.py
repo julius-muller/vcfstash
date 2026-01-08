@@ -113,7 +113,8 @@ def download_doi(doi: str, dest: Path, sandbox: bool = False) -> Path:
     with requests.get(file_url, stream=True, timeout=60) as r:
         r.raise_for_status()
         total = 0
-        total_len = int(r.headers.get("Content-Length", "0") or 0)
+        headers = getattr(r, "headers", {}) or {}
+        total_len = int(headers.get("Content-Length", "0") or 0)
         show_progress = _progress_enabled()
         if show_progress:
             import sys

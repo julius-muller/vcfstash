@@ -276,8 +276,11 @@ def _print_annotation_command(path_hint: Path, params_override: Path | None = No
             if res.returncode == 0:
                 contigs = [line.strip() for line in res.stdout.splitlines() if line.strip()]
                 if contigs:
-                    for line in contigs:
+                    max_lines = 50
+                    for line in contigs[:max_lines]:
                         print(f"  {line}")
+                    if len(contigs) > max_lines:
+                        print(f"  ... ({len(contigs) - max_lines} more)")
                 else:
                     print("  (no contigs reported)")
             else:
