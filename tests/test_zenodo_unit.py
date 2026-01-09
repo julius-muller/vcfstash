@@ -10,9 +10,10 @@ from vcfcache.integrations import zenodo
 
 
 class _FakeStreamResponse:
-    def __init__(self, chunks: list[bytes], status_code: int = 200):
+    def __init__(self, chunks: list[bytes], status_code: int = 200, headers: dict[str, str] | None = None):
         self._chunks = chunks
         self.status_code = status_code
+        self.headers = headers or {}
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
@@ -43,7 +44,7 @@ def test_download_doi_downloads_first_file_and_honors_sandbox(tmp_path: Path):
     record_resp.json.return_value = record
     record_resp.raise_for_status.return_value = None
 
-    stream_resp = _FakeStreamResponse([b"abc", b"def"])
+    stream_resp = _FakeStreamResponse([b"abc", b"def"], headers={"Content-Length": "6"})
 
     with patch("vcfcache.integrations.zenodo.requests.get") as get_mock:
         get_mock.side_effect = [record_resp, stream_resp]
@@ -53,6 +54,33 @@ def test_download_doi_downloads_first_file_and_honors_sandbox(tmp_path: Path):
         assert dest.read_bytes() == b"abcdef"
         first_call_url = get_mock.call_args_list[0].args[0]
         assert first_call_url.startswith(zenodo.ZENODO_SANDBOX_API)
+
+
+def test_download_doi_progress_writes_to_stderr(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys):
+    record = {
+        "files": [
+            {
+                "links": {
+                    "self": "https://sandbox.zenodo.org/api/files/bucket/test.tar.gz"
+                }
+            }
+        ]
+    }
+
+    record_resp = MagicMock()
+    record_resp.json.return_value = record
+    record_resp.raise_for_status.return_value = None
+
+    stream_resp = _FakeStreamResponse([b"abc", b"def"], headers={"Content-Length": "6"})
+    monkeypatch.setenv("VCFCACHE_UPLOAD_PROGRESS", "1")
+
+    with patch("vcfcache.integrations.zenodo.requests.get") as get_mock:
+        get_mock.side_effect = [record_resp, stream_resp]
+        dest = tmp_path / "cache.tar.gz"
+        zenodo.download_doi("10.5072/zenodo.12345", dest, sandbox=True)
+
+    out = capsys.readouterr().err
+    assert "Downloading" in out
 
 
 def test_download_doi_raises_if_no_files(tmp_path: Path):
@@ -92,6 +120,28 @@ def test_upload_file_puts_to_bucket(tmp_path: Path):
         assert out["ok"] is True
         called_url = put_mock.call_args.args[0]
         assert called_url.endswith("/file.tar.gz")
+
+
+def test_upload_file_retries_on_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    deposition = {"links": {"bucket": "https://sandbox.zenodo.org/api/files/bucket"}}
+    file_path = tmp_path / "file.tar.gz"
+    file_path.write_bytes(b"content")
+
+    put_resp = MagicMock()
+    put_resp.json.return_value = {"ok": True}
+    put_resp.raise_for_status.return_value = None
+
+    monkeypatch.setenv("VCFCACHE_UPLOAD_PROGRESS", "1")
+
+    with patch("vcfcache.integrations.zenodo.requests.put") as put_mock:
+        put_mock.side_effect = [
+            zenodo.requests.exceptions.RequestException("boom"),
+            zenodo.requests.exceptions.RequestException("boom"),
+            put_resp,
+        ]
+        out = zenodo.upload_file(deposition, file_path, "tok", sandbox=True)
+        assert out["ok"] is True
+        assert put_mock.call_count == 3
 
 
 def test_publish_deposit_posts_publish_link():

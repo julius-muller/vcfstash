@@ -1221,6 +1221,45 @@ def test_print_annotation_command_no_caches(tmp_path):
         cli._print_annotation_command(cache_root)
 
 
+def test_print_annotation_command_contigs_capped(monkeypatch, tmp_path, capsys):
+    cache_root = tmp_path / "cache_root"
+    cache_dir = cache_root / "cache" / "anno1"
+    cache_dir.mkdir(parents=True)
+    (cache_dir / "vcfcache_annotated.bcf").write_text("bcf")
+    (cache_dir / "annotation.yaml").write_text(
+        "annotation_cmd: echo ok\n"
+        "must_contain_info_tag: MOCK\n"
+        "required_tool_version: 1.0\n"
+        "genome_build: GRCh38\n"
+    )
+    (cache_dir / "params.snapshot.yaml").write_text(
+        "bcftools_cmd: bcftools\n"
+        "genome_build: GRCh38\n"
+    )
+
+    class _Res:
+        def __init__(self, stdout: str, returncode: int = 0):
+            self.stdout = stdout
+            self.returncode = returncode
+            self.stderr = ""
+
+    def _run(cmd, *args, **kwargs):
+        if cmd[1:] == ["--version-only"]:
+            return _Res("1.22")
+        if cmd[0:3] == ["bcftools", "index", "-s"]:
+            contigs = "\n".join([f"chr{i}\t100" for i in range(60)])
+            return _Res(contigs)
+        return _Res("")
+
+    monkeypatch.setattr(cli.subprocess, "run", _run)
+
+    cli._print_annotation_command(cache_dir)
+    out = capsys.readouterr().out
+    assert "Cache contigs" in out
+    assert "chr0\t100" in out
+    assert "... (10 more)" in out
+
+
 def test_list_annotation_caches_marks_incomplete(tmp_path):
     cache_root = tmp_path / "cache_root"
     cache_dir = cache_root / "cache"
