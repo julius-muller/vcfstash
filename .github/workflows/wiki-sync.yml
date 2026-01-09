@@ -1,0 +1,37 @@
+name: Sync Wiki
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - WIKI.md
+
+jobs:
+  sync-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Sync WIKI.md to GitHub Wiki
+        env:
+          WIKI_PUSH_TOKEN: ${{ secrets.WIKI_PUSH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WIKI_PUSH_TOKEN:-}" ]; then
+            echo "WIKI_PUSH_TOKEN is not set. Skipping wiki sync."
+            exit 0
+          fi
+          git clone "https://x-access-token:${WIKI_PUSH_TOKEN}@github.com/julius-muller/vcfcache.wiki.git" wiki
+          cp WIKI.md wiki/Home.md
+          cd wiki
+          if git diff --quiet; then
+            echo "Wiki is already up to date."
+            exit 0
+          fi
+          git config user.name "vcfcache-bot"
+          git config user.email "actions@github.com"
+          git add Home.md
+          git commit -m "Sync wiki from WIKI.md"
+          git push
