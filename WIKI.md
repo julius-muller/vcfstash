@@ -40,6 +40,13 @@ The workflow is:
 Trade-off:
 - A cache is only valid for the exact annotation recipe/tooling it was built with (same semantics and compatible tool versions).
 
+### Requirements and constraints
+
+* **Reference build must match** (e.g., GRCh37 vs GRCh38). Cache hits require matching contigs and coordinates.
+* **Contig naming must match** (e.g., `chr1` vs `1`). Convert contigs at the boundary if needed.
+* **BCF I/O:** VCFcache operates on BCF; use `bcftools view` to bridge tools that only read/write VCF.
+* **Recipe compatibility:** cached annotations are only valid for the same annotation recipe/tool version used to create the cache.
+
 ---
 
 ## 2) Quick Start
@@ -51,6 +58,18 @@ This section is for “I want to see it work” with minimal setup.
 Requires Python 3.11+ and `bcftools >= 1.20`.
 ```bash
 uv pip install vcfcache
+vcfcache --help
+```
+
+### Install from source (development)
+
+For development with tests:
+```bash
+git clone https://github.com/julius-muller/vcfcache.git
+cd vcfcache
+uv venv .venv && source .venv/bin/activate
+uv pip install -e ".[dev]"
+python -m pytest tests -q
 vcfcache --help
 ```
 
@@ -348,6 +367,21 @@ These preprocessing steps ensure:
 - Identical outputs between cached and uncached modes
 - No unannotated variants in the output (annotation tools skip `ALT=*` variants)
 
+### Output equivalence and verification
+
+VCFcache does not modify the annotation logic of your recipe:
+
+* For **cache hits**, it reuses the stored annotations from the cache.
+* For **cache misses**, it runs your `annotation.yaml` command.
+
+To validate equivalence for your environment and options, run a small sample once with caching disabled (or using an empty cache), once with caching enabled, and compare outputs at the variant/INFO level using `bcftools` (and, if needed, normalized representations).
+
+Practical recommendation:
+
+* Start with a small VCF/BCF (e.g., a few thousand variants).
+* Use a fixed reference build and deterministic tool settings.
+* Compare post-processed outputs (normalized, sorted, same compression) rather than relying on byte-identical files.
+
 ---
 
 ## 8) Configuration reference (`params.yaml` + `annotation.yaml`)
@@ -373,16 +407,25 @@ optional_checks: {}
 
 ### `annotation.yaml` (immutable recipe)
 
-Example skeleton:
+Complete VEP example (BCF in → VCF → VEP → BCF out):
 ```yaml
 annotation_cmd: |
-  ${params.bcftools_cmd} view ${INPUT_BCF} | \
-  ${params.annotation_tool_cmd} ... | \
-  ${params.bcftools_cmd} view -o ${OUTPUT_BCF} -Ob -W
+  ${params.bcftools_cmd} view -Ov ${INPUT_BCF} | \
+  ${params.annotation_tool_cmd} --offline --cache --vcf \
+    --dir_cache ${params.vep_cache} \
+    --assembly ${params.genome_build} \
+    --stats_file ${AUXILIARY_DIR}/vep_stats.html \
+    -i stdin -o stdout | \
+  ${params.bcftools_cmd} view -Ob -o ${OUTPUT_BCF} -W
 must_contain_info_tag: CSQ
 required_tool_version: "115.2"
 genome_build: "GRCh38"
 ```
+
+**Key conventions:**
+* `${INPUT_BCF}` and `${OUTPUT_BCF}` are provided by VCFcache.
+* Keep all tool options (plugins, custom files, flags) inside this command.
+* If your command depends on local paths (FASTA, plugin data, cache dirs), put them in `params.yaml` and reference them as `${params.*}` here.
 
 Variables you can use:
 - `${INPUT_BCF}`, `${OUTPUT_BCF}`, `${AUXILIARY_DIR}`

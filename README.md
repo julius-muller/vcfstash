@@ -5,163 +5,193 @@
 [![Cite](https://img.shields.io/badge/Cite-CITATION.cff-blue)](CITATION.cff)
 [![codecov](https://codecov.io/github/julius-muller/vcfcache/graph/badge.svg?token=ELV3PZ6PNL)](https://codecov.io/github/julius-muller/vcfcache)
 
-
 # VCFcache – cache once, annotate fast
 
-VCFcache builds a normalized blueprint of common variants, annotates it once, and reuses those annotations so only novel variants are processed at runtime. It is genome‑agnostic and tool‑agnostic (VEP, SnpEff, ANNOVAR, custom scripts).
-
-**Important**: to use a cache, you must have the same annotation tool (and compatible version) installed locally.
+VCFcache builds a normalized blueprint of common variants, annotates it once, and reuses those annotations so only novel variants are processed at runtime.
 
 ## When VCFcache helps
 
-VCFcache is useful when you either (a) repeatedly annotate many samples with a stable pipeline, or (b) want to quickly apply published, prebuilt annotations (e.g., gnomAD-derived, vep annotated caches) to a large VCF/BCF. Performance depends on cache hit rate and I/O.
+VCFcache is useful when you either (a) repeatedly annotate many samples with a stable pipeline, or (b) want to quickly apply common annotations (e.g., VEP --everything) to a large VCF/BCF. Speed increase depends on cache hit rate of the input sample and per-variant annotation speed of the original pipeline.
 
 ## Key properties
 
 * **Drop-in integration:** keep your existing annotation command; place it into a simple `annotation.yaml` and run `vcfcache annotate`.
 * **Cache reuse with automatic fallback:** cache hits are reused; cache misses are annotated with your configured command and merged into one output.
 * **Genome- and tool-agnostic:** works with arbitrary reference builds and organisms, and with any annotator or pipeline that can be expressed as a command (stdin/stdout or file-based).
-* **Ready-made human caches available:** published caches built from public aggregation resources (e.g., gnomAD) can be downloaded and used immediately; the same tooling can generate highly efficient custom caches for your specific options and datasets.
+* **Pre-built caches available:** published caches built from public aggregation resources and annotation tools can be downloaded and used immediately (currently hg19/hg38 annotated with VEP --everything, more on request); the same tooling can generate highly efficient custom caches for your specific options and datasets.
 * **BCF-native I/O:** VCFcache reads and writes **BCF** for performance and indexing; use `bcftools view` to convert VCF/VCF.gz at the boundaries.
+
+**Important**: to use a prebuilt cache, you must have the same annotation tool (and compatible version) installed locally.
 
 See [WIKI.md](WIKI.md) for full documentation, performance notes, and cache distribution via Zenodo.
 
 ---
 
----
+## Quick Start
 
-## Quick Start (pip)
-
-Requires: Python >= 3.11 and `bcftools >= 1.20`.
+### Installation
 
 ```bash
+# Via pip (requires Python 3.11+ and bcftools >= 1.20)
 uv pip install vcfcache
-vcfcache demo -q
-vcfcache --help
+
+# Via Docker (includes bcftools)
+docker pull ghcr.io/julius-muller/vcfcache:latest
+
+# Via Apptainer
+apptainer exec docker://ghcr.io/julius-muller/vcfcache:latest vcfcache --help
 ```
 
-Install `bcftools` separately:
-- Ubuntu/Debian: `sudo apt-get install bcftools`
-- macOS: `brew install bcftools`
-- Conda: `conda install -c bioconda bcftools`
+See [WIKI.md - Section 2 (Quick Start)](WIKI.md#2-quick-start) for development installation and troubleshooting.
 
 ---
 
-## Quick Start (from source with test suite)
+## Your First Annotation (3-minute tutorial)
 
-```bash
-git clone https://github.com/julius-muller/vcfcache.git
-cd vcfcache
-uv venv .venv && source .venv/bin/activate
-uv pip install -e ".[dev]"
-vcfcache --help
-```
+This minimal example shows the complete workflow using a public cache.
 
----
+### 1. List available caches
 
-## Build your own cache
-
-1. **Create blueprint** (normalize/deduplicate variants):
-```bash
-vcfcache blueprint-init --vcf gnomad.bcf --output ./cache -y params.yaml
-```
-
-2. **Annotate blueprint** (create cache):
-```bash
-vcfcache cache-build --name vep_cache --db ./cache -a annotation.yaml -y params.yaml
-```
-
-3. **Use cache** on samples:
-```bash
-vcfcache annotate --requirements -a ./cache/cache/vep_cache
-vcfcache annotate -a ./cache/cache/vep_cache --vcf sample.vcf.gz --output ./sample_vc.bcf --stats-dir ./results
-```
-
-If `--stats-dir` is provided, stats are written to `<stats_dir>/<input_basename>_vcstats`. Otherwise, they default to `<cwd>/<input_basename>_vcstats`.
-Use `--no-stats` to skip writing stats/logs (disables `vcfcache compare`).
-
----
-
-## Public caches/blueprints (Zenodo)
-
-List and download:
 ```bash
 vcfcache list caches
-vcfcache list blueprints
-vcfcache cache-build --doi <DOI>                 # download cache
-vcfcache blueprint-init --doi <DOI> -o ./cache   # download blueprint
 ```
-Use a downloaded cache:
+
+### 2. Pull a specific cache
+
 ```bash
-vcfcache annotate -a ~/.cache/vcfcache/caches/<cache_name> --vcf sample.vcf.gz --output sample_vc.bcf
+# Cache auto-downloads on first use, or download explicitly:
+vcfcache cache-build --doi 10.5281/zenodo.18189447
 ```
+
+### 3. Check cache requirements
+
+```bash
+vcfcache annotate --requirements -a cache-hg38-gnomad-4.1joint-AF0100-vep-115.2-basic
+```
+
+This shows:
+- Required annotation tool version (e.g., VEP 115.2)
+- Required params (reference cache paths, etc.)
+- The exact annotation command that will run
+
+**Critical**: Install the exact tool version shown (e.g., `vep --version` must match).
+
+### 4. Annotate your sample
+
+```bash
+vcfcache annotate \
+  -a cache-hg38-gnomad-4.1joint-AF0100-vep-115.2-basic \
+  --vcf sample.bcf \
+  --output sample_annotated.bcf \
+  --stats-dir ./results
+```
+
+**Input format**: VCFcache operates on BCF. Convert VCF/VCF.gz at boundaries:
+```bash
+bcftools view -Ob sample.vcf.gz | vcfcache annotate -a <cache-alias> -i - -o - | ...
+```
+
+See [WIKI.md - Section 7 (Using a cache to annotate samples)](WIKI.md#7-using-a-cache-to-annotate-samples) for all annotation options.
 
 ---
 
-## params.yaml (runtime settings)
+## Building Your Own Cache
 
-`params.yaml` defines tool paths and runtime settings (e.g., `bcftools_cmd`, `annotation_tool_cmd`, `threads`, `temp_dir`, `genome_build`).  
-Pass it with `-y/--yaml` for `cache-build` and `annotate`. If omitted for `annotate`, the cache’s `params.snapshot.yaml` is used.
+If you need different annotation settings (plugins, flags, tool version):
 
-## annotation.yaml (annotation recipe)
-
-`annotation.yaml` defines the annotation command, required tool version, and output tag (`must_contain_info_tag`).  
-It is required for `cache-build` (`-a/--anno-config`) and is stored in the cache as `annotation.snapshot.yaml`.
-
-The key field is `annotation_cmd`. It is a shell command string that must read from `$INPUT_BCF` and write to `$OUTPUT_BCF`.  
-You can include `$AUXILIARY_DIR` for tool side‑outputs. This is typically a direct translation of your annotation pipeline.
-
-To see requirements for a downloaded cache, run:
+### From a public cache's blueprint
 ```bash
-vcfcache annotate --requirements -a <cache_dir>
+# Downloaded caches include the blueprint! Use it to build a cache variant:
+# 1. Download cache (includes blueprint)
+vcfcache cache-build --doi 10.5281/zenodo.18189447
+
+# 2. Create annotation.yaml with your pipeline (see below)
+
+# 3. Build cache from the downloaded blueprint
+vcfcache cache-build \
+  --db ~/.cache/vcfcache/caches/<cache-alias> \
+  --name my_vep_cache \
+  -a annotation.yaml \
+  -y params.yaml
 ```
 
-For publishing to Zenodo, prepare a metadata YAML and use `vcfcache push` (details in the wiki).
+### From a public blueprint only
+```bash
+# 1. Download blueprint (smaller, no annotations)
+vcfcache blueprint-init --doi <blueprint_DOI> -o ./cache_root
 
-Minimal example (bcftools annotate):
+# 2. Create annotation.yaml with your pipeline (see below)
+
+# 3. Build cache
+vcfcache cache-build \
+  --db ./cache_root \
+  --name my_vep_cache \
+  -a annotation.yaml \
+  -y params.yaml
+```
+
+### From your own variants
+```bash
+# Use your cohort's common variants for maximum cache hit rate
+vcfcache blueprint-init --vcf cohort_common.bcf --output ./cache_root -y params.yaml
+vcfcache cache-build --db ./cache_root --name my_cache -a annotation.yaml -y params.yaml
+```
+
+See [WIKI.md - Section 6 (Building your own cache)](WIKI.md#6-building-your-own-cache-end-to-end) for the complete workflow including sharing via Zenodo.
+
+---
+
+## Setting Up annotation.yaml
+
+The annotation.yaml defines your annotation pipeline **at cache-build time**. It is **immutable**: once baked into a cache, it cannot be changed without rebuilding.
+
+**What goes in annotation.yaml vs params.yaml:**
+- **annotation.yaml** (immutable): annotation logic, tool flags, plugins — anything that affects the annotation semantics
+- **params.yaml** (runtime): machine-specific paths, threads, tool locations — settings that differ between environments but don't change the annotation results
+
+**When you annotate samples**, you can only provide params.yaml (via `-y`). The annotation.yaml is fixed in the cache.
+
+**Minimal VEP example**:
 ```yaml
-annotation_cmd: "bcftools annotate -a /path/to/anno.bcf -c INFO -o $OUTPUT_BCF -Ob -W --threads ${params.threads} $INPUT_BCF"
-must_contain_info_tag: "CSQ"
-required_tool_version: "1.0"
+annotation_cmd: |
+  ${params.bcftools_cmd} view -Ov ${INPUT_BCF} | \
+  ${params.annotation_tool_cmd} \
+    --offline --cache --vcf \
+    --dir_cache ${params.vep_cache} \
+    --assembly ${params.genome_build} \
+    --stats_file ${AUXILIARY_DIR}/vep_stats.html \
+    -i stdin -o stdout | \
+  ${params.bcftools_cmd} view -Ob -o ${OUTPUT_BCF} -W
+
+must_contain_info_tag: CSQ
+required_tool_version: "115.2"
 genome_build: "GRCh38"
 ```
 
----
+**Variable substitution**:
+- `${INPUT_BCF}`, `${OUTPUT_BCF}`, `${AUXILIARY_DIR}`: provided by VCFcache automatically
+- `${params.*}`: substituted from your params.yaml at runtime (allows different paths per machine)
+- Use `${params.*}` for paths/settings that vary between machines (e.g., `/path/to/vep/cache`)
+- Hardcode values that define the annotation semantics (e.g., `--offline --cache`)
 
-## Stats directory contents
-
-`<input_basename>_vcstats` contains:
-- `annotation.log` and `workflow.log` — run logs and timing breakdown.
-- `workflow/params.snapshot.yaml` and `workflow/annotation.snapshot.yaml` — exact configs used for the run.
-- `auxiliary/` — tool side‑outputs (e.g., VEP stats).
-- `compare_stats.yaml` and `.vcfcache_complete` — summary metrics and completion metadata.
-
----
-
-## Configuration (common)
-
-Override system bcftools (if needed):
-```bash
-export VCFCACHE_BCFTOOLS=/path/to/bcftools-1.22
-```
-
-Change where downloaded caches/blueprints are stored (default: `~/.cache/vcfcache`):
-```bash
-export VCFCACHE_DIR=/path/to/vcfcache_cache_dir
-```
-
-Or in `params.yaml`:
+**params.yaml example**:
 ```yaml
-bcftools_cmd: "/path/to/bcftools"
+genome_build: "GRCh38"
+bcftools_cmd: "bcftools"
+annotation_tool_cmd: "vep"
+vep_cache: "/path/to/vep/cache"  # Machine-specific path
+threads: 8                        # Machine-specific setting
 ```
 
-See [WIKI.md](WIKI.md) for detailed configuration, cache distribution via Zenodo, and troubleshooting.
+See [WIKI.md - Section 8 (Configuration reference)](WIKI.md#8-configuration-reference-paramsyaml--annotationyaml) for full configuration details and advanced examples.
 
 ---
 
 ## Links
 
-- **Documentation**: [WIKI.md](WIKI.md)
+- **Full Documentation**: [WIKI.md](WIKI.md)
+- **Performance Model**: [WIKI.md - Section 11](WIKI.md#11-performance-model-runtime-efficiency)
+- **CLI Reference**: [WIKI.md - Section 10](WIKI.md#10-cli-reference-all-commands--flags)
 - **Source**: https://github.com/julius-muller/vcfcache
 - **Issues**: https://github.com/julius-muller/vcfcache/issues
 - **Docker**: ghcr.io/julius-muller/vcfcache
