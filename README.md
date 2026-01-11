@@ -146,8 +146,8 @@ See [WIKI.md - Section 6 (Building your own cache)](WIKI.md#6-building-your-own-
 The annotation.yaml defines your annotation pipeline **at cache-build time**. It is **immutable**: once baked into a cache, it cannot be changed without rebuilding.
 
 **What goes in annotation.yaml vs params.yaml:**
-- **annotation.yaml** (immutable): annotation logic, tool flags, plugins — anything that affects the annotation semantics
-- **params.yaml** (runtime): machine-specific paths, threads, tool locations — settings that differ between environments but don't change the annotation results
+- **annotation.yaml** (immutable): annotation logic, tool flags, plugins - anything that affects the annotation semantics
+- **params.yaml** (runtime): machine-specific paths, threads, tool locations - settings that differ between environments but don't change the annotation results
 
 **When you annotate samples**, you can only provide params.yaml (via `-y`). The annotation.yaml is fixed in the cache.
 

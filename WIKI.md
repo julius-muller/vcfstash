@@ -258,9 +258,9 @@ vcfcache cache-build \
 ```
 
 What gets stored (per cache):
-- `vcfcache_annotated.bcf(.csi)` — annotated blueprint
-- `annotation.yaml` — recipe (copied, treated as immutable)
-- `params.snapshot.yaml` — params snapshot used to build the cache
+- `vcfcache_annotated.bcf(.csi)` - annotated blueprint
+- `annotation.yaml` - recipe (copied, treated as immutable)
+- `params.snapshot.yaml` - params snapshot used to build the cache
 
 ### Step 4 (optional): Share your cache via Zenodo (upload)
 
